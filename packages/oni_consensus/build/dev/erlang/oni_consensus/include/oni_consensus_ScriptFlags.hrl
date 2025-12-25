@@ -1,0 +1,20 @@
+-record(script_flags, {
+    verify_p2sh :: boolean(),
+    verify_witness :: boolean(),
+    verify_minimaldata :: boolean(),
+    verify_cleanstack :: boolean(),
+    verify_dersig :: boolean(),
+    verify_low_s :: boolean(),
+    verify_nulldummy :: boolean(),
+    verify_sigpushonly :: boolean(),
+    verify_strictenc :: boolean(),
+    verify_minimalif :: boolean(),
+    verify_nullfail :: boolean(),
+    verify_witness_pubkeytype :: boolean(),
+    verify_taproot :: boolean(),
+    verify_discourage_upgradable_nops :: boolean(),
+    verify_discourage_upgradable_witness_program :: boolean(),
+    verify_discourage_upgradable_taproot_version :: boolean(),
+    verify_discourage_op_success :: boolean(),
+    verify_discourage_upgradable_pubkeytype :: boolean()
+}).

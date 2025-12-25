@@ -1,0 +1,14 @@
+name = "oni_bitcoin"
+version = "0.1.0"
+gleam = ">= 1.0.0"
+description = "Bitcoin primitives, encodings, and consensus serialization for oni."
+licences = ["MIT"]
+target = "erlang"
+
+[dependencies]
+gleam_stdlib = { path = "../../external/gleam_stdlib" }
+gleam_erlang = { path = "../../external/gleam_erlang" }
+gleam_crypto = { path = "../../external/gleam_crypto" }
+
+[dev-dependencies]
+gleeunit = { path = "../../external/gleeunit" }

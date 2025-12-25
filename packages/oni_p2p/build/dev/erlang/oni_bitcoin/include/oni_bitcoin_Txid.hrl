@@ -1,0 +1,1 @@
+-record(txid, {hash :: oni_bitcoin:hash256()}).

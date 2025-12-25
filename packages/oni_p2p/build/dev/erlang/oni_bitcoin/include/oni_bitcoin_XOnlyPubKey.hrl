@@ -1,0 +1,1 @@
+-record(x_only_pub_key, {bytes :: bitstring()}).

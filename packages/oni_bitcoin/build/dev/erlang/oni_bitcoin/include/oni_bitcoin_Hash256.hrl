@@ -1,0 +1,1 @@
+-record(hash256, {bytes :: bitstring()}).
