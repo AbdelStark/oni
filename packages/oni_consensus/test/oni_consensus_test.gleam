@@ -1,6 +1,11 @@
 import gleeunit
 import gleeunit/should
+import gleam/bit_array
+import gleam/list
 import oni_consensus
+import validation
+import oni_bitcoin
+import oni_storage
 
 pub fn main() {
   gleeunit.main()
@@ -253,4 +258,274 @@ pub fn execute_hash160_test() {
   }
 }
 
-import gleam/bit_array
+// ============================================================================
+// Validation Module Tests (Phase 4)
+// ============================================================================
+
+pub fn validation_flags_default_test() {
+  let flags = validation.default_validation_flags()
+  flags.bip16 |> should.be_true
+  flags.bip141 |> should.be_true
+  flags.bip341 |> should.be_true
+}
+
+pub fn is_coinbase_test() {
+  // Create a coinbase transaction
+  let null_hash = oni_bitcoin.Hash256(<<0:256>>)
+  let null_outpoint = oni_bitcoin.OutPoint(
+    txid: oni_bitcoin.Txid(null_hash),
+    vout: 0xFFFFFFFF,
+  )
+  let coinbase_input = oni_bitcoin.TxIn(
+    prevout: null_outpoint,
+    script_sig: oni_bitcoin.script_from_bytes(<<>>),
+    sequence: 0xFFFFFFFF,
+    witness: [],
+  )
+  let assert Ok(value) = oni_bitcoin.amount_from_sats(5_000_000_000)
+  let output = oni_bitcoin.TxOut(
+    value: value,
+    script_pubkey: oni_bitcoin.script_from_bytes(<<>>),
+  )
+  let coinbase_tx = oni_bitcoin.Transaction(
+    version: 1,
+    inputs: [coinbase_input],
+    outputs: [output],
+    lock_time: 0,
+  )
+
+  validation.is_coinbase(coinbase_tx) |> should.be_true
+}
+
+pub fn is_not_coinbase_test() {
+  // Create a normal transaction
+  let assert Ok(hash) = oni_bitcoin.hash256_from_bytes(<<1:256>>)
+  let outpoint = oni_bitcoin.OutPoint(
+    txid: oni_bitcoin.Txid(hash),
+    vout: 0,
+  )
+  let input = oni_bitcoin.TxIn(
+    prevout: outpoint,
+    script_sig: oni_bitcoin.script_from_bytes(<<>>),
+    sequence: 0xFFFFFFFF,
+    witness: [],
+  )
+  let assert Ok(value) = oni_bitcoin.amount_from_sats(1000)
+  let output = oni_bitcoin.TxOut(
+    value: value,
+    script_pubkey: oni_bitcoin.script_from_bytes(<<>>),
+  )
+  let normal_tx = oni_bitcoin.Transaction(
+    version: 1,
+    inputs: [input],
+    outputs: [output],
+    lock_time: 0,
+  )
+
+  validation.is_coinbase(normal_tx) |> should.be_false
+}
+
+pub fn validate_tx_stateless_empty_inputs_test() {
+  let assert Ok(value) = oni_bitcoin.amount_from_sats(1000)
+  let output = oni_bitcoin.TxOut(
+    value: value,
+    script_pubkey: oni_bitcoin.script_from_bytes(<<>>),
+  )
+  let tx = oni_bitcoin.Transaction(
+    version: 1,
+    inputs: [],
+    outputs: [output],
+    lock_time: 0,
+  )
+
+  let result = validation.validate_tx_stateless(tx)
+  result |> should.be_error
+}
+
+pub fn validate_tx_stateless_empty_outputs_test() {
+  let assert Ok(hash) = oni_bitcoin.hash256_from_bytes(<<1:256>>)
+  let outpoint = oni_bitcoin.OutPoint(
+    txid: oni_bitcoin.Txid(hash),
+    vout: 0,
+  )
+  let input = oni_bitcoin.TxIn(
+    prevout: outpoint,
+    script_sig: oni_bitcoin.script_from_bytes(<<>>),
+    sequence: 0xFFFFFFFF,
+    witness: [],
+  )
+  let tx = oni_bitcoin.Transaction(
+    version: 1,
+    inputs: [input],
+    outputs: [],
+    lock_time: 0,
+  )
+
+  let result = validation.validate_tx_stateless(tx)
+  result |> should.be_error
+}
+
+pub fn validate_tx_stateless_valid_test() {
+  let assert Ok(hash) = oni_bitcoin.hash256_from_bytes(<<1:256>>)
+  let outpoint = oni_bitcoin.OutPoint(
+    txid: oni_bitcoin.Txid(hash),
+    vout: 0,
+  )
+  let input = oni_bitcoin.TxIn(
+    prevout: outpoint,
+    script_sig: oni_bitcoin.script_from_bytes(<<>>),
+    sequence: 0xFFFFFFFF,
+    witness: [],
+  )
+  let assert Ok(value) = oni_bitcoin.amount_from_sats(1000)
+  let output = oni_bitcoin.TxOut(
+    value: value,
+    script_pubkey: oni_bitcoin.script_from_bytes(<<>>),
+  )
+  let tx = oni_bitcoin.Transaction(
+    version: 1,
+    inputs: [input],
+    outputs: [output],
+    lock_time: 0,
+  )
+
+  let result = validation.validate_tx_stateless(tx)
+  result |> should.be_ok
+}
+
+pub fn validate_tx_duplicate_inputs_test() {
+  let assert Ok(hash) = oni_bitcoin.hash256_from_bytes(<<1:256>>)
+  let outpoint = oni_bitcoin.OutPoint(
+    txid: oni_bitcoin.Txid(hash),
+    vout: 0,
+  )
+  let input = oni_bitcoin.TxIn(
+    prevout: outpoint,
+    script_sig: oni_bitcoin.script_from_bytes(<<>>),
+    sequence: 0xFFFFFFFF,
+    witness: [],
+  )
+  let assert Ok(value) = oni_bitcoin.amount_from_sats(1000)
+  let output = oni_bitcoin.TxOut(
+    value: value,
+    script_pubkey: oni_bitcoin.script_from_bytes(<<>>),
+  )
+  // Same input twice = duplicate
+  let tx = oni_bitcoin.Transaction(
+    version: 1,
+    inputs: [input, input],
+    outputs: [output],
+    lock_time: 0,
+  )
+
+  let result = validation.validate_tx_stateless(tx)
+  result |> should.be_error
+}
+
+pub fn calculate_tx_weight_test() {
+  let assert Ok(hash) = oni_bitcoin.hash256_from_bytes(<<1:256>>)
+  let outpoint = oni_bitcoin.OutPoint(
+    txid: oni_bitcoin.Txid(hash),
+    vout: 0,
+  )
+  let input = oni_bitcoin.TxIn(
+    prevout: outpoint,
+    script_sig: oni_bitcoin.script_from_bytes(<<>>),
+    sequence: 0xFFFFFFFF,
+    witness: [],
+  )
+  let assert Ok(value) = oni_bitcoin.amount_from_sats(1000)
+  let output = oni_bitcoin.TxOut(
+    value: value,
+    script_pubkey: oni_bitcoin.script_from_bytes(<<>>),
+  )
+  let tx = oni_bitcoin.Transaction(
+    version: 1,
+    inputs: [input],
+    outputs: [output],
+    lock_time: 0,
+  )
+
+  let weight = validation.calculate_tx_weight(tx)
+  // Weight should be positive and reasonable
+  should.be_true(weight > 0)
+  should.be_true(weight < validation.max_tx_weight)
+}
+
+pub fn sighash_type_all_test() {
+  let sh = validation.sighash_type_from_byte(0x01)
+  sh |> should.equal(validation.SighashAll)
+}
+
+pub fn sighash_type_none_test() {
+  let sh = validation.sighash_type_from_byte(0x02)
+  sh |> should.equal(validation.SighashNone)
+}
+
+pub fn sighash_type_single_test() {
+  let sh = validation.sighash_type_from_byte(0x03)
+  sh |> should.equal(validation.SighashSingle)
+}
+
+pub fn sighash_type_anyonecanpay_all_test() {
+  let sh = validation.sighash_type_from_byte(0x81)
+  sh |> should.equal(validation.SighashAnyoneCanPay(validation.SighashAll))
+}
+
+pub fn constants_validation_test() {
+  validation.max_tx_weight |> should.equal(4_000_000)
+  validation.max_block_weight |> should.equal(4_000_000)
+  validation.coinbase_maturity |> should.equal(100)
+  validation.witness_scale_factor |> should.equal(4)
+  validation.locktime_threshold |> should.equal(500_000_000)
+}
+
+pub fn utxo_view_operations_test() {
+  // Create an empty UTXO view
+  let view = oni_storage.utxo_view_new()
+
+  // Create an outpoint
+  let assert Ok(hash) = oni_bitcoin.hash256_from_bytes(<<1:256>>)
+  let outpoint = oni_bitcoin.OutPoint(
+    txid: oni_bitcoin.Txid(hash),
+    vout: 0,
+  )
+
+  // Should not find the coin initially
+  oni_storage.utxo_has(view, outpoint) |> should.be_false
+
+  // Add a coin
+  let assert Ok(value) = oni_bitcoin.amount_from_sats(5000)
+  let output = oni_bitcoin.TxOut(
+    value: value,
+    script_pubkey: oni_bitcoin.script_from_bytes(<<>>),
+  )
+  let coin = oni_storage.coin_new(output, 100, False)
+  let view2 = oni_storage.utxo_add(view, outpoint, coin)
+
+  // Should find it now
+  oni_storage.utxo_has(view2, outpoint) |> should.be_true
+
+  // Remove it
+  let view3 = oni_storage.utxo_remove(view2, outpoint)
+  oni_storage.utxo_has(view3, outpoint) |> should.be_false
+}
+
+pub fn coin_maturity_test() {
+  let assert Ok(value) = oni_bitcoin.amount_from_sats(5_000_000_000)
+  let output = oni_bitcoin.TxOut(
+    value: value,
+    script_pubkey: oni_bitcoin.script_from_bytes(<<>>),
+  )
+
+  // Non-coinbase is always mature
+  let regular_coin = oni_storage.coin_new(output, 100, False)
+  oni_storage.coin_is_mature(regular_coin, 101) |> should.be_true
+  oni_storage.coin_is_mature(regular_coin, 100) |> should.be_true
+
+  // Coinbase needs 100 confirmations
+  let coinbase_coin = oni_storage.coin_new(output, 100, True)
+  oni_storage.coin_is_mature(coinbase_coin, 199) |> should.be_false
+  oni_storage.coin_is_mature(coinbase_coin, 200) |> should.be_true
+  oni_storage.coin_is_mature(coinbase_coin, 201) |> should.be_true
+}

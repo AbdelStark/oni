@@ -9,6 +9,7 @@ target = "erlang"
 gleam_stdlib = { path = "../../external/gleam_stdlib" }
 gleam_erlang = { path = "../../external/gleam_erlang" }
 oni_bitcoin = { path = "../oni_bitcoin" }
+oni_storage = { path = "../oni_storage" }
 
 [dev-dependencies]
 gleeunit = { path = "../../external/gleeunit" }

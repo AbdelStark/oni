@@ -1,0 +1,217 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (e.g., v0.1.0)"
+        required: true
+        type: string
+      prerelease:
+        description: "Is this a pre-release?"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  GLEAM_VERSION: "1.6.3"
+  OTP_VERSION: "27.2"
+
+jobs:
+  # Build and test before release
+  validate:
+    name: Validate Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Erlang/OTP
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{ env.OTP_VERSION }}
+          gleam-version: ${{ env.GLEAM_VERSION }}
+
+      - name: Run full CI
+        run: make ci
+
+  # Build release artifacts
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: validate
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-x86_64
+          - os: ubuntu-24.04-arm
+            target: linux-aarch64
+          - os: macos-latest
+            target: macos-x86_64
+          - os: macos-14
+            target: macos-aarch64
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Erlang/OTP
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{ env.OTP_VERSION }}
+          gleam-version: ${{ env.GLEAM_VERSION }}
+
+      - name: Build all packages
+        run: |
+          for pkg in packages/*; do
+            echo "==> Building $(basename $pkg)"
+            (cd "$pkg" && gleam build)
+          done
+
+      - name: Create release archive
+        run: |
+          VERSION="${{ github.ref_name || inputs.version }}"
+          ARCHIVE_NAME="oni-${VERSION}-${{ matrix.target }}"
+
+          mkdir -p dist/${ARCHIVE_NAME}
+
+          # Copy compiled packages
+          for pkg in packages/*; do
+            PKG_NAME=$(basename $pkg)
+            mkdir -p dist/${ARCHIVE_NAME}/lib/${PKG_NAME}
+            cp -r $pkg/build/prod/erlang/${PKG_NAME}/* dist/${ARCHIVE_NAME}/lib/${PKG_NAME}/ 2>/dev/null || true
+            cp -r $pkg/build/dev/erlang/${PKG_NAME}/* dist/${ARCHIVE_NAME}/lib/${PKG_NAME}/ 2>/dev/null || true
+          done
+
+          # Copy documentation
+          cp README.md LICENSE* dist/${ARCHIVE_NAME}/ 2>/dev/null || true
+          cp -r docs dist/${ARCHIVE_NAME}/ 2>/dev/null || true
+
+          # Create archive
+          cd dist
+          tar -czvf ${ARCHIVE_NAME}.tar.gz ${ARCHIVE_NAME}
+
+          # Create checksum
+          sha256sum ${ARCHIVE_NAME}.tar.gz > ${ARCHIVE_NAME}.tar.gz.sha256
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.target }}
+          path: |
+            dist/*.tar.gz
+            dist/*.sha256
+          retention-days: 7
+
+  # Generate SBOM for release
+  sbom:
+    name: Generate Release SBOM
+    runs-on: ubuntu-latest
+    needs: validate
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: sbom.cyclonedx.json
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-sbom
+          path: sbom.cyclonedx.json
+          retention-days: 90
+
+  # Create GitHub release
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: [build, sbom]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release files
+        run: |
+          mkdir -p release-files
+          find artifacts -name "*.tar.gz" -exec mv {} release-files/ \;
+          find artifacts -name "*.sha256" -exec mv {} release-files/ \;
+          find artifacts -name "sbom.*.json" -exec mv {} release-files/ \;
+
+          # Create combined checksums file
+          cd release-files
+          cat *.sha256 > checksums.txt
+
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          VERSION="${{ github.ref_name || inputs.version }}"
+
+          cat << EOF > release-notes.md
+          ## oni ${VERSION}
+
+          A Bitcoin full node implementation in Gleam.
+
+          ### What's Included
+
+          - **oni_bitcoin**: Bitcoin primitives, encodings, and serialization
+          - **oni_consensus**: Script engine and validation rules
+          - **oni_storage**: Chainstate and UTXO management
+          - **oni_p2p**: Peer-to-peer networking
+          - **oni_rpc**: JSON-RPC server
+          - **oni_node**: OTP application and supervision
+
+          ### Installation
+
+          Download the appropriate archive for your platform and extract:
+
+          \`\`\`bash
+          tar -xzvf oni-${VERSION}-linux-x86_64.tar.gz
+          \`\`\`
+
+          ### Verification
+
+          Verify the download integrity:
+
+          \`\`\`bash
+          sha256sum -c oni-${VERSION}-linux-x86_64.tar.gz.sha256
+          \`\`\`
+
+          ### SBOM
+
+          A Software Bill of Materials (SBOM) in CycloneDX format is included with this release.
+
+          ### Build Requirements
+
+          - Erlang/OTP 26.2+
+          - Gleam 1.6+
+
+          EOF
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "oni ${{ github.ref_name || inputs.version }}"
+          body_path: release-notes.md
+          files: release-files/*
+          draft: false
+          prerelease: ${{ inputs.prerelease || contains(github.ref_name, '-') }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

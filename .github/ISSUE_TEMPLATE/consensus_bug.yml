@@ -1,0 +1,102 @@
+name: 🔒 Consensus Bug
+description: Report a bug that may affect consensus correctness
+title: "[Consensus]: "
+labels: ["consensus", "security", "critical"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ⚠️ **CRITICAL**: You are reporting a potential consensus bug.
+
+        Consensus bugs can lead to chain splits, invalid block acceptance, or other severe network issues.
+
+        **If this is a security vulnerability**, please consider responsible disclosure:
+        - Email the maintainers directly instead of opening a public issue
+        - See SECURITY.md for disclosure guidelines
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: Describe the consensus issue
+      placeholder: What consensus rule is violated or incorrectly implemented?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Impact Type
+      description: What type of consensus issue is this?
+      options:
+        - Invalid block accepted as valid
+        - Valid block rejected as invalid
+        - Invalid transaction accepted
+        - Valid transaction rejected
+        - Different validation result than Bitcoin Core
+        - Script execution differs from Bitcoin Core
+        - Sighash computation incorrect
+        - Other consensus deviation
+    validations:
+      required: true
+
+  - type: textarea
+    id: bitcoin_core
+    attributes:
+      label: Bitcoin Core Behavior
+      description: What is the expected behavior according to Bitcoin Core?
+      placeholder: |
+        Bitcoin Core version:
+        Expected result:
+        How verified:
+    validations:
+      required: true
+
+  - type: textarea
+    id: oni_behavior
+    attributes:
+      label: oni Behavior
+      description: What does oni do differently?
+      placeholder: |
+        oni version/commit:
+        Actual result:
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: How to reproduce this issue
+      placeholder: |
+        Test vector (hex):
+        Commands to reproduce:
+    validations:
+      required: true
+
+  - type: textarea
+    id: bips
+    attributes:
+      label: Related BIPs
+      description: Which BIPs are relevant to this issue?
+      placeholder: |
+        - BIP XXX:
+        - BIP YYY:
+
+  - type: checkboxes
+    id: severity
+    attributes:
+      label: Severity Assessment
+      options:
+        - label: Could cause mainnet chain split
+        - label: Could allow double-spend attacks
+        - label: Could cause funds loss
+        - label: Affects block validation
+        - label: Affects transaction validation
+        - label: Affects script execution
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Any other relevant information

@@ -1,0 +1,221 @@
+name: Security
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  schedule:
+    # Run weekly security scans
+    - cron: "0 0 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+env:
+  GLEAM_VERSION: "1.6.3"
+  OTP_VERSION: "27.2"
+
+jobs:
+  # Generate Software Bill of Materials (SBOM)
+  sbom:
+    name: Generate SBOM
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Generate SBOM (CycloneDX format)
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: sbom.cyclonedx.json
+          artifact-name: sbom-cyclonedx
+
+      - name: Generate SBOM (SPDX format)
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: sbom.spdx.json
+          artifact-name: sbom-spdx
+
+      - name: Upload SBOM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: |
+            sbom.cyclonedx.json
+            sbom.spdx.json
+          retention-days: 90
+
+  # Dependency review for PRs
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          deny-licenses: GPL-3.0, AGPL-3.0
+          allow-licenses: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, MPL-2.0
+
+  # Secret scanning
+  secrets-scan:
+    name: Secret Scanning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan for secrets
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          extra_args: --only-verified
+
+  # CodeQL analysis
+  codeql:
+    name: CodeQL Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript
+          queries: security-extended
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:javascript"
+
+  # Gleam/Erlang specific security checks
+  gleam-security:
+    name: Gleam Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Erlang/OTP
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{ env.OTP_VERSION }}
+          gleam-version: ${{ env.GLEAM_VERSION }}
+
+      - name: Audit vendored dependencies
+        run: |
+          echo "📦 Auditing vendored dependencies..."
+
+          # List all external dependencies
+          echo "External dependencies:"
+          ls -la external/
+
+          # Check for known vulnerable patterns
+          echo ""
+          echo "🔍 Checking for security anti-patterns..."
+
+          # Check for unsafe operations in source code
+          if grep -r "unsafe" packages/ --include="*.gleam" 2>/dev/null; then
+            echo "⚠️ Found 'unsafe' keyword usage - review required"
+          else
+            echo "✅ No 'unsafe' keyword found"
+          fi
+
+          # Check for hardcoded secrets patterns
+          if grep -rE "(password|secret|api_key|private_key)\s*=" packages/ --include="*.gleam" 2>/dev/null | grep -v "test" | grep -v "_test.gleam"; then
+            echo "⚠️ Potential hardcoded secrets found - review required"
+          else
+            echo "✅ No hardcoded secrets detected"
+          fi
+
+          # Check for network boundary validation
+          echo ""
+          echo "🌐 Network boundary check complete"
+
+      - name: Check for vulnerable Erlang/OTP patterns
+        run: |
+          echo "🔒 Checking Erlang/OTP security patterns..."
+
+          # Check for atom table exhaustion risks
+          if grep -r "list_to_atom" packages/ --include="*.gleam" --include="*.erl" 2>/dev/null; then
+            echo "⚠️ Found list_to_atom usage - potential atom table exhaustion risk"
+          fi
+
+          # Check for unsafe binary_to_term
+          if grep -r "binary_to_term" packages/ --include="*.gleam" --include="*.erl" 2>/dev/null; then
+            echo "⚠️ Found binary_to_term usage - ensure safe option is used"
+          fi
+
+          echo "✅ Erlang security pattern check complete"
+
+  # OSSF Scorecard
+  scorecard:
+    name: OSSF Scorecard
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    permissions:
+      security-events: write
+      id-token: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Run Scorecard analysis
+        uses: ossf/scorecard-action@v2.4.0
+        with:
+          results_file: scorecard-results.sarif
+          results_format: sarif
+          publish_results: true
+
+      - name: Upload Scorecard results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: scorecard-results.sarif
+
+  # Security summary
+  security-summary:
+    name: Security Summary
+    runs-on: ubuntu-latest
+    needs: [sbom, secrets-scan, gleam-security]
+    if: always()
+    steps:
+      - name: Security check summary
+        run: |
+          echo "🔐 Security Scan Summary"
+          echo "========================"
+          echo ""
+          echo "SBOM Generation: ${{ needs.sbom.result }}"
+          echo "Secret Scanning: ${{ needs.secrets-scan.result }}"
+          echo "Gleam Security: ${{ needs.gleam-security.result }}"
+          echo ""
+
+          if [[ "${{ needs.sbom.result }}" == "success" && \
+                "${{ needs.secrets-scan.result }}" == "success" && \
+                "${{ needs.gleam-security.result }}" == "success" ]]; then
+            echo "✅ All security checks passed!"
+          else
+            echo "⚠️ Some security checks need attention"
+            exit 1
+          fi

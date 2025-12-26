@@ -1,0 +1,37 @@
+# CODEOWNERS - Defines who is responsible for code in this repository
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for everything
+* @AbdelStark
+
+# Consensus-critical code requires extra review
+/packages/oni_consensus/ @AbdelStark
+/packages/oni_bitcoin/ @AbdelStark
+
+# Storage and chainstate
+/packages/oni_storage/ @AbdelStark
+
+# P2P networking
+/packages/oni_p2p/ @AbdelStark
+
+# RPC server
+/packages/oni_rpc/ @AbdelStark
+
+# Node application
+/packages/oni_node/ @AbdelStark
+
+# CI and build infrastructure
+/.github/ @AbdelStark
+/Makefile @AbdelStark
+/scripts/ @AbdelStark
+
+# Documentation
+/docs/ @AbdelStark
+*.md @AbdelStark
+
+# AI agent instructions
+/ai/ @AbdelStark
+
+# Security-sensitive files
+/SECURITY.md @AbdelStark
+/docs/SECURITY.md @AbdelStark
