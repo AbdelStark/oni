@@ -1,0 +1,120 @@
+# docker-compose.yml - oni Bitcoin Node deployment
+#
+# Usage:
+#   Development: docker-compose up
+#   Production:  docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Environment file (.env):
+#   ONI_RPC_USER=your_username
+#   ONI_RPC_PASSWORD=your_secure_password
+
+version: "3.8"
+
+services:
+  oni:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: oni-node
+    restart: unless-stopped
+
+    ports:
+      # P2P network
+      - "8333:8333"
+      # RPC interface (bind to localhost only in production)
+      - "127.0.0.1:8332:8332"
+      # Metrics endpoint
+      - "127.0.0.1:9100:9100"
+
+    volumes:
+      # Persistent data storage
+      - oni-data:/data
+      # Optional: mount configuration file
+      # - ./oni.conf:/app/oni.conf:ro
+
+    environment:
+      - ONI_NETWORK=${ONI_NETWORK:-mainnet}
+      - ONI_DATA_DIR=/data
+      - ONI_LOG_LEVEL=${ONI_LOG_LEVEL:-info}
+      - ONI_RPC_USER=${ONI_RPC_USER:-}
+      - ONI_RPC_PASSWORD=${ONI_RPC_PASSWORD:-}
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 8G
+        reservations:
+          cpus: "1"
+          memory: 2G
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9100/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
+
+  # Optional: Prometheus metrics collector
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: oni-prometheus
+    restart: unless-stopped
+    profiles: ["monitoring"]
+
+    ports:
+      - "127.0.0.1:9090:9090"
+
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"
+
+    depends_on:
+      - oni
+
+  # Optional: Grafana dashboard
+  grafana:
+    image: grafana/grafana:latest
+    container_name: oni-grafana
+    restart: unless-stopped
+    profiles: ["monitoring"]
+
+    ports:
+      - "127.0.0.1:3000:3000"
+
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+
+    depends_on:
+      - prometheus
+
+volumes:
+  oni-data:
+    name: oni-data
+  prometheus-data:
+    name: oni-prometheus-data
+  grafana-data:
+    name: oni-grafana-data
+
+networks:
+  default:
+    name: oni-network
