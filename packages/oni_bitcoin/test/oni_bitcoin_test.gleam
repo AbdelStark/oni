@@ -670,7 +670,237 @@ pub fn address_testnet_p2pkh_test() {
 }
 
 // ============================================================================
+// Block Header Serialization Tests
+// ============================================================================
+
+pub fn block_header_encode_decode_roundtrip_test() {
+  // Create a block header
+  let prev_bytes = <<
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+  >>
+  let merkle_bytes = <<
+    0x4a, 0x5e, 0x1e, 0x4b, 0xaa, 0xb8, 0x9f, 0x3a,
+    0x32, 0x51, 0x8a, 0x88, 0xc3, 0x1b, 0xc8, 0x7f,
+    0x61, 0x8f, 0x76, 0x67, 0x3e, 0x2c, 0xc7, 0x7a,
+    0xb2, 0x12, 0x7b, 0x7a, 0xfd, 0xed, 0xa3, 0x3b
+  >>
+
+  let assert Ok(prev_hash) = oni_bitcoin.hash256_from_bytes(prev_bytes)
+  let assert Ok(merkle_hash) = oni_bitcoin.hash256_from_bytes(merkle_bytes)
+
+  let header = oni_bitcoin.BlockHeader(
+    version: 1,
+    prev_block: oni_bitcoin.BlockHash(prev_hash),
+    merkle_root: oni_bitcoin.MerkleRoot(merkle_hash),
+    timestamp: 1231006505,
+    bits: 0x1d00ffff,
+    nonce: 2083236893,
+  )
+
+  // Encode
+  let encoded = oni_bitcoin.encode_block_header(header)
+
+  // Should be exactly 80 bytes
+  bit_array.byte_size(encoded) |> should.equal(80)
+
+  // Decode
+  let result = oni_bitcoin.decode_block_header(encoded)
+  result |> should.be_ok
+
+  let assert Ok(#(decoded, remaining)) = result
+  decoded.version |> should.equal(1)
+  decoded.timestamp |> should.equal(1231006505)
+  decoded.bits |> should.equal(0x1d00ffff)
+  decoded.nonce |> should.equal(2083236893)
+  remaining |> should.equal(<<>>)
+}
+
+pub fn block_hash_from_header_test() {
+  // Create a simple header
+  let prev_bytes = <<0:256>>
+  let merkle_bytes = <<0:256>>
+
+  let assert Ok(prev_hash) = oni_bitcoin.hash256_from_bytes(prev_bytes)
+  let assert Ok(merkle_hash) = oni_bitcoin.hash256_from_bytes(merkle_bytes)
+
+  let header = oni_bitcoin.BlockHeader(
+    version: 1,
+    prev_block: oni_bitcoin.BlockHash(prev_hash),
+    merkle_root: oni_bitcoin.MerkleRoot(merkle_hash),
+    timestamp: 0,
+    bits: 0x1d00ffff,
+    nonce: 0,
+  )
+
+  // Compute hash
+  let hash = oni_bitcoin.block_hash_from_header(header)
+  let hex = oni_bitcoin.block_hash_to_hex(hash)
+
+  // Should be a valid 64-char hex string
+  string.length(hex) |> should.equal(64)
+}
+
+// ============================================================================
+// Network Magic Tests
+// ============================================================================
+
+pub fn mainnet_magic_test() {
+  let magic = oni_bitcoin.mainnet_magic()
+  magic.bytes |> should.equal(<<0xF9, 0xBE, 0xB4, 0xD9>>)
+}
+
+pub fn testnet_magic_test() {
+  let magic = oni_bitcoin.testnet_magic()
+  magic.bytes |> should.equal(<<0x0B, 0x11, 0x09, 0x07>>)
+}
+
+pub fn regtest_magic_test() {
+  let magic = oni_bitcoin.regtest_magic()
+  magic.bytes |> should.equal(<<0xFA, 0xBF, 0xB5, 0xDA>>)
+}
+
+pub fn network_magic_for_network_test() {
+  let mainnet_magic = oni_bitcoin.network_magic(oni_bitcoin.Mainnet)
+  mainnet_magic.bytes |> should.equal(<<0xF9, 0xBE, 0xB4, 0xD9>>)
+
+  let testnet_magic = oni_bitcoin.network_magic(oni_bitcoin.Testnet)
+  testnet_magic.bytes |> should.equal(<<0x0B, 0x11, 0x09, 0x07>>)
+}
+
+// ============================================================================
+// WIF Encoding Tests
+// ============================================================================
+
+pub fn private_key_from_bytes_valid_test() {
+  let key_bytes = <<
+    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+    0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+    0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+    0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f
+  >>
+  let result = oni_bitcoin.private_key_from_bytes(key_bytes, True)
+  result |> should.be_ok
+}
+
+pub fn private_key_from_bytes_invalid_length_test() {
+  let key_bytes = <<0x00, 0x01, 0x02>>  // Too short
+  let result = oni_bitcoin.private_key_from_bytes(key_bytes, True)
+  result |> should.be_error
+}
+
+pub fn wif_encode_decode_mainnet_compressed_roundtrip_test() {
+  let key_bytes = <<
+    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+    0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+    0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+    0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f
+  >>
+  let assert Ok(key) = oni_bitcoin.private_key_from_bytes(key_bytes, True)
+
+  // Encode to WIF
+  let wif = oni_bitcoin.private_key_to_wif(key, oni_bitcoin.Mainnet)
+
+  // Mainnet compressed WIF starts with K or L
+  { string.starts_with(wif, "K") || string.starts_with(wif, "L") } |> should.be_true
+
+  // Decode from WIF
+  let result = oni_bitcoin.private_key_from_wif(wif)
+  result |> should.be_ok
+  let assert Ok(#(decoded_key, network)) = result
+  decoded_key.compressed |> should.be_true
+  case network {
+    oni_bitcoin.Mainnet -> should.be_true(True)
+    _ -> should.be_true(False)
+  }
+}
+
+pub fn wif_encode_decode_mainnet_uncompressed_test() {
+  let key_bytes = <<
+    0xAB, 0xCD, 0xEF, 0x01, 0x23, 0x45, 0x67, 0x89,
+    0xAB, 0xCD, 0xEF, 0x01, 0x23, 0x45, 0x67, 0x89,
+    0xAB, 0xCD, 0xEF, 0x01, 0x23, 0x45, 0x67, 0x89,
+    0xAB, 0xCD, 0xEF, 0x01, 0x23, 0x45, 0x67, 0x89
+  >>
+  let assert Ok(key) = oni_bitcoin.private_key_from_bytes(key_bytes, False)
+
+  // Encode to WIF
+  let wif = oni_bitcoin.private_key_to_wif(key, oni_bitcoin.Mainnet)
+
+  // Mainnet uncompressed WIF starts with 5
+  string.starts_with(wif, "5") |> should.be_true
+
+  // Decode from WIF
+  let result = oni_bitcoin.private_key_from_wif(wif)
+  result |> should.be_ok
+  let assert Ok(#(decoded_key, _network)) = result
+  decoded_key.compressed |> should.be_false
+}
+
+pub fn wif_encode_decode_testnet_compressed_test() {
+  let key_bytes = <<
+    0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0,
+    0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0,
+    0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0,
+    0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0
+  >>
+  let assert Ok(key) = oni_bitcoin.private_key_from_bytes(key_bytes, True)
+
+  // Encode to WIF
+  let wif = oni_bitcoin.private_key_to_wif(key, oni_bitcoin.Testnet)
+
+  // Testnet compressed WIF starts with c
+  string.starts_with(wif, "c") |> should.be_true
+
+  // Decode from WIF
+  let result = oni_bitcoin.private_key_from_wif(wif)
+  result |> should.be_ok
+  let assert Ok(#(decoded_key, network)) = result
+  decoded_key.compressed |> should.be_true
+  case network {
+    oni_bitcoin.Testnet -> should.be_true(True)
+    _ -> should.be_true(False)
+  }
+}
+
+// ============================================================================
+// Extended Key Types Tests
+// ============================================================================
+
+pub fn fingerprint_from_bytes_valid_test() {
+  let bytes = <<0x01, 0x02, 0x03, 0x04>>
+  let result = oni_bitcoin.fingerprint_from_bytes(bytes)
+  result |> should.be_ok
+}
+
+pub fn fingerprint_from_bytes_invalid_test() {
+  let bytes = <<0x01, 0x02>>  // Too short
+  let result = oni_bitcoin.fingerprint_from_bytes(bytes)
+  result |> should.be_error
+}
+
+pub fn chain_code_from_bytes_valid_test() {
+  let bytes = <<
+    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+    0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+    0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+    0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f
+  >>
+  let result = oni_bitcoin.chain_code_from_bytes(bytes)
+  result |> should.be_ok
+}
+
+pub fn chain_code_from_bytes_invalid_test() {
+  let bytes = <<0x00, 0x01, 0x02>>  // Too short
+  let result = oni_bitcoin.chain_code_from_bytes(bytes)
+  result |> should.be_error
+}
+
+// ============================================================================
 // Imports needed
 // ============================================================================
+import gleam/bit_array
 import gleam/list
 import gleam/string

@@ -1736,3 +1736,249 @@ fn list_to_bitarray(lst: List(Int)) -> BitArray {
     bit_array.append(acc, <<byte:8>>)
   })
 }
+
+// ============================================================================
+// Block Header Serialization
+// ============================================================================
+
+/// Encode a block header to bytes (80 bytes)
+pub fn encode_block_header(header: BlockHeader) -> BitArray {
+  bit_array.concat([
+    <<header.version:32-little>>,
+    header.prev_block.hash.bytes,
+    header.merkle_root.hash.bytes,
+    <<header.timestamp:32-little>>,
+    <<header.bits:32-little>>,
+    <<header.nonce:32-little>>,
+  ])
+}
+
+/// Decode a block header from bytes
+pub fn decode_block_header(bytes: BitArray) -> Result(#(BlockHeader, BitArray), String) {
+  case bytes {
+    <<version:32-little, prev:256-bits, merkle:256-bits,
+      timestamp:32-little, bits:32-little, nonce:32-little, rest:bits>> -> {
+      let prev_block = BlockHash(Hash256(<<prev:256-bits>>))
+      let merkle_root = MerkleRoot(Hash256(<<merkle:256-bits>>))
+      let header = BlockHeader(
+        version: version,
+        prev_block: prev_block,
+        merkle_root: merkle_root,
+        timestamp: timestamp,
+        bits: bits,
+        nonce: nonce,
+      )
+      Ok(#(header, rest))
+    }
+    _ -> Error("Insufficient bytes for block header (need 80)")
+  }
+}
+
+/// Compute the block hash from a header
+pub fn block_hash_from_header(header: BlockHeader) -> BlockHash {
+  let serialized = encode_block_header(header)
+  let hash = hash256_digest(serialized)
+  BlockHash(hash)
+}
+
+// ============================================================================
+// Block Serialization
+// ============================================================================
+
+/// Encode a full block to bytes
+pub fn encode_block(block: Block) -> BitArray {
+  let header_bytes = encode_block_header(block.header)
+  let tx_count = compact_size_encode(list.length(block.transactions))
+  let tx_bytes = list.fold(block.transactions, <<>>, fn(acc, tx) {
+    bit_array.append(acc, encode_tx(tx))
+  })
+  bit_array.concat([header_bytes, tx_count, tx_bytes])
+}
+
+/// Decode a full block from bytes
+pub fn decode_block(bytes: BitArray) -> Result(#(Block, BitArray), String) {
+  case decode_block_header(bytes) {
+    Error(e) -> Error(e)
+    Ok(#(header, after_header)) -> {
+      case compact_size_decode(after_header) {
+        Error(e) -> Error(e)
+        Ok(#(tx_count, after_count)) -> {
+          case decode_transactions(after_count, tx_count, []) {
+            Error(e) -> Error(e)
+            Ok(#(txs, remaining)) -> {
+              let block = Block(header, txs)
+              Ok(#(block, remaining))
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fn decode_transactions(bytes: BitArray, count: Int, acc: List(Transaction)) -> Result(#(List(Transaction), BitArray), String) {
+  case count {
+    0 -> Ok(#(list.reverse(acc), bytes))
+    _ -> {
+      case decode_tx(bytes) {
+        Error(e) -> Error(e)
+        Ok(#(tx, rest)) -> decode_transactions(rest, count - 1, [tx, ..acc])
+      }
+    }
+  }
+}
+
+// ============================================================================
+// Network Magic Constants
+// ============================================================================
+
+/// Network magic bytes for message framing
+pub type NetworkMagic {
+  NetworkMagic(bytes: BitArray)
+}
+
+/// Get network magic for mainnet
+pub fn mainnet_magic() -> NetworkMagic {
+  NetworkMagic(<<0xF9, 0xBE, 0xB4, 0xD9>>)
+}
+
+/// Get network magic for testnet
+pub fn testnet_magic() -> NetworkMagic {
+  NetworkMagic(<<0x0B, 0x11, 0x09, 0x07>>)
+}
+
+/// Get network magic for regtest
+pub fn regtest_magic() -> NetworkMagic {
+  NetworkMagic(<<0xFA, 0xBF, 0xB5, 0xDA>>)
+}
+
+/// Get network magic for signet
+pub fn signet_magic() -> NetworkMagic {
+  NetworkMagic(<<0x0A, 0x03, 0xCF, 0x40>>)
+}
+
+/// Get network magic for a network type
+pub fn network_magic(network: Network) -> NetworkMagic {
+  case network {
+    Mainnet -> mainnet_magic()
+    Testnet -> testnet_magic()
+    Regtest -> regtest_magic()
+    Signet -> signet_magic()
+  }
+}
+
+// ============================================================================
+// WIF (Wallet Import Format) Encoding
+// ============================================================================
+
+/// Private key type
+pub type PrivateKey {
+  PrivateKey(bytes: BitArray, compressed: Bool)
+}
+
+/// Create a private key from 32 bytes
+pub fn private_key_from_bytes(bytes: BitArray, compressed: Bool) -> Result(PrivateKey, String) {
+  case bit_array.byte_size(bytes) {
+    32 -> Ok(PrivateKey(bytes, compressed))
+    _ -> Error("Private key must be 32 bytes")
+  }
+}
+
+/// Encode a private key to WIF format
+pub fn private_key_to_wif(key: PrivateKey, network: Network) -> String {
+  let prefix = case network {
+    Mainnet -> <<0x80>>
+    Testnet | Regtest | Signet -> <<0xEF>>
+  }
+
+  let payload = case key.compressed {
+    True -> bit_array.concat([prefix, key.bytes, <<0x01>>])
+    False -> bit_array.append(prefix, key.bytes)
+  }
+
+  base58check_encode(payload)
+}
+
+/// Decode a private key from WIF format
+pub fn private_key_from_wif(wif: String) -> Result(#(PrivateKey, Network), String) {
+  case base58check_decode(wif) {
+    Error(e) -> Error(e)
+    Ok(payload) -> {
+      case payload {
+        // Mainnet compressed (34 bytes: prefix + 32 key + compression flag)
+        <<0x80, key:256-bits, 0x01>> -> {
+          case private_key_from_bytes(<<key:256-bits>>, True) {
+            Ok(pk) -> Ok(#(pk, Mainnet))
+            Error(e) -> Error(e)
+          }
+        }
+        // Mainnet uncompressed (33 bytes: prefix + 32 key)
+        <<0x80, key:256-bits>> -> {
+          case private_key_from_bytes(<<key:256-bits>>, False) {
+            Ok(pk) -> Ok(#(pk, Mainnet))
+            Error(e) -> Error(e)
+          }
+        }
+        // Testnet compressed
+        <<0xEF, key:256-bits, 0x01>> -> {
+          case private_key_from_bytes(<<key:256-bits>>, True) {
+            Ok(pk) -> Ok(#(pk, Testnet))
+            Error(e) -> Error(e)
+          }
+        }
+        // Testnet uncompressed
+        <<0xEF, key:256-bits>> -> {
+          case private_key_from_bytes(<<key:256-bits>>, False) {
+            Ok(pk) -> Ok(#(pk, Testnet))
+            Error(e) -> Error(e)
+          }
+        }
+        _ -> Error("Invalid WIF format")
+      }
+    }
+  }
+}
+
+/// Get the public key hash (hash160) from a private key
+/// Note: This is a placeholder - real implementation requires secp256k1
+pub fn private_key_to_pubkey_hash(_key: PrivateKey) -> BitArray {
+  // In a real implementation, this would:
+  // 1. Derive the public key from the private key using secp256k1
+  // 2. Compress or not based on the compressed flag
+  // 3. Return hash160(pubkey)
+  // For now, return a placeholder
+  <<0:160>>
+}
+
+// ============================================================================
+// Extended Public Key Types (BIP32)
+// ============================================================================
+
+/// Extended key depth
+pub type ExtKeyDepth = Int
+
+/// Extended key fingerprint (4 bytes)
+pub type Fingerprint {
+  Fingerprint(bytes: BitArray)
+}
+
+/// Extended key chain code (32 bytes)
+pub type ChainCode {
+  ChainCode(bytes: BitArray)
+}
+
+/// Create a fingerprint from bytes
+pub fn fingerprint_from_bytes(bytes: BitArray) -> Result(Fingerprint, String) {
+  case bit_array.byte_size(bytes) {
+    4 -> Ok(Fingerprint(bytes))
+    _ -> Error("Fingerprint must be 4 bytes")
+  }
+}
+
+/// Create a chain code from bytes
+pub fn chain_code_from_bytes(bytes: BitArray) -> Result(ChainCode, String) {
+  case bit_array.byte_size(bytes) {
+    32 -> Ok(ChainCode(bytes))
+    _ -> Error("Chain code must be 32 bytes")
+  }
+}
