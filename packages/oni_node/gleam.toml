@@ -1,0 +1,19 @@
+name = "oni_node"
+version = "0.1.0"
+gleam = ">= 1.0.0"
+description = "The oni node OTP application (wiring + supervision)."
+licences = ["MIT"]
+target = "erlang"
+
+[dependencies]
+gleam_stdlib = { path = "../../external/gleam_stdlib" }
+gleam_erlang = { path = "../../external/gleam_erlang" }
+gleam_otp = { path = "../../external/gleam_otp" }
+oni_bitcoin = { path = "../oni_bitcoin" }
+oni_consensus = { path = "../oni_consensus" }
+oni_storage = { path = "../oni_storage" }
+oni_p2p = { path = "../oni_p2p" }
+oni_rpc = { path = "../oni_rpc" }
+
+[dev-dependencies]
+gleeunit = { path = "../../external/gleeunit" }

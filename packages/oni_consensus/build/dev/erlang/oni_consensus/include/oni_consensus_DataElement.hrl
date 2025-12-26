@@ -1,0 +1,1 @@
+-record(data_element, {data :: bitstring()}).

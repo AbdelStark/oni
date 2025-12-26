@@ -1,0 +1,261 @@
+# oni backlog
+#
+# Each task is intended to be small enough for a focused PR.
+#
+# Fields:
+# - id: stable identifier
+# - title: short summary
+# - subsystem: one of [foundations, bitcoin, consensus, storage, p2p, rpc, node, ops, security]
+# - depends_on: list of ids
+# - description: what to do
+# - acceptance: explicit acceptance criteria
+# - tests: tests required (unit/integration/fuzz/diff/bench)
+#
+# Note: Avoid time estimates.
+
+- id: A1
+  title: "Repo automation Makefile + package runner"
+  subsystem: foundations
+  depends_on: []
+  description: >
+    Provide make targets to run format, check, and tests across all packages.
+  acceptance:
+    - "make fmt/check/test works from repo root"
+  tests:
+    - "CI runs make ci"
+
+- id: A2
+  title: "CI workflow for format + check + test"
+  subsystem: foundations
+  depends_on: [A1]
+  description: >
+    Add a GitHub Actions workflow to run make ci on push/PR.
+  acceptance:
+    - "CI pipeline runs on PRs"
+  tests:
+    - "CI green on a no-op change"
+
+- id: B1
+  title: "Implement CompactSize/varint codec"
+  subsystem: bitcoin
+  depends_on: []
+  description: >
+    Add encode/decode for Bitcoin CompactSize integers with strict bounds.
+  acceptance:
+    - "Edge cases at 0xFC/0xFD/0xFE/0xFF boundaries pass vectors"
+    - "Malformed encodings rejected"
+  tests:
+    - "unit"
+
+- id: B2
+  title: "Implement base58check encode/decode"
+  subsystem: bitcoin
+  depends_on: []
+  description: >
+    Implement Base58Check with checksum rules for addresses/WIF.
+  acceptance:
+    - "Known vectors pass"
+    - "Invalid checksum rejected"
+  tests:
+    - "unit"
+
+- id: B3
+  title: "Implement bech32 + bech32m encode/decode"
+  subsystem: bitcoin
+  depends_on: []
+  description: >
+    Implement Bech32 and Bech32m for segwit addresses.
+  acceptance:
+    - "Known vectors pass"
+    - "Mixed case rejected"
+  tests:
+    - "unit"
+
+- id: B4
+  title: "Consensus serialization for Tx (legacy)"
+  subsystem: bitcoin
+  depends_on: [B1]
+  description: >
+    Implement transaction encode/decode without witness.
+  acceptance:
+    - "Roundtrip and vector tests"
+  tests:
+    - "unit"
+
+- id: B5
+  title: "Consensus serialization for Tx (witness)"
+  subsystem: bitcoin
+  depends_on: [B4]
+  description: >
+    Extend tx serialization for segwit (marker/flag and witness stack).
+  acceptance:
+    - "txid and wtxid computed correctly for vectors"
+  tests:
+    - "unit"
+
+- id: C1
+  title: "SHA256d hashing utilities"
+  subsystem: bitcoin
+  depends_on: []
+  description: >
+    Implement sha256 and double-sha256 helpers with tests.
+  acceptance:
+    - "Vectors match expected hashes"
+  tests:
+    - "unit"
+
+- id: C2
+  title: "RIPEMD160 + HASH160"
+  subsystem: bitcoin
+  depends_on: [C1]
+  description: >
+    Implement ripemd160 and hash160 (sha256 then ripemd160).
+  acceptance:
+    - "Vectors pass"
+  tests:
+    - "unit"
+
+- id: C3
+  title: "secp256k1 verify interface"
+  subsystem: consensus
+  depends_on: []
+  description: >
+    Define a crypto interface for signature verification (ECDSA + Schnorr).
+  acceptance:
+    - "Interface used by consensus code; no direct NIF calls elsewhere"
+  tests:
+    - "unit"
+
+- id: D1
+  title: "Script opcode table and parser"
+  subsystem: consensus
+  depends_on: []
+  description: >
+    Parse script bytes to opcodes and pushdata with strict bounds.
+  acceptance:
+    - "Parser total and rejects oversize push"
+  tests:
+    - "unit"
+
+- id: D2
+  title: "Legacy script evaluation core (stack machine)"
+  subsystem: consensus
+  depends_on: [D1, C3]
+  description: >
+    Implement baseline script interpreter for legacy spends.
+  acceptance:
+    - "Opcode group tests pass (stack ops, flow control, arithmetic basics)"
+  tests:
+    - "unit"
+
+- id: D3
+  title: "SegWit v0 script evaluation"
+  subsystem: consensus
+  depends_on: [D2]
+  description: >
+    Implement witness program rules and BIP143 digest integration.
+  acceptance:
+    - "SegWit vectors pass"
+  tests:
+    - "unit"
+
+- id: D4
+  title: "Taproot schnorr verification + tagged hash helpers"
+  subsystem: consensus
+  depends_on: [C3, C1]
+  description: >
+    Add tagged hash and schnorr verify support for taproot.
+  acceptance:
+    - "BIP340 vectors pass"
+  tests:
+    - "unit"
+
+- id: E1
+  title: "Transaction stateless validation"
+  subsystem: consensus
+  depends_on: [B4, B5]
+  description: >
+    Implement non-context checks: sizes, counts, value ranges.
+  acceptance:
+    - "Invalid txs rejected with stable error types"
+  tests:
+    - "unit"
+
+- id: F1
+  title: "Storage engine abstraction (KV interface)"
+  subsystem: storage
+  depends_on: []
+  description: >
+    Define a storage interface for UTXO/index DB with a concrete backend.
+  acceptance:
+    - "CRUD operations tested"
+  tests:
+    - "unit"
+
+- id: F2
+  title: "UTXO encoding and lookup"
+  subsystem: storage
+  depends_on: [F1, B4]
+  description: >
+    Implement coin record encoding and outpoint lookup.
+  acceptance:
+    - "Roundtrip tests; malformed values handled"
+  tests:
+    - "unit"
+
+- id: F3
+  title: "ConnectBlock: apply UTXO transitions"
+  subsystem: storage
+  depends_on: [F2, E1]
+  description: >
+    Apply tx spends/creates to UTXO set with undo data.
+  acceptance:
+    - "Connect/disconnect roundtrip tests"
+  tests:
+    - "unit"
+
+- id: G1
+  title: "P2P message envelope parser"
+  subsystem: p2p
+  depends_on: [C1]
+  description: >
+    Implement Bitcoin message header parsing with checksum verification.
+  acceptance:
+    - "Oversize payload rejected before allocation"
+  tests:
+    - "unit"
+    - "fuzz (smoke)"
+
+- id: G2
+  title: "version/verack handshake"
+  subsystem: p2p
+  depends_on: [G1]
+  description: >
+    Implement version and verack message codec and handshake state machine.
+  acceptance:
+    - "Handshake completes with test harness peer"
+  tests:
+    - "unit"
+    - "integration (regtest harness)"
+
+- id: J1
+  title: "JSON-RPC server skeleton with auth"
+  subsystem: rpc
+  depends_on: []
+  description: >
+    Provide an HTTP JSON-RPC server skeleton with authentication hooks.
+  acceptance:
+    - "Unauthenticated requests rejected"
+  tests:
+    - "integration (smoke)"
+
+- id: K1
+  title: "Metrics endpoint and basic gauges"
+  subsystem: ops
+  depends_on: []
+  description: >
+    Expose /metrics endpoint and basic node health metrics.
+  acceptance:
+    - "Prometheus scrape returns metrics"
+  tests:
+    - "integration (smoke)"

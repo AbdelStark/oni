@@ -1,0 +1,1 @@
+-record(out_point, {txid :: oni_bitcoin:txid(), vout :: integer()}).

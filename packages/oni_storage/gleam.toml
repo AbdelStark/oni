@@ -1,0 +1,14 @@
+name = "oni_storage"
+version = "0.1.0"
+gleam = ">= 1.0.0"
+description = "Storage engine, block store, and chainstate persistence for oni."
+licences = ["MIT"]
+target = "erlang"
+
+[dependencies]
+gleam_stdlib = { path = "../../external/gleam_stdlib" }
+gleam_erlang = { path = "../../external/gleam_erlang" }
+oni_bitcoin = { path = "../oni_bitcoin" }
+
+[dev-dependencies]
+gleeunit = { path = "../../external/gleeunit" }

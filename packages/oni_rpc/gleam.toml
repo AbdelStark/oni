@@ -1,0 +1,14 @@
+name = "oni_rpc"
+version = "0.1.0"
+gleam = ">= 1.0.0"
+description = "JSON-RPC and operator endpoints for oni."
+licences = ["MIT"]
+target = "erlang"
+
+[dependencies]
+gleam_stdlib = { path = "../../external/gleam_stdlib" }
+gleam_erlang = { path = "../../external/gleam_erlang" }
+gleam_json = { path = "../../external/gleam_json" }
+
+[dev-dependencies]
+gleeunit = { path = "../../external/gleeunit" }

@@ -1,0 +1,10 @@
+name = "thoas"
+version = "1.2.1"
+gleam = ">= 0.32.0"
+description = "A blazing fast JSON parser for Erlang"
+licences = ["Apache-2.0"]
+target = "erlang"
+
+[dependencies]
+
+[dev-dependencies]

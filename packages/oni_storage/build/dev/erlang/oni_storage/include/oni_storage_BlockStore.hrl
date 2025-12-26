@@ -1,0 +1,1 @@
+-record(block_store, {blocks :: gleam@dict:dict(binary(), oni_bitcoin:block())}).

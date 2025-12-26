@@ -1,0 +1,1 @@
+-record(script, {bytes :: bitstring()}).

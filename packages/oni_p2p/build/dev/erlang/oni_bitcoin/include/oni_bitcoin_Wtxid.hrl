@@ -1,0 +1,1 @@
+-record(wtxid, {hash :: oni_bitcoin:hash256()}).
