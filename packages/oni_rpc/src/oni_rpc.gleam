@@ -766,9 +766,9 @@ fn handle_decoderawtransaction(params: RpcParams, _ctx: RpcContext) -> Result(Rp
             Ok(#(tx, _)) -> {
               let txid = oni_bitcoin.txid_from_tx(tx)
               let result = dict.new()
-                |> dict.insert("txid", RpcString(oni_bitcoin.hash256_to_hex(txid.hash)))
+                |> dict.insert("txid", RpcString(oni_bitcoin.txid_to_hex(txid)))
                 |> dict.insert("version", RpcInt(tx.version))
-                |> dict.insert("locktime", RpcInt(tx.locktime))
+                |> dict.insert("locktime", RpcInt(tx.lock_time))
                 |> dict.insert("vin", encode_tx_inputs(tx.inputs))
                 |> dict.insert("vout", encode_tx_outputs(tx.outputs))
 
@@ -785,7 +785,7 @@ fn handle_decoderawtransaction(params: RpcParams, _ctx: RpcContext) -> Result(Rp
 fn encode_tx_inputs(inputs: List(oni_bitcoin.TxIn)) -> RpcValue {
   RpcArray(list.index_map(inputs, fn(input, _idx) {
     let obj = dict.new()
-      |> dict.insert("txid", RpcString(oni_bitcoin.hash256_to_hex(input.prevout.txid.hash)))
+      |> dict.insert("txid", RpcString(oni_bitcoin.txid_to_hex(input.prevout.txid)))
       |> dict.insert("vout", RpcInt(input.prevout.vout))
       |> dict.insert("sequence", RpcInt(input.sequence))
     RpcObject(obj)
@@ -837,7 +837,7 @@ fn handle_sendrawtransaction(params: RpcParams, _ctx: RpcContext) -> Result(RpcV
             Error(_) -> Error(InvalidParams("TX decode failed"))
             Ok(#(tx, _)) -> {
               let txid = oni_bitcoin.txid_from_tx(tx)
-              Ok(RpcString(oni_bitcoin.hash256_to_hex(txid.hash)))
+              Ok(RpcString(oni_bitcoin.txid_to_hex(txid)))
             }
           }
         }
