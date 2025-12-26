@@ -1,7 +1,6 @@
 import gleeunit
 import gleeunit/should
 import gleam/bit_array
-import gleam/list
 import oni_consensus
 import validation
 import oni_bitcoin

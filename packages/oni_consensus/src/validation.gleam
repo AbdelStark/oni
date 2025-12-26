@@ -12,16 +12,16 @@ import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import oni_bitcoin.{
-  type Amount, type Block, type BlockHash, type BlockHeader, type Hash256,
-  type OutPoint, type Script, type Transaction, type TxIn, type TxOut, type Txid,
+  type Amount, type Block, type Hash256, type OutPoint, type Script,
+  type Transaction, type TxIn, type TxOut,
 }
 import oni_storage.{type Coin, type UtxoView}
 import oni_consensus.{
   type ConsensusError, BlockBadCoinbase, BlockDuplicateTx, BlockInvalidMerkleRoot,
   BlockInvalidWitnessCommitment, BlockWeightExceeded, TxDuplicateInputs,
-  TxEmptyInputs, TxEmptyOutputs, TxInputNotFound, TxInputSpent,
-  TxInvalidAmount, TxLockTimeNotMet, TxOutputValueOverflow, TxOversized,
-  TxPrematureCoinbaseSpend, TxSequenceLockNotMet, TxSigOpCountExceeded,
+  TxEmptyInputs, TxEmptyOutputs, TxInputNotFound, TxInvalidAmount,
+  TxLockTimeNotMet, TxOutputValueOverflow, TxOversized, TxPrematureCoinbaseSpend,
+  TxSequenceLockNotMet,
 }
 
 // ============================================================================
@@ -55,14 +55,14 @@ pub const witness_scale_factor = 4
 /// Locktime threshold (if >= this, it's a timestamp, otherwise block height)
 pub const locktime_threshold = 500_000_000
 
-/// BIP68 sequence lock time type flag
-pub const sequence_locktime_type_flag = 1 <<. 22
+/// BIP68 sequence lock time type flag (1 << 22)
+pub const sequence_locktime_type_flag = 4_194_304
 
 /// BIP68 sequence lock time mask
 pub const sequence_locktime_mask = 0x0000FFFF
 
-/// BIP68 disable flag
-pub const sequence_locktime_disable_flag = 1 <<. 31
+/// BIP68 disable flag (1 << 31)
+pub const sequence_locktime_disable_flag = 2_147_483_648
 
 /// Witness commitment header (OP_RETURN + 36 bytes)
 pub const witness_commitment_header_hex = "6a24aa21a9ed"
@@ -645,13 +645,12 @@ fn prepare_legacy_sighash_tx(
       case list_nth(tx.outputs, input_index) {
         Ok(out) -> {
           // Fill with empty outputs up to input_index
+          // Bitcoin uses -1 (0xFFFFFFFFFFFFFFFF) as the value for blank outputs
+          let blank_amount = oni_bitcoin.Amount(sats: -1)
           list.range(0, input_index - 1)
           |> list.map(fn(_) {
             oni_bitcoin.TxOut(
-              value: case oni_bitcoin.amount_from_sats(-1) {
-                Ok(amt) -> amt
-                Error(_) -> oni_bitcoin.Amount(sats: -1)
-              },
+              value: blank_amount,
               script_pubkey: oni_bitcoin.script_from_bytes(<<>>),
             )
           })
