@@ -555,6 +555,9 @@ fn register_default_handlers(handlers: Dict(String, MethodHandler)) -> Dict(Stri
   |> dict.insert("getconnectioncount", handle_getconnectioncount)
   |> dict.insert("getbestblockhash", handle_getbestblockhash)
   |> dict.insert("getblockcount", handle_getblockcount)
+  |> dict.insert("getblockhash", handle_getblockhash)
+  |> dict.insert("getblock", handle_getblock)
+  |> dict.insert("getblockheader", handle_getblockheader)
   |> dict.insert("getdifficulty", handle_getdifficulty)
   |> dict.insert("uptime", handle_uptime)
   |> dict.insert("help", handle_help)
@@ -564,8 +567,11 @@ fn register_default_handlers(handlers: Dict(String, MethodHandler)) -> Dict(Stri
   |> dict.insert("verifymessage", handle_verifymessage)
   |> dict.insert("decoderawtransaction", handle_decoderawtransaction)
   |> dict.insert("decodescript", handle_decodescript)
+  |> dict.insert("getrawtransaction", handle_getrawtransaction)
   |> dict.insert("getrawmempool", handle_getrawmempool)
   |> dict.insert("sendrawtransaction", handle_sendrawtransaction)
+  |> dict.insert("gettxout", handle_gettxout)
+  |> dict.insert("getblocktemplate", handle_getblocktemplate)
 }
 
 // Blockchain info
@@ -686,7 +692,9 @@ getblockchaininfo
 getblockcount
 getblockhash height
 getblockheader \"blockhash\" ( verbose )
+getblocktemplate ( \"template_request\" )
 getdifficulty
+gettxout \"txid\" n ( include_mempool )
 
 == Network ==
 getconnectioncount
@@ -694,6 +702,7 @@ getnetworkinfo
 getpeerinfo
 
 == Mining ==
+getblocktemplate ( \"template_request\" )
 getmininginfo
 
 == Mempool ==
@@ -703,6 +712,7 @@ getrawmempool ( verbose mempool_sequence )
 == Rawtransactions ==
 decoderawtransaction \"hexstring\" ( iswitness )
 decodescript \"hexstring\"
+getrawtransaction \"txid\" ( verbose \"blockhash\" )
 sendrawtransaction \"hexstring\" ( maxfeerate )
 
 == Util ==
@@ -710,6 +720,7 @@ validateaddress \"address\"
 verifymessage \"address\" \"signature\" \"message\"
 
 == Control ==
+echo \"message\" ...
 help ( \"command\" )
 stop
 uptime
@@ -766,9 +777,9 @@ fn handle_decoderawtransaction(params: RpcParams, _ctx: RpcContext) -> Result(Rp
             Ok(#(tx, _)) -> {
               let txid = oni_bitcoin.txid_from_tx(tx)
               let result = dict.new()
-                |> dict.insert("txid", RpcString(oni_bitcoin.hash256_to_hex(txid.hash)))
+                |> dict.insert("txid", RpcString(oni_bitcoin.txid_to_hex(txid)))
                 |> dict.insert("version", RpcInt(tx.version))
-                |> dict.insert("locktime", RpcInt(tx.locktime))
+                |> dict.insert("locktime", RpcInt(tx.lock_time))
                 |> dict.insert("vin", encode_tx_inputs(tx.inputs))
                 |> dict.insert("vout", encode_tx_outputs(tx.outputs))
 
@@ -785,7 +796,7 @@ fn handle_decoderawtransaction(params: RpcParams, _ctx: RpcContext) -> Result(Rp
 fn encode_tx_inputs(inputs: List(oni_bitcoin.TxIn)) -> RpcValue {
   RpcArray(list.index_map(inputs, fn(input, _idx) {
     let obj = dict.new()
-      |> dict.insert("txid", RpcString(oni_bitcoin.hash256_to_hex(input.prevout.txid.hash)))
+      |> dict.insert("txid", RpcString(oni_bitcoin.txid_to_hex(input.prevout.txid)))
       |> dict.insert("vout", RpcInt(input.prevout.vout))
       |> dict.insert("sequence", RpcInt(input.sequence))
     RpcObject(obj)
@@ -837,7 +848,7 @@ fn handle_sendrawtransaction(params: RpcParams, _ctx: RpcContext) -> Result(RpcV
             Error(_) -> Error(InvalidParams("TX decode failed"))
             Ok(#(tx, _)) -> {
               let txid = oni_bitcoin.txid_from_tx(tx)
-              Ok(RpcString(oni_bitcoin.hash256_to_hex(txid.hash)))
+              Ok(RpcString(oni_bitcoin.txid_to_hex(txid)))
             }
           }
         }
@@ -845,6 +856,203 @@ fn handle_sendrawtransaction(params: RpcParams, _ctx: RpcContext) -> Result(RpcV
     }
     _ -> Error(InvalidParams("sendrawtransaction \"hexstring\""))
   }
+}
+
+// Get block hash by height
+fn handle_getblockhash(params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
+  case params {
+    ParamsArray([RpcInt(height), ..]) -> {
+      // In a real implementation, we would look up the block hash at this height
+      // For now, return genesis for height 0, error otherwise
+      case height {
+        0 -> {
+          let genesis = oni_bitcoin.mainnet_params().genesis_hash
+          Ok(RpcString(oni_bitcoin.block_hash_to_hex(genesis)))
+        }
+        _ -> Error(Internal("Block not found"))
+      }
+    }
+    _ -> Error(InvalidParams("getblockhash height"))
+  }
+}
+
+// Get block data
+fn handle_getblock(params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
+  case params {
+    ParamsArray([RpcString(blockhash), ..rest]) -> {
+      // Determine verbosity level (0=hex, 1=json, 2=json+tx)
+      let verbosity = case rest {
+        [RpcInt(v), ..] -> v
+        _ -> 1
+      }
+
+      // Validate block hash
+      case string.length(blockhash) == 64 {
+        False -> Error(InvalidParams("Invalid block hash"))
+        True -> {
+          // Return block info based on verbosity
+          case verbosity {
+            0 -> {
+              // Return raw hex - placeholder
+              Ok(RpcString(""))
+            }
+            _ -> {
+              // Return JSON object
+              let result = dict.new()
+                |> dict.insert("hash", RpcString(blockhash))
+                |> dict.insert("confirmations", RpcInt(1))
+                |> dict.insert("height", RpcInt(0))
+                |> dict.insert("version", RpcInt(1))
+                |> dict.insert("versionHex", RpcString("00000001"))
+                |> dict.insert("merkleroot", RpcString("0000000000000000000000000000000000000000000000000000000000000000"))
+                |> dict.insert("time", RpcInt(0))
+                |> dict.insert("mediantime", RpcInt(0))
+                |> dict.insert("nonce", RpcInt(0))
+                |> dict.insert("bits", RpcString("1d00ffff"))
+                |> dict.insert("difficulty", RpcFloat(1.0))
+                |> dict.insert("chainwork", RpcString("0000000000000000000000000000000000000000000000000000000000000000"))
+                |> dict.insert("nTx", RpcInt(1))
+                |> dict.insert("tx", RpcArray([]))
+
+              Ok(RpcObject(result))
+            }
+          }
+        }
+      }
+    }
+    _ -> Error(InvalidParams("getblock \"blockhash\" ( verbosity )"))
+  }
+}
+
+// Get block header
+fn handle_getblockheader(params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
+  case params {
+    ParamsArray([RpcString(blockhash), ..rest]) -> {
+      // Determine if verbose (default true)
+      let verbose = case rest {
+        [RpcBool(v), ..] -> v
+        _ -> True
+      }
+
+      // Validate block hash
+      case string.length(blockhash) == 64 {
+        False -> Error(InvalidParams("Invalid block hash"))
+        True -> {
+          case verbose {
+            False -> {
+              // Return raw hex header (80 bytes)
+              Ok(RpcString(""))
+            }
+            True -> {
+              // Return JSON object
+              let result = dict.new()
+                |> dict.insert("hash", RpcString(blockhash))
+                |> dict.insert("confirmations", RpcInt(1))
+                |> dict.insert("height", RpcInt(0))
+                |> dict.insert("version", RpcInt(1))
+                |> dict.insert("versionHex", RpcString("00000001"))
+                |> dict.insert("merkleroot", RpcString("0000000000000000000000000000000000000000000000000000000000000000"))
+                |> dict.insert("time", RpcInt(0))
+                |> dict.insert("mediantime", RpcInt(0))
+                |> dict.insert("nonce", RpcInt(0))
+                |> dict.insert("bits", RpcString("1d00ffff"))
+                |> dict.insert("difficulty", RpcFloat(1.0))
+                |> dict.insert("chainwork", RpcString("0000000000000000000000000000000000000000000000000000000000000000"))
+                |> dict.insert("nTx", RpcInt(1))
+
+              Ok(RpcObject(result))
+            }
+          }
+        }
+      }
+    }
+    _ -> Error(InvalidParams("getblockheader \"blockhash\" ( verbose )"))
+  }
+}
+
+// Get raw transaction
+fn handle_getrawtransaction(params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
+  case params {
+    ParamsArray([RpcString(txid), ..rest]) -> {
+      // Determine verbosity
+      let verbose = case rest {
+        [RpcBool(v), ..] -> v
+        [RpcInt(v), ..] -> v != 0
+        _ -> False
+      }
+
+      // Validate txid
+      case string.length(txid) == 64 {
+        False -> Error(InvalidParams("Invalid txid"))
+        True -> {
+          case verbose {
+            False -> {
+              // Return raw hex
+              Ok(RpcString(""))
+            }
+            True -> {
+              // Return JSON object
+              let result = dict.new()
+                |> dict.insert("txid", RpcString(txid))
+                |> dict.insert("hash", RpcString(txid))
+                |> dict.insert("version", RpcInt(1))
+                |> dict.insert("size", RpcInt(0))
+                |> dict.insert("vsize", RpcInt(0))
+                |> dict.insert("weight", RpcInt(0))
+                |> dict.insert("locktime", RpcInt(0))
+                |> dict.insert("vin", RpcArray([]))
+                |> dict.insert("vout", RpcArray([]))
+
+              Ok(RpcObject(result))
+            }
+          }
+        }
+      }
+    }
+    _ -> Error(InvalidParams("getrawtransaction \"txid\" ( verbose \"blockhash\" )"))
+  }
+}
+
+// Get transaction output
+fn handle_gettxout(params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
+  case params {
+    ParamsArray([RpcString(txid), RpcInt(n), ..]) -> {
+      // Validate txid
+      case string.length(txid) == 64 {
+        False -> Error(InvalidParams("Invalid txid"))
+        True -> {
+          // In real implementation, look up UTXO
+          // For now, return null (not found)
+          let _ = n
+          Ok(RpcNull)
+        }
+      }
+    }
+    _ -> Error(InvalidParams("gettxout \"txid\" n ( include_mempool )"))
+  }
+}
+
+// Get block template (for mining)
+fn handle_getblocktemplate(_params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
+  // Return a basic block template
+  let result = dict.new()
+    |> dict.insert("version", RpcInt(536870912))  // BIP9 versionbits
+    |> dict.insert("previousblockhash", RpcString("0000000000000000000000000000000000000000000000000000000000000000"))
+    |> dict.insert("transactions", RpcArray([]))
+    |> dict.insert("coinbaseaux", RpcObject(dict.new()))
+    |> dict.insert("coinbasevalue", RpcInt(625_000_000))  // 6.25 BTC subsidy
+    |> dict.insert("target", RpcString("00000000ffff0000000000000000000000000000000000000000000000000000"))
+    |> dict.insert("mintime", RpcInt(0))
+    |> dict.insert("mutable", RpcArray([RpcString("time"), RpcString("transactions"), RpcString("prevblock")]))
+    |> dict.insert("noncerange", RpcString("00000000ffffffff"))
+    |> dict.insert("sigoplimit", RpcInt(80000))
+    |> dict.insert("sizelimit", RpcInt(4000000))
+    |> dict.insert("weightlimit", RpcInt(4000000))
+    |> dict.insert("curtime", RpcInt(0))
+    |> dict.insert("bits", RpcString("1d00ffff"))
+    |> dict.insert("height", RpcInt(0))
+
+  Ok(RpcObject(result))
 }
 
 // ============================================================================
