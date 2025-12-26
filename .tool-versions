@@ -1,0 +1,5 @@
+# Tool versions for asdf/mise version manager
+# Install with: asdf install or mise install
+
+erlang 27.2
+gleam 1.6.3

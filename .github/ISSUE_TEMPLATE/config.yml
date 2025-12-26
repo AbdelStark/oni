@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📖 Documentation
+    url: https://github.com/AbdelStark/oni/tree/main/docs
+    about: Check the documentation for answers
+  - name: 💬 Discussions
+    url: https://github.com/AbdelStark/oni/discussions
+    about: Ask questions and discuss with the community
+  - name: 🔒 Security Vulnerability
+    url: https://github.com/AbdelStark/oni/security/policy
+    about: Report security vulnerabilities responsibly

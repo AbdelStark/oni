@@ -1,0 +1,209 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master, develop]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GLEAM_VERSION: "1.6.3"
+  OTP_VERSION: "27.2"
+
+jobs:
+  # Quick format check - fast feedback
+  format:
+    name: Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Erlang/OTP
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{ env.OTP_VERSION }}
+          gleam-version: ${{ env.GLEAM_VERSION }}
+
+      - name: Check formatting
+        run: make fmt-check
+
+  # Type checking
+  typecheck:
+    name: Type Check
+    runs-on: ubuntu-latest
+    needs: format
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Erlang/OTP
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{ env.OTP_VERSION }}
+          gleam-version: ${{ env.GLEAM_VERSION }}
+
+      - name: Cache Gleam build
+        uses: actions/cache@v4
+        with:
+          path: |
+            packages/*/build
+            ~/.cache/gleam
+          key: gleam-${{ runner.os }}-${{ env.GLEAM_VERSION }}-${{ env.OTP_VERSION }}-${{ hashFiles('packages/*/gleam.toml') }}
+          restore-keys: |
+            gleam-${{ runner.os }}-${{ env.GLEAM_VERSION }}-${{ env.OTP_VERSION }}-
+
+      - name: Type check all packages
+        run: make check
+
+  # Matrix test across multiple OTP versions
+  test:
+    name: Test (OTP ${{ matrix.otp }})
+    runs-on: ubuntu-latest
+    needs: typecheck
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - otp: "26.2"
+            gleam: "1.6.3"
+          - otp: "27.2"
+            gleam: "1.6.3"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Erlang/OTP
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{ matrix.otp }}
+          gleam-version: ${{ matrix.gleam }}
+
+      - name: Cache Gleam build
+        uses: actions/cache@v4
+        with:
+          path: |
+            packages/*/build
+            ~/.cache/gleam
+          key: gleam-${{ runner.os }}-${{ matrix.gleam }}-${{ matrix.otp }}-${{ hashFiles('packages/*/gleam.toml') }}
+          restore-keys: |
+            gleam-${{ runner.os }}-${{ matrix.gleam }}-${{ matrix.otp }}-
+
+      - name: Run tests
+        run: make test
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-otp-${{ matrix.otp }}
+          path: packages/*/build/test_results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # Build documentation
+  docs:
+    name: Build Documentation
+    runs-on: ubuntu-latest
+    needs: typecheck
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Erlang/OTP
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{ env.OTP_VERSION }}
+          gleam-version: ${{ env.GLEAM_VERSION }}
+
+      - name: Cache Gleam build
+        uses: actions/cache@v4
+        with:
+          path: |
+            packages/*/build
+            ~/.cache/gleam
+          key: gleam-${{ runner.os }}-${{ env.GLEAM_VERSION }}-${{ env.OTP_VERSION }}-${{ hashFiles('packages/*/gleam.toml') }}
+          restore-keys: |
+            gleam-${{ runner.os }}-${{ env.GLEAM_VERSION }}-${{ env.OTP_VERSION }}-
+
+      - name: Generate documentation
+        run: |
+          for pkg in packages/*; do
+            echo "==> Building docs for $(basename $pkg)"
+            (cd "$pkg" && gleam docs build) || true
+          done
+
+      - name: Upload documentation
+        uses: actions/upload-artifact@v4
+        with:
+          name: documentation
+          path: packages/*/build/docs/
+          if-no-files-found: ignore
+          retention-days: 30
+
+  # Integration tests (when available)
+  integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' || github.event.pull_request.draft == false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Erlang/OTP
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{ env.OTP_VERSION }}
+          gleam-version: ${{ env.GLEAM_VERSION }}
+
+      - name: Cache Gleam build
+        uses: actions/cache@v4
+        with:
+          path: |
+            packages/*/build
+            ~/.cache/gleam
+          key: gleam-${{ runner.os }}-${{ env.GLEAM_VERSION }}-${{ env.OTP_VERSION }}-${{ hashFiles('packages/*/gleam.toml') }}
+          restore-keys: |
+            gleam-${{ runner.os }}-${{ env.GLEAM_VERSION }}-${{ env.OTP_VERSION }}-
+
+      - name: Run integration tests
+        run: |
+          if [ -f scripts/run_integration_tests.sh ]; then
+            chmod +x scripts/run_integration_tests.sh
+            ./scripts/run_integration_tests.sh
+          else
+            echo "No integration tests script found, skipping..."
+          fi
+
+  # Quality gate - summary job that must pass
+  quality-gate:
+    name: Quality Gate
+    runs-on: ubuntu-latest
+    needs: [format, typecheck, test, docs]
+    if: always()
+    steps:
+      - name: Check all jobs passed
+        run: |
+          if [[ "${{ needs.format.result }}" != "success" ]]; then
+            echo "❌ Format check failed"
+            exit 1
+          fi
+          if [[ "${{ needs.typecheck.result }}" != "success" ]]; then
+            echo "❌ Type check failed"
+            exit 1
+          fi
+          if [[ "${{ needs.test.result }}" != "success" ]]; then
+            echo "❌ Tests failed"
+            exit 1
+          fi
+          if [[ "${{ needs.docs.result }}" != "success" ]]; then
+            echo "❌ Documentation build failed"
+            exit 1
+          fi
+          echo "✅ All quality checks passed!"

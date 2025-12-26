@@ -1,0 +1,85 @@
+name: Benchmarks
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+concurrency:
+  group: benchmark-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GLEAM_VERSION: "1.6.3"
+  OTP_VERSION: "27.2"
+
+jobs:
+  benchmark:
+    name: Run Benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Erlang/OTP
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{ env.OTP_VERSION }}
+          gleam-version: ${{ env.GLEAM_VERSION }}
+
+      - name: Cache Gleam build
+        uses: actions/cache@v4
+        with:
+          path: |
+            packages/*/build
+            ~/.cache/gleam
+          key: gleam-${{ runner.os }}-${{ env.GLEAM_VERSION }}-${{ env.OTP_VERSION }}-${{ hashFiles('packages/*/gleam.toml') }}
+          restore-keys: |
+            gleam-${{ runner.os }}-${{ env.GLEAM_VERSION }}-${{ env.OTP_VERSION }}-
+
+      - name: Run benchmarks
+        id: benchmark
+        run: |
+          echo "## Benchmark Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -f scripts/bench.sh ]; then
+            chmod +x scripts/bench.sh
+            ./scripts/bench.sh 2>&1 | tee benchmark-output.txt
+
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat benchmark-output.txt >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          else
+            echo "No benchmark script found, running package benchmarks..." >> $GITHUB_STEP_SUMMARY
+
+            # Run package-level benchmarks if they exist
+            for pkg in packages/*; do
+              PKG_NAME=$(basename $pkg)
+              echo "### ${PKG_NAME}" >> $GITHUB_STEP_SUMMARY
+
+              # Check for benchmark tests
+              if ls $pkg/test/*_bench*.gleam 2>/dev/null; then
+                echo "Running benchmarks for ${PKG_NAME}..."
+                (cd "$pkg" && gleam test 2>&1) | tee -a benchmark-output.txt
+              else
+                echo "_No benchmarks defined_" >> $GITHUB_STEP_SUMMARY
+              fi
+            done
+          fi
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: benchmark-output.txt
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Compare with baseline (PR only)
+        if: github.event_name == 'pull_request'
+        run: |
+          echo "📊 Benchmark comparison would go here"
+          echo "For now, please review the benchmark output manually"
