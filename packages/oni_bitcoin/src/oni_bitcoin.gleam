@@ -1746,7 +1746,7 @@ pub fn encode_block_header(header: BlockHeader) -> BitArray {
   bit_array.concat([
     <<header.version:32-little>>,
     header.prev_block.hash.bytes,
-    header.merkle_root.hash.bytes,
+    header.merkle_root.bytes,
     <<header.timestamp:32-little>>,
     <<header.bits:32-little>>,
     <<header.nonce:32-little>>,
@@ -1759,7 +1759,7 @@ pub fn decode_block_header(bytes: BitArray) -> Result(#(BlockHeader, BitArray), 
     <<version:32-little, prev:256-bits, merkle:256-bits,
       timestamp:32-little, bits:32-little, nonce:32-little, rest:bits>> -> {
       let prev_block = BlockHash(Hash256(<<prev:256-bits>>))
-      let merkle_root = MerkleRoot(Hash256(<<merkle:256-bits>>))
+      let merkle_root = Hash256(<<merkle:256-bits>>)
       let header = BlockHeader(
         version: version,
         prev_block: prev_block,

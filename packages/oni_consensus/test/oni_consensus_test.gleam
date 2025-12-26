@@ -528,3 +528,279 @@ pub fn coin_maturity_test() {
   oni_storage.coin_is_mature(coinbase_coin, 200) |> should.be_true
   oni_storage.coin_is_mature(coinbase_coin, 201) |> should.be_true
 }
+
+// ============================================================================
+// Merkle Root Computation Tests
+// ============================================================================
+
+pub fn merkle_root_empty_test() {
+  let txids: List(oni_bitcoin.Hash256) = []
+  let root = oni_consensus.compute_merkle_root(txids)
+  // Empty list should return zero hash
+  root.bytes |> should.equal(<<0:256>>)
+}
+
+pub fn merkle_root_single_test() {
+  // Single txid should be the merkle root
+  let assert Ok(txid) = oni_bitcoin.hash256_from_bytes(<<1:256>>)
+  let root = oni_consensus.compute_merkle_root([txid])
+  root |> should.equal(txid)
+}
+
+pub fn merkle_root_two_test() {
+  // Two txids - hash them together
+  let assert Ok(txid1) = oni_bitcoin.hash256_from_bytes(<<1:256>>)
+  let assert Ok(txid2) = oni_bitcoin.hash256_from_bytes(<<2:256>>)
+  let root = oni_consensus.compute_merkle_root([txid1, txid2])
+  // The root should be hash256(txid1 || txid2)
+  let expected = oni_bitcoin.hash256_digest(bit_array.concat([txid1.bytes, txid2.bytes]))
+  root |> should.equal(expected)
+}
+
+pub fn merkle_root_three_test() {
+  // Three txids - should duplicate the last one for pairing
+  let assert Ok(txid1) = oni_bitcoin.hash256_from_bytes(<<1:256>>)
+  let assert Ok(txid2) = oni_bitcoin.hash256_from_bytes(<<2:256>>)
+  let assert Ok(txid3) = oni_bitcoin.hash256_from_bytes(<<3:256>>)
+  let root = oni_consensus.compute_merkle_root([txid1, txid2, txid3])
+  // First level: hash(txid1||txid2), hash(txid3||txid3)
+  let hash12 = oni_bitcoin.hash256_digest(bit_array.concat([txid1.bytes, txid2.bytes]))
+  let hash33 = oni_bitcoin.hash256_digest(bit_array.concat([txid3.bytes, txid3.bytes]))
+  // Second level: hash(hash12||hash33)
+  let expected = oni_bitcoin.hash256_digest(bit_array.concat([hash12.bytes, hash33.bytes]))
+  root |> should.equal(expected)
+}
+
+// ============================================================================
+// Witness Commitment Tests
+// ============================================================================
+
+pub fn witness_commitment_test() {
+  let assert Ok(wtxid_root) = oni_bitcoin.hash256_from_bytes(<<1:256>>)
+  let nonce = <<0:256>>
+  let commitment = oni_consensus.compute_witness_commitment(wtxid_root, nonce)
+  // The commitment should be hash256(wtxid_root || nonce)
+  let expected = oni_bitcoin.hash256_digest(bit_array.concat([wtxid_root.bytes, nonce]))
+  commitment |> should.equal(expected)
+}
+
+// ============================================================================
+// Signature Context Tests
+// ============================================================================
+
+pub fn sig_context_new_test() {
+  // Create a simple transaction for testing
+  let assert Ok(hash) = oni_bitcoin.hash256_from_bytes(<<1:256>>)
+  let outpoint = oni_bitcoin.OutPoint(txid: oni_bitcoin.Txid(hash), vout: 0)
+  let assert Ok(value) = oni_bitcoin.amount_from_sats(1000)
+  let input = oni_bitcoin.TxIn(
+    prevout: outpoint,
+    script_sig: oni_bitcoin.script_from_bytes(<<>>),
+    sequence: 0xffffffff,
+  )
+  let output = oni_bitcoin.TxOut(
+    value: value,
+    script_pubkey: oni_bitcoin.script_from_bytes(<<>>),
+  )
+  let tx = oni_bitcoin.Transaction(
+    version: 1,
+    inputs: [input],
+    outputs: [output],
+    lock_time: 0,
+    witnesses: [],
+  )
+
+  let script_code = oni_bitcoin.script_from_bytes(<<0x76, 0xa9>>)  // OP_DUP OP_HASH160
+
+  // Create sig context
+  let sig_ctx = oni_consensus.sig_context_new(
+    tx,
+    0,  // input_index
+    value,  // spent_value
+    script_code,
+    False,  // not segwit
+    False,  // not taproot
+  )
+
+  sig_ctx.input_index |> should.equal(0)
+  sig_ctx.is_segwit |> should.be_false
+  sig_ctx.is_taproot |> should.be_false
+}
+
+pub fn script_context_with_sig_test() {
+  // Create a simple transaction for testing
+  let assert Ok(hash) = oni_bitcoin.hash256_from_bytes(<<1:256>>)
+  let outpoint = oni_bitcoin.OutPoint(txid: oni_bitcoin.Txid(hash), vout: 0)
+  let assert Ok(value) = oni_bitcoin.amount_from_sats(1000)
+  let input = oni_bitcoin.TxIn(
+    prevout: outpoint,
+    script_sig: oni_bitcoin.script_from_bytes(<<>>),
+    sequence: 0xffffffff,
+  )
+  let output = oni_bitcoin.TxOut(
+    value: value,
+    script_pubkey: oni_bitcoin.script_from_bytes(<<>>),
+  )
+  let tx = oni_bitcoin.Transaction(
+    version: 1,
+    inputs: [input],
+    outputs: [output],
+    lock_time: 0,
+    witnesses: [],
+  )
+
+  let script_code = oni_bitcoin.script_from_bytes(<<0x76, 0xa9>>)
+  let sig_ctx = oni_consensus.sig_context_new(tx, 0, value, script_code, True, False)
+
+  let flags = oni_consensus.default_script_flags()
+  let ctx = oni_consensus.script_context_with_sig(<<0x51>>, flags, sig_ctx)  // OP_TRUE
+
+  // Execute script
+  let result = oni_consensus.execute_script(ctx)
+  result |> should.be_ok
+
+  // Verify sig_ctx is present
+  case ctx.sig_ctx {
+    oni_consensus.SigContextSome(_) -> should.be_true(True)
+    oni_consensus.SigContextNone -> should.fail()
+  }
+}
+
+// ============================================================================
+// Script Checksig Tests (Stub Verification)
+// ============================================================================
+
+pub fn execute_checksig_without_context_test() {
+  // Without sig context, CHECKSIG should push 0 (false)
+  let flags = oni_consensus.default_script_flags()
+  // Push fake signature, push fake pubkey, then OP_CHECKSIG
+  // 0x02 0xab 0xcd = push 2 bytes (signature)
+  // 0x02 0x12 0x34 = push 2 bytes (pubkey)
+  // 0xac = OP_CHECKSIG
+  let script = <<0x02, 0xab, 0xcd, 0x02, 0x12, 0x34, 0xac>>
+  let ctx = oni_consensus.script_context_new(script, flags)
+
+  let result = oni_consensus.execute_script(ctx)
+  result |> should.be_ok
+
+  let assert Ok(final_ctx) = result
+  // Without context, verify_signature returns false, so stack top should be empty (false)
+  case final_ctx.stack {
+    [top, ..] -> {
+      // Top should be empty (false) since no sig context
+      bit_array.byte_size(top) |> should.equal(0)
+    }
+    _ -> should.fail()
+  }
+}
+
+pub fn execute_checksigverify_without_context_fails_test() {
+  // Without sig context, CHECKSIGVERIFY should fail
+  let flags = oni_consensus.default_script_flags()
+  // Push fake signature, push fake pubkey, then OP_CHECKSIGVERIFY
+  let script = <<0x02, 0xab, 0xcd, 0x02, 0x12, 0x34, 0xad>>
+  let ctx = oni_consensus.script_context_new(script, flags)
+
+  let result = oni_consensus.execute_script(ctx)
+  // Should fail because verification fails without context
+  case result {
+    Error(oni_consensus.ScriptCheckSigFailed) -> should.be_true(True)
+    _ -> should.fail()
+  }
+}
+
+// ============================================================================
+// Script Multisig Tests
+// ============================================================================
+
+pub fn execute_checkmultisig_0_of_0_test() {
+  // 0-of-0 multisig: OP_0 OP_0 OP_0 OP_CHECKMULTISIG
+  // Dummy, 0 sigs, 0 pubkeys
+  let flags = oni_consensus.default_script_flags()
+  let script = <<0x00, 0x00, 0x00, 0xae>>
+  let ctx = oni_consensus.script_context_new(script, flags)
+
+  let result = oni_consensus.execute_script(ctx)
+  result |> should.be_ok
+
+  let assert Ok(final_ctx) = result
+  case final_ctx.stack {
+    [top] -> {
+      // 0-of-0 should succeed, pushing 1
+      top |> should.equal(<<1:8>>)
+    }
+    _ -> should.fail()
+  }
+}
+
+// ============================================================================
+// Additional Stack Operation Tests
+// ============================================================================
+
+pub fn execute_op_hash160_test() {
+  let flags = oni_consensus.default_script_flags()
+  // Push 1 byte (0x01), then OP_HASH160
+  let script = <<0x01, 0x01, 0xa9>>
+  let ctx = oni_consensus.script_context_new(script, flags)
+
+  let result = oni_consensus.execute_script(ctx)
+  result |> should.be_ok
+
+  let assert Ok(final_ctx) = result
+  case final_ctx.stack {
+    [hash] -> {
+      // HASH160 output should be 20 bytes
+      bit_array.byte_size(hash) |> should.equal(20)
+    }
+    _ -> should.fail()
+  }
+}
+
+pub fn execute_op_sha256_test() {
+  let flags = oni_consensus.default_script_flags()
+  // Push 1 byte (0x01), then OP_SHA256
+  let script = <<0x01, 0x01, 0xa8>>
+  let ctx = oni_consensus.script_context_new(script, flags)
+
+  let result = oni_consensus.execute_script(ctx)
+  result |> should.be_ok
+
+  let assert Ok(final_ctx) = result
+  case final_ctx.stack {
+    [hash] -> {
+      // SHA256 output should be 32 bytes
+      bit_array.byte_size(hash) |> should.equal(32)
+    }
+    _ -> should.fail()
+  }
+}
+
+pub fn execute_op_hash256_test() {
+  let flags = oni_consensus.default_script_flags()
+  // Push 1 byte (0x01), then OP_HASH256
+  let script = <<0x01, 0x01, 0xaa>>
+  let ctx = oni_consensus.script_context_new(script, flags)
+
+  let result = oni_consensus.execute_script(ctx)
+  result |> should.be_ok
+
+  let assert Ok(final_ctx) = result
+  case final_ctx.stack {
+    [hash] -> {
+      // HASH256 output should be 32 bytes
+      bit_array.byte_size(hash) |> should.equal(32)
+    }
+    _ -> should.fail()
+  }
+}
+
+// ============================================================================
+// Sighash Type Constants Tests
+// ============================================================================
+
+pub fn sighash_constants_test() {
+  oni_consensus.sighash_all |> should.equal(0x01)
+  oni_consensus.sighash_none |> should.equal(0x02)
+  oni_consensus.sighash_single |> should.equal(0x03)
+  oni_consensus.sighash_anyonecanpay |> should.equal(0x80)
+}

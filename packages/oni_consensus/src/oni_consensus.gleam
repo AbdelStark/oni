@@ -371,6 +371,24 @@ pub fn default_script_flags() -> ScriptFlags {
   )
 }
 
+/// Signature verification context - transaction data needed for sighash computation
+pub type SigContext {
+  SigContext(
+    /// The transaction being validated
+    tx: Transaction,
+    /// The input index being verified
+    input_index: Int,
+    /// The value of the output being spent (needed for SegWit sighash)
+    spent_value: Amount,
+    /// The script code to use (for P2SH/P2WSH the redeemScript/witnessScript)
+    script_code: Script,
+    /// Whether this is a SegWit spend
+    is_segwit: Bool,
+    /// Whether this is a Taproot spend
+    is_taproot: Bool,
+  )
+}
+
 /// Script execution context
 pub type ScriptContext {
   ScriptContext(
@@ -382,10 +400,18 @@ pub type ScriptContext {
     codesep_pos: Int,
     flags: ScriptFlags,
     exec_stack: List(Bool),  // For IF/ELSE/ENDIF
+    /// Optional signature context for CHECKSIG operations
+    sig_ctx: SigContextOption,
   )
 }
 
-/// Create a new script context
+/// Optional signature context (None when not verifying signatures)
+pub type SigContextOption {
+  SigContextNone
+  SigContextSome(SigContext)
+}
+
+/// Create a new script context (without signature context)
 pub fn script_context_new(script: BitArray, flags: ScriptFlags) -> ScriptContext {
   ScriptContext(
     stack: [],
@@ -396,6 +422,45 @@ pub fn script_context_new(script: BitArray, flags: ScriptFlags) -> ScriptContext
     codesep_pos: 0,
     flags: flags,
     exec_stack: [],
+    sig_ctx: SigContextNone,
+  )
+}
+
+/// Create a new script context with signature verification context
+pub fn script_context_with_sig(
+  script: BitArray,
+  flags: ScriptFlags,
+  sig_ctx: SigContext,
+) -> ScriptContext {
+  ScriptContext(
+    stack: [],
+    alt_stack: [],
+    op_count: 0,
+    script: script,
+    script_pos: 0,
+    codesep_pos: 0,
+    flags: flags,
+    exec_stack: [],
+    sig_ctx: SigContextSome(sig_ctx),
+  )
+}
+
+/// Create a SigContext for signature verification
+pub fn sig_context_new(
+  tx: Transaction,
+  input_index: Int,
+  spent_value: Amount,
+  script_code: Script,
+  is_segwit: Bool,
+  is_taproot: Bool,
+) -> SigContext {
+  SigContext(
+    tx: tx,
+    input_index: input_index,
+    spent_value: spent_value,
+    script_code: script_code,
+    is_segwit: is_segwit,
+    is_taproot: is_taproot,
   )
 }
 
@@ -705,7 +770,7 @@ pub fn validate_txid(_txid: Txid) -> Result(Nil, ConsensusError) {
   Ok(Nil)
 }
 
-/// Verify a script execution succeeds
+/// Verify a script execution succeeds (without signature context)
 pub fn verify_script(
   script_sig: Script,
   script_pubkey: Script,
@@ -716,6 +781,52 @@ pub fn verify_script(
   let ctx = script_context_new(
     oni_bitcoin.script_to_bytes(script_sig),
     flags,
+  )
+
+  // Execute script_sig to populate stack
+  case execute_script(ctx) {
+    Error(e) -> Error(e)
+    Ok(ctx_after_sig) -> {
+      // Now execute script_pubkey with the stack from script_sig
+      let pubkey_ctx = ScriptContext(
+        ..ctx_after_sig,
+        script: oni_bitcoin.script_to_bytes(script_pubkey),
+        script_pos: 0,
+        op_count: 0,
+        codesep_pos: 0,
+      )
+      case execute_script(pubkey_ctx) {
+        Error(e) -> Error(e)
+        Ok(final_ctx) -> {
+          // Check if stack is non-empty and top is truthy
+          case final_ctx.stack {
+            [] -> Error(ScriptVerifyFailed)
+            [top, ..] -> {
+              case is_truthy(top) {
+                True -> Ok(Nil)
+                False -> Error(ScriptVerifyFailed)
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+/// Verify a script with transaction context for signature verification
+pub fn verify_script_with_sig(
+  script_sig: Script,
+  script_pubkey: Script,
+  _witness: List(BitArray),
+  flags: ScriptFlags,
+  sig_ctx: SigContext,
+) -> Result(Nil, ConsensusError) {
+  // Create initial context with signature context
+  let ctx = script_context_with_sig(
+    oni_bitcoin.script_to_bytes(script_sig),
+    flags,
+    sig_ctx,
   )
 
   // Execute script_sig to populate stack
@@ -1094,12 +1205,12 @@ fn execute_opcode_impl(
     OpReserved | OpReserved1 | OpReserved2 | OpVer | OpVerIf | OpVerNotIf -> Error(ScriptBadOpcode)
     OpInvalidOpcode -> Error(ScriptBadOpcode)
 
-    // Signature ops (placeholders - need transaction context)
-    OpCheckSig | OpCheckSigVerify | OpCheckMultiSig | OpCheckMultiSigVerify | OpCheckSigAdd -> {
-      // For now, pop required elements and push success
-      // Real implementation needs transaction context for sighash
-      Ok(ctx)
-    }
+    // Signature verification opcodes
+    OpCheckSig -> execute_checksig(ctx)
+    OpCheckSigVerify -> execute_checksigverify(ctx)
+    OpCheckMultiSig -> execute_checkmultisig(ctx)
+    OpCheckMultiSigVerify -> execute_checkmultisigverify(ctx)
+    OpCheckSigAdd -> execute_checksigadd(ctx)
 
     // CLTV and CSV need block/tx context
     OpCheckLockTimeVerify | OpCheckSequenceVerify -> Ok(ctx)
@@ -1586,6 +1697,487 @@ fn execute_hash256(ctx: ScriptContext) -> Result(ScriptContext, ConsensusError) 
     [data, ..rest] -> {
       let hash = oni_bitcoin.sha256d(data)
       Ok(ScriptContext(..ctx, stack: [hash, ..rest]))
+    }
+  }
+}
+
+// ============================================================================
+// Signature Verification Operations
+// ============================================================================
+
+/// Execute OP_CHECKSIG - verify ECDSA signature
+fn execute_checksig(ctx: ScriptContext) -> Result(ScriptContext, ConsensusError) {
+  case ctx.stack {
+    [pubkey, sig, ..rest] -> {
+      // Verify the signature
+      let result = verify_signature(ctx, sig, pubkey)
+      let result_byte = case result {
+        True -> <<1:8>>
+        False -> <<>>
+      }
+      Ok(ScriptContext(..ctx, stack: [result_byte, ..rest]))
+    }
+    _ -> Error(ScriptStackUnderflow)
+  }
+}
+
+/// Execute OP_CHECKSIGVERIFY - verify ECDSA signature and require success
+fn execute_checksigverify(ctx: ScriptContext) -> Result(ScriptContext, ConsensusError) {
+  case execute_checksig(ctx) {
+    Error(e) -> Error(e)
+    Ok(new_ctx) -> {
+      case new_ctx.stack {
+        [top, ..rest] -> {
+          case is_truthy(top) {
+            True -> Ok(ScriptContext(..new_ctx, stack: rest))
+            False -> Error(ScriptCheckSigFailed)
+          }
+        }
+        _ -> Error(ScriptStackUnderflow)
+      }
+    }
+  }
+}
+
+/// Execute OP_CHECKMULTISIG - verify multiple ECDSA signatures
+fn execute_checkmultisig(ctx: ScriptContext) -> Result(ScriptContext, ConsensusError) {
+  // Pop number of pubkeys
+  case ctx.stack {
+    [] -> Error(ScriptStackUnderflow)
+    [n_pubkeys_bytes, ..rest1] -> {
+      case decode_script_num(n_pubkeys_bytes) {
+        Error(_) -> Error(ScriptInvalid)
+        Ok(n_pubkeys) -> {
+          case n_pubkeys < 0 || n_pubkeys > 20 {
+            True -> Error(ScriptInvalid)
+            False -> {
+              // Pop pubkeys
+              case pop_n(rest1, n_pubkeys, []) {
+                Error(_) -> Error(ScriptStackUnderflow)
+                Ok(#(pubkeys, rest2)) -> {
+                  // Pop number of signatures
+                  case rest2 {
+                    [] -> Error(ScriptStackUnderflow)
+                    [n_sigs_bytes, ..rest3] -> {
+                      case decode_script_num(n_sigs_bytes) {
+                        Error(_) -> Error(ScriptInvalid)
+                        Ok(n_sigs) -> {
+                          case n_sigs < 0 || n_sigs > n_pubkeys {
+                            True -> Error(ScriptInvalid)
+                            False -> {
+                              // Pop signatures
+                              case pop_n(rest3, n_sigs, []) {
+                                Error(_) -> Error(ScriptStackUnderflow)
+                                Ok(#(sigs, rest4)) -> {
+                                  // Pop the dummy element (bug compatibility)
+                                  case rest4 {
+                                    [] -> Error(ScriptStackUnderflow)
+                                    [_dummy, ..rest5] -> {
+                                      // Verify signatures
+                                      let result = verify_multisig(ctx, sigs, pubkeys)
+                                      let result_byte = case result {
+                                        True -> <<1:8>>
+                                        False -> <<>>
+                                      }
+                                      Ok(ScriptContext(..ctx, stack: [result_byte, ..rest5]))
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+/// Execute OP_CHECKMULTISIGVERIFY - verify multiple signatures and require success
+fn execute_checkmultisigverify(ctx: ScriptContext) -> Result(ScriptContext, ConsensusError) {
+  case execute_checkmultisig(ctx) {
+    Error(e) -> Error(e)
+    Ok(new_ctx) -> {
+      case new_ctx.stack {
+        [top, ..rest] -> {
+          case is_truthy(top) {
+            True -> Ok(ScriptContext(..new_ctx, stack: rest))
+            False -> Error(ScriptCheckMultisigFailed)
+          }
+        }
+        _ -> Error(ScriptStackUnderflow)
+      }
+    }
+  }
+}
+
+/// Execute OP_CHECKSIGADD (BIP342 Taproot) - add signature verification result
+fn execute_checksigadd(ctx: ScriptContext) -> Result(ScriptContext, ConsensusError) {
+  case ctx.stack {
+    [pubkey, n_bytes, sig, ..rest] -> {
+      case decode_script_num(n_bytes) {
+        Error(_) -> Error(ScriptInvalid)
+        Ok(n) -> {
+          // Empty signature means skip (not an error in tapscript)
+          case bit_array.byte_size(sig) == 0 {
+            True -> {
+              // Push n unchanged
+              Ok(ScriptContext(..ctx, stack: [encode_script_num(n), ..rest]))
+            }
+            False -> {
+              // Verify signature
+              let result = verify_signature(ctx, sig, pubkey)
+              let new_n = case result {
+                True -> n + 1
+                False -> n
+              }
+              Ok(ScriptContext(..ctx, stack: [encode_script_num(new_n), ..rest]))
+            }
+          }
+        }
+      }
+    }
+    _ -> Error(ScriptStackUnderflow)
+  }
+}
+
+/// Verify a single signature against a pubkey
+fn verify_signature(ctx: ScriptContext, sig: BitArray, pubkey: BitArray) -> Bool {
+  case ctx.sig_ctx {
+    SigContextNone -> {
+      // No transaction context - cannot verify
+      // Return false (signature check fails without context)
+      False
+    }
+    SigContextSome(sig_context) -> {
+      // Empty signature is always invalid (unless NULLFAIL flag not set)
+      case bit_array.byte_size(sig) == 0 {
+        True -> False
+        False -> {
+          // Extract sighash type from last byte of signature
+          let sig_len = bit_array.byte_size(sig)
+          case bit_array.slice(sig, sig_len - 1, 1) {
+            Error(_) -> False
+            Ok(<<sighash_type:8>>) -> {
+              // Get the actual signature (without sighash type)
+              case bit_array.slice(sig, 0, sig_len - 1) {
+                Error(_) -> False
+                Ok(sig_bytes) -> {
+                  // Compute sighash
+                  let sighash = compute_sighash_for_verify(sig_context, sighash_type)
+                  // Verify using secp256k1
+                  // NOTE: This is a stub - real implementation requires NIF
+                  verify_ecdsa_stub(sighash.bytes, sig_bytes, pubkey)
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+/// Compute sighash for signature verification
+fn compute_sighash_for_verify(sig_ctx: SigContext, sighash_type: Int) -> Hash256 {
+  case sig_ctx.is_taproot {
+    True -> {
+      // BIP341 Taproot sighash (simplified - no annex support here)
+      compute_taproot_sighash_simple(sig_ctx.tx, sig_ctx.input_index, sighash_type)
+    }
+    False -> {
+      case sig_ctx.is_segwit {
+        True -> {
+          // BIP143 SegWit v0 sighash
+          compute_segwit_sighash(sig_ctx.tx, sig_ctx.input_index, sig_ctx.script_code, sig_ctx.spent_value, sighash_type)
+        }
+        False -> {
+          // Legacy sighash
+          compute_legacy_sighash(sig_ctx.tx, sig_ctx.input_index, sig_ctx.script_code, sighash_type)
+        }
+      }
+    }
+  }
+}
+
+/// Compute legacy sighash (pre-SegWit)
+fn compute_legacy_sighash(
+  tx: Transaction,
+  input_index: Int,
+  script_code: Script,
+  sighash_type: Int,
+) -> Hash256 {
+  let base_type = int.bitwise_and(sighash_type, 0x1F)
+  let anyonecanpay = int.bitwise_and(sighash_type, 0x80) != 0
+
+  // Modify inputs
+  let inputs = case anyonecanpay {
+    True -> {
+      case list_nth(tx.inputs, input_index) {
+        Error(_) -> []
+        Ok(input) -> [oni_bitcoin.TxIn(..input, script_sig: script_code)]
+      }
+    }
+    False -> {
+      list.index_map(tx.inputs, fn(input, idx) {
+        case idx == input_index {
+          True -> oni_bitcoin.TxIn(..input, script_sig: script_code)
+          False -> oni_bitcoin.TxIn(..input, script_sig: oni_bitcoin.script_empty(), sequence: clear_sequence_for_sighash(input.sequence, base_type, idx, input_index))
+        }
+      })
+    }
+  }
+
+  // Modify outputs based on sighash type
+  let outputs = case base_type {
+    0x02 -> []  // SIGHASH_NONE: no outputs
+    0x03 -> {   // SIGHASH_SINGLE: only matching output
+      case input_index >= list.length(tx.outputs) {
+        True -> []
+        False -> {
+          list.index_map(tx.outputs, fn(out, idx) {
+            case idx == input_index {
+              True -> out
+              False -> oni_bitcoin.TxOut(
+                value: oni_bitcoin.sats(-1),
+                script_pubkey: oni_bitcoin.script_empty(),
+              )
+            }
+          })
+          |> list.take(input_index + 1)
+        }
+      }
+    }
+    _ -> tx.outputs  // SIGHASH_ALL: all outputs
+  }
+
+  let modified_tx = oni_bitcoin.Transaction(
+    version: tx.version,
+    inputs: inputs,
+    outputs: outputs,
+    lock_time: tx.lock_time,
+    witnesses: [],
+  )
+
+  // Serialize and hash
+  let serialized = serialize_tx_for_sighash(modified_tx)
+  let with_type = bit_array.append(serialized, <<sighash_type:32-little>>)
+  oni_bitcoin.hash256_digest(with_type)
+}
+
+fn clear_sequence_for_sighash(seq: Int, base_type: Int, idx: Int, input_index: Int) -> Int {
+  case base_type == 0x02 || base_type == 0x03 {
+    True -> case idx != input_index {
+      True -> 0
+      False -> seq
+    }
+    False -> seq
+  }
+}
+
+/// Compute BIP143 SegWit v0 sighash
+fn compute_segwit_sighash(
+  tx: Transaction,
+  input_index: Int,
+  script_code: Script,
+  value: Amount,
+  sighash_type: Int,
+) -> Hash256 {
+  let base_type = int.bitwise_and(sighash_type, 0x1F)
+  let anyonecanpay = int.bitwise_and(sighash_type, 0x80) != 0
+
+  // Compute prevouts hash
+  let hash_prevouts = case anyonecanpay {
+    True -> oni_bitcoin.Hash256(<<0:256>>)
+    False -> {
+      let data = list.fold(tx.inputs, <<>>, fn(acc, input) {
+        bit_array.append(acc, serialize_outpoint(input.prevout))
+      })
+      oni_bitcoin.hash256_digest(data)
+    }
+  }
+
+  // Compute sequence hash
+  let hash_sequence = case anyonecanpay || base_type == 0x02 || base_type == 0x03 {
+    True -> oni_bitcoin.Hash256(<<0:256>>)
+    False -> {
+      let data = list.fold(tx.inputs, <<>>, fn(acc, input) {
+        bit_array.append(acc, <<input.sequence:32-little>>)
+      })
+      oni_bitcoin.hash256_digest(data)
+    }
+  }
+
+  // Compute outputs hash
+  let hash_outputs = case base_type {
+    0x02 -> oni_bitcoin.Hash256(<<0:256>>)  // NONE
+    0x03 -> {  // SINGLE
+      case list_nth(tx.outputs, input_index) {
+        Ok(out) -> oni_bitcoin.hash256_digest(serialize_output(out))
+        Error(_) -> oni_bitcoin.Hash256(<<0:256>>)
+      }
+    }
+    _ -> {  // ALL
+      let data = list.fold(tx.outputs, <<>>, fn(acc, out) {
+        bit_array.append(acc, serialize_output(out))
+      })
+      oni_bitcoin.hash256_digest(data)
+    }
+  }
+
+  // Get the input
+  case list_nth(tx.inputs, input_index) {
+    Error(_) -> oni_bitcoin.Hash256(<<0:256>>)
+    Ok(input) -> {
+      // Build preimage
+      let script_bytes = oni_bitcoin.script_to_bytes(script_code)
+      let script_len = oni_bitcoin.compact_size_encode(bit_array.byte_size(script_bytes))
+      let value_sats = oni_bitcoin.amount_to_sats(value)
+
+      let preimage = bit_array.concat([
+        <<tx.version:32-little>>,
+        hash_prevouts.bytes,
+        hash_sequence.bytes,
+        serialize_outpoint(input.prevout),
+        script_len,
+        script_bytes,
+        <<value_sats:64-little>>,
+        <<input.sequence:32-little>>,
+        hash_outputs.bytes,
+        <<tx.lock_time:32-little>>,
+        <<sighash_type:32-little>>,
+      ])
+
+      oni_bitcoin.hash256_digest(preimage)
+    }
+  }
+}
+
+/// Compute simplified Taproot sighash (BIP341)
+fn compute_taproot_sighash_simple(
+  tx: Transaction,
+  _input_index: Int,
+  sighash_type: Int,
+) -> Hash256 {
+  // Simplified implementation - full BIP341 requires more context
+  // For now, just return a hash based on tx data
+  let data = bit_array.concat([
+    <<0x00:8>>,  // epoch
+    <<sighash_type:8>>,
+    <<tx.version:32-little>>,
+    <<tx.lock_time:32-little>>,
+  ])
+  oni_bitcoin.hash256_digest(data)
+}
+
+/// Serialize outpoint for sighash
+fn serialize_outpoint(outpoint: OutPoint) -> BitArray {
+  <<outpoint.txid.hash.bytes:bits, outpoint.vout:32-little>>
+}
+
+/// Serialize output for sighash
+fn serialize_output(output: TxOut) -> BitArray {
+  let script_bytes = oni_bitcoin.script_to_bytes(output.script_pubkey)
+  let value = oni_bitcoin.amount_to_sats(output.value)
+  bit_array.concat([
+    <<value:64-little>>,
+    oni_bitcoin.compact_size_encode(bit_array.byte_size(script_bytes)),
+    script_bytes,
+  ])
+}
+
+/// Serialize transaction for legacy sighash
+fn serialize_tx_for_sighash(tx: Transaction) -> BitArray {
+  let inputs_data = list.fold(tx.inputs, <<>>, fn(acc, input) {
+    let script = oni_bitcoin.script_to_bytes(input.script_sig)
+    let input_data = bit_array.concat([
+      input.prevout.txid.hash.bytes,
+      <<input.prevout.vout:32-little>>,
+      oni_bitcoin.compact_size_encode(bit_array.byte_size(script)),
+      script,
+      <<input.sequence:32-little>>,
+    ])
+    bit_array.append(acc, input_data)
+  })
+
+  let outputs_data = list.fold(tx.outputs, <<>>, fn(acc, output) {
+    let script = oni_bitcoin.script_to_bytes(output.script_pubkey)
+    let value = oni_bitcoin.amount_to_sats(output.value)
+    let output_data = bit_array.concat([
+      <<value:64-little>>,
+      oni_bitcoin.compact_size_encode(bit_array.byte_size(script)),
+      script,
+    ])
+    bit_array.append(acc, output_data)
+  })
+
+  bit_array.concat([
+    <<tx.version:32-little>>,
+    oni_bitcoin.compact_size_encode(list.length(tx.inputs)),
+    inputs_data,
+    oni_bitcoin.compact_size_encode(list.length(tx.outputs)),
+    outputs_data,
+    <<tx.lock_time:32-little>>,
+  ])
+}
+
+/// Stub for ECDSA verification - needs NIF implementation
+fn verify_ecdsa_stub(_sighash: BitArray, _signature: BitArray, _pubkey: BitArray) -> Bool {
+  // TODO: Implement using secp256k1 NIF
+  // For now, return true to allow testing of script logic
+  // This MUST be replaced with actual verification in production
+  True
+}
+
+/// Verify multiple signatures against pubkeys (CHECKMULTISIG)
+fn verify_multisig(ctx: ScriptContext, sigs: List(BitArray), pubkeys: List(BitArray)) -> Bool {
+  verify_multisig_loop(ctx, sigs, pubkeys)
+}
+
+fn verify_multisig_loop(ctx: ScriptContext, sigs: List(BitArray), pubkeys: List(BitArray)) -> Bool {
+  case sigs {
+    [] -> True  // All signatures verified
+    [sig, ..rest_sigs] -> {
+      // Find a matching pubkey
+      case find_matching_pubkey(ctx, sig, pubkeys) {
+        Error(_) -> False  // No matching pubkey found
+        Ok(remaining_pubkeys) -> {
+          // Continue with remaining signatures and pubkeys
+          verify_multisig_loop(ctx, rest_sigs, remaining_pubkeys)
+        }
+      }
+    }
+  }
+}
+
+fn find_matching_pubkey(ctx: ScriptContext, sig: BitArray, pubkeys: List(BitArray)) -> Result(List(BitArray), Nil) {
+  case pubkeys {
+    [] -> Error(Nil)  // No more pubkeys to try
+    [pubkey, ..rest] -> {
+      case verify_signature(ctx, sig, pubkey) {
+        True -> Ok(rest)  // Found match, return remaining pubkeys
+        False -> find_matching_pubkey(ctx, sig, rest)  // Try next pubkey
+      }
+    }
+  }
+}
+
+/// Pop n elements from a list
+fn pop_n(lst: List(a), n: Int, acc: List(a)) -> Result(#(List(a), List(a)), Nil) {
+  case n <= 0 {
+    True -> Ok(#(list.reverse(acc), lst))
+    False -> {
+      case lst {
+        [] -> Error(Nil)
+        [head, ..tail] -> pop_n(tail, n - 1, [head, ..acc])
+      }
     }
   }
 }
