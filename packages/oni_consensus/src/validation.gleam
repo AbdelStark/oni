@@ -516,7 +516,12 @@ fn get_witness_nonce(coinbase: Transaction) -> Option(BitArray) {
   case coinbase.inputs {
     [input, ..] -> {
       case input.witness {
-        [nonce] if bit_array.byte_size(nonce) == 32 -> Some(nonce)
+        [nonce] -> {
+          case bit_array.byte_size(nonce) == 32 {
+            True -> Some(nonce)
+            False -> None
+          }
+        }
         _ -> None
       }
     }
