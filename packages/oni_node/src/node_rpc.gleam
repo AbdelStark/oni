@@ -9,15 +9,20 @@
 // RPC service types and supervisor message types.
 
 import gleam/erlang/process.{type Subject}
+import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
 import oni_bitcoin
 import supervisor
 import rpc_service.{
-  type ChainstateQuery, type MempoolQuery, type SyncQuery, type SyncState,
-  QueryHeight, QueryMempoolSize, QueryMempoolTxids, QueryNetwork,
-  QuerySyncState, QueryTip, SyncState,
+  type BlockTemplateData, type ChainstateQuery, type MempoolQuery,
+  type SyncQuery, type SyncState, type TemplateTxData,
+  BlockTemplateData, QueryBlockTemplate, QueryHeight, QueryMempoolSize,
+  QueryMempoolTxids, QueryNetwork, QuerySyncState, QueryTip, SyncState,
+  TemplateTxData,
 }
+import oni_consensus/block_template
+import oni_consensus/mempool
 
 // ============================================================================
 // Adapter Actor for Chainstate Queries
@@ -99,7 +104,50 @@ fn handle_mempool_query(
       process.send(reply, result)
       actor.continue(state)
     }
+
+    QueryBlockTemplate(reply) -> {
+      // Get template data from supervisor mempool
+      // Use default height=0 and bits (will be overridden by RPC handler)
+      let template_data = process.call(
+        state.target,
+        supervisor.GetTemplateData(0, 0x1d00ffff, _),
+        30_000,
+      )
+
+      // Convert to RPC template format
+      let result = convert_template_data(template_data)
+      process.send(reply, result)
+      actor.continue(state)
+    }
   }
+}
+
+/// Convert supervisor template data to RPC format
+fn convert_template_data(data: supervisor.MempoolTemplateData) -> BlockTemplateData {
+  let txs = list.map(data.transactions, fn(tx) {
+    TemplateTxData(
+      data: tx.data_hex,
+      txid: tx.txid_hex,
+      hash: tx.hash_hex,
+      fee: tx.fee,
+      sigops: tx.sigops,
+      weight: tx.weight,
+      depends: tx.depends,
+    )
+  })
+
+  // Calculate subsidy for height 0 (will be adjusted in RPC)
+  let subsidy = 5_000_000_000
+
+  BlockTemplateData(
+    transactions: txs,
+    coinbase_value: subsidy + data.total_fees,
+    total_fees: data.total_fees,
+    weight_used: data.weight_used,
+    sigops_used: data.sigops_used,
+    height: 0,  // Will be set by RPC handler
+    bits: 0x1d00ffff,
+  )
 }
 
 // ============================================================================

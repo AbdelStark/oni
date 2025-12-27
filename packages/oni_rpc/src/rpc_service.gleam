@@ -76,6 +76,40 @@ pub type ChainstateQuery {
 pub type MempoolQuery {
   QueryMempoolSize(reply: Subject(Int))
   QueryMempoolTxids(reply: Subject(List(oni_bitcoin.Txid)))
+  QueryBlockTemplate(reply: Subject(BlockTemplateData))
+}
+
+/// Block template data for RPC response
+pub type BlockTemplateData {
+  BlockTemplateData(
+    /// Transactions to include (as hex strings)
+    transactions: List(TemplateTxData),
+    /// Coinbase value (subsidy + fees)
+    coinbase_value: Int,
+    /// Total fees from transactions
+    total_fees: Int,
+    /// Weight used
+    weight_used: Int,
+    /// SigOps used
+    sigops_used: Int,
+    /// Height for this template
+    height: Int,
+    /// Current bits
+    bits: Int,
+  )
+}
+
+/// Single transaction in template
+pub type TemplateTxData {
+  TemplateTxData(
+    data: String,  // hex encoded
+    txid: String,  // hex encoded
+    hash: String,  // wtxid hex encoded
+    fee: Int,
+    sigops: Int,
+    weight: Int,
+    depends: List(Int),
+  )
 }
 
 /// Sync query messages
@@ -219,6 +253,7 @@ fn register_stateful_handlers(
   |> oni_rpc.server_register("getblockchaininfo", create_getblockchaininfo_handler(chainstate, sync))
   |> oni_rpc.server_register("getmempoolinfo", create_getmempoolinfo_handler(mempool))
   |> oni_rpc.server_register("getrawmempool", create_getrawmempool_handler(mempool))
+  |> oni_rpc.server_register("getblocktemplate", create_getblocktemplate_handler(chainstate, mempool))
 }
 
 // ============================================================================
@@ -360,6 +395,66 @@ fn create_getrawmempool_handler(
   }
 }
 
+/// Create handler for getblocktemplate that queries chainstate and mempool
+fn create_getblocktemplate_handler(
+  chainstate: Subject(ChainstateQuery),
+  mempool: Subject(MempoolQuery),
+) -> MethodHandler {
+  fn(_params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
+    // Get current state
+    let height = query_chainstate_height(chainstate)
+    let tip = query_chainstate_tip(chainstate)
+
+    // Get block template from mempool
+    let template = query_block_template(mempool)
+
+    // Build response
+    let tip_hex = case tip {
+      Some(hash) -> oni_bitcoin.block_hash_to_hex(hash)
+      None -> "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+
+    // Convert transactions to RPC format
+    let txs = list.map(template.transactions, fn(tx) {
+      let tx_obj = dict.new()
+        |> dict.insert("data", RpcString(tx.data))
+        |> dict.insert("txid", RpcString(tx.txid))
+        |> dict.insert("hash", RpcString(tx.hash))
+        |> dict.insert("fee", RpcInt(tx.fee))
+        |> dict.insert("sigops", RpcInt(tx.sigops))
+        |> dict.insert("weight", RpcInt(tx.weight))
+        |> dict.insert("depends", RpcArray(list.map(tx.depends, fn(i) { RpcInt(i) })))
+      RpcObject(tx_obj)
+    })
+
+    let result = dict.new()
+      |> dict.insert("version", RpcInt(0x20000000))
+      |> dict.insert("previousblockhash", RpcString(tip_hex))
+      |> dict.insert("transactions", RpcArray(txs))
+      |> dict.insert("coinbaseaux", RpcObject(dict.new()))
+      |> dict.insert("coinbasevalue", RpcInt(template.coinbase_value))
+      |> dict.insert("target", RpcString("00000000ffff0000000000000000000000000000000000000000000000000000"))
+      |> dict.insert("mintime", RpcInt(0))
+      |> dict.insert("mutable", RpcArray([RpcString("time"), RpcString("transactions"), RpcString("prevblock")]))
+      |> dict.insert("noncerange", RpcString("00000000ffffffff"))
+      |> dict.insert("sigoplimit", RpcInt(80000))
+      |> dict.insert("sizelimit", RpcInt(4000000))
+      |> dict.insert("weightlimit", RpcInt(4000000))
+      |> dict.insert("curtime", RpcInt(get_timestamp()))
+      |> dict.insert("bits", RpcString(int_to_hex(template.bits)))
+      |> dict.insert("height", RpcInt(height + 1))
+      |> dict.insert("sigops", RpcInt(template.sigops_used))
+      |> dict.insert("weight", RpcInt(template.weight_used))
+
+    Ok(RpcObject(result))
+  }
+}
+
+/// Convert int to hex string
+fn int_to_hex(n: Int) -> String {
+  oni_bitcoin.hex_encode(<<n:32-big>>)
+}
+
 // ============================================================================
 // Query Helpers
 // ============================================================================
@@ -398,6 +493,11 @@ fn query_mempool_txids(
 /// Query sync state
 fn query_sync_state(sync: Subject(SyncQuery)) -> SyncState {
   process.call(sync, QuerySyncState, 5000)
+}
+
+/// Query mempool for block template
+fn query_block_template(mempool: Subject(MempoolQuery)) -> BlockTemplateData {
+  process.call(mempool, QueryBlockTemplate, 30_000)  // Longer timeout for template
 }
 
 // ============================================================================
