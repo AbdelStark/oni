@@ -526,17 +526,19 @@ pub fn sha256d(data: BitArray) -> BitArray {
 
 /// RIPEMD160 hash - uses Erlang's crypto module directly
 pub fn ripemd160(data: BitArray) -> BitArray {
-  erlang_ripemd160(data)
+  erlang_hash(ripemd160_atom(), data)
 }
 
-/// Erlang FFI for RIPEMD160
+/// SHA1 hash - uses Erlang's crypto module directly
+/// Note: SHA1 is cryptographically weak and should only be used for
+/// Bitcoin Script compatibility (OP_SHA1)
+pub fn sha1(data: BitArray) -> BitArray {
+  erlang_hash(sha1_atom(), data)
+}
+
+/// Erlang FFI for crypto:hash
 @external(erlang, "crypto", "hash")
-fn erlang_ripemd160_raw(algo: ErlangAtom, data: BitArray) -> BitArray
-
-/// Helper to call Erlang crypto:hash(ripemd160, data)
-fn erlang_ripemd160(data: BitArray) -> BitArray {
-  erlang_ripemd160_raw(ripemd160_atom(), data)
-}
+fn erlang_hash(algo: ErlangAtom, data: BitArray) -> BitArray
 
 /// Get the ripemd160 atom
 @external(erlang, "erlang", "binary_to_atom")
@@ -546,6 +548,10 @@ type ErlangAtom
 
 fn ripemd160_atom() -> ErlangAtom {
   binary_to_atom(<<"ripemd160":utf8>>)
+}
+
+fn sha1_atom() -> ErlangAtom {
+  binary_to_atom(<<"sha":utf8>>)
 }
 
 /// HASH160 = RIPEMD160(SHA256(data)) - used for addresses

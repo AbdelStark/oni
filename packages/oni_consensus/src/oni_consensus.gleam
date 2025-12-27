@@ -30,6 +30,8 @@ pub type ConsensusError {
   ScriptEqualVerifyFailed
   ScriptCheckSigFailed
   ScriptCheckMultisigFailed
+  ScriptCheckLockTimeVerifyFailed
+  ScriptCheckSequenceVerifyFailed
   ScriptPushSizeExceeded
   ScriptOpCountExceeded
   ScriptBadOpcode
@@ -1191,6 +1193,7 @@ fn execute_opcode_impl(
     OpWithin -> execute_within(ctx)
 
     // Crypto
+    OpSha1 -> execute_sha1(ctx)
     OpRipeMd160 -> execute_ripemd160(ctx)
     OpSha256 -> execute_sha256(ctx)
     OpHash160 -> execute_hash160(ctx)
@@ -1213,8 +1216,9 @@ fn execute_opcode_impl(
     OpCheckMultiSigVerify -> execute_checkmultisigverify(ctx)
     OpCheckSigAdd -> execute_checksigadd(ctx)
 
-    // CLTV and CSV need block/tx context
-    OpCheckLockTimeVerify | OpCheckSequenceVerify -> Ok(ctx)
+    // CLTV and CSV timelock verification (BIP65/BIP112)
+    OpCheckLockTimeVerify -> execute_checklocktimeverify(ctx)
+    OpCheckSequenceVerify -> execute_checksequenceverify(ctx)
 
     // OP_CODESEPARATOR
     OpCodeSeparator -> Ok(ScriptContext(..ctx, codesep_pos: ctx.script_pos))
@@ -1455,6 +1459,158 @@ fn execute_verify(ctx: ScriptContext) -> Result(ScriptContext, ConsensusError) {
 }
 
 // ============================================================================
+// Timelock Operations (BIP65/BIP112)
+// ============================================================================
+
+/// Threshold for interpreting lock time as Unix timestamp vs block height
+const locktime_threshold: Int = 500_000_000
+
+/// Sequence number that disables relative locktime (CSV)
+const sequence_final: Int = 0xFFFFFFFF
+
+/// Sequence locktime disable flag (bit 31)
+const sequence_locktime_disable_flag: Int = 0x80000000
+
+/// Sequence locktime type flag (bit 22) - 1 for time, 0 for blocks
+const sequence_locktime_type_flag: Int = 0x00400000
+
+/// Sequence locktime mask (lower 16 bits)
+const sequence_locktime_mask: Int = 0x0000FFFF
+
+/// Execute OP_CHECKLOCKTIMEVERIFY (BIP65)
+/// Verifies that the transaction's nLockTime is >= the top stack value.
+/// The value remains on the stack.
+fn execute_checklocktimeverify(ctx: ScriptContext) -> Result(ScriptContext, ConsensusError) {
+  case ctx.stack {
+    [] -> Error(ScriptStackUnderflow)
+    [locktime_bytes, ..] -> {
+      // Decode the locktime from stack
+      case decode_script_num(locktime_bytes) {
+        Error(_) -> Error(ScriptInvalid)
+        Ok(locktime) -> {
+          // Locktime must be non-negative
+          case locktime < 0 {
+            True -> Error(ScriptCheckLockTimeVerifyFailed)
+            False -> {
+              // Need transaction context to verify
+              case ctx.sig_ctx {
+                SigContextNone -> {
+                  // No transaction context - cannot verify CLTV
+                  // In practice this shouldn't happen during script verification
+                  Error(ScriptCheckLockTimeVerifyFailed)
+                }
+                SigContextSome(sig_ctx) -> {
+                  // Get the transaction's lock_time
+                  let tx_locktime = sig_ctx.tx.lock_time
+
+                  // Get the input's sequence
+                  case list_nth(sig_ctx.tx.inputs, sig_ctx.input_index) {
+                    Error(_) -> Error(ScriptCheckLockTimeVerifyFailed)
+                    Ok(input) -> {
+                      // Input sequence must not be final (0xFFFFFFFF)
+                      case input.sequence == sequence_final {
+                        True -> Error(ScriptCheckLockTimeVerifyFailed)
+                        False -> {
+                          // Both locktimes must be of same type:
+                          // Both < threshold (blocks) or both >= threshold (time)
+                          let stack_is_time = locktime >= locktime_threshold
+                          let tx_is_time = tx_locktime >= locktime_threshold
+
+                          case stack_is_time == tx_is_time {
+                            False -> Error(ScriptCheckLockTimeVerifyFailed)
+                            True -> {
+                              // tx locktime must be >= stack locktime
+                              case tx_locktime >= locktime {
+                                True -> Ok(ctx)  // Success - leave stack unchanged
+                                False -> Error(ScriptCheckLockTimeVerifyFailed)
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+/// Execute OP_CHECKSEQUENCEVERIFY (BIP112)
+/// Verifies relative locktime against the input's sequence number.
+/// The value remains on the stack.
+fn execute_checksequenceverify(ctx: ScriptContext) -> Result(ScriptContext, ConsensusError) {
+  case ctx.stack {
+    [] -> Error(ScriptStackUnderflow)
+    [sequence_bytes, ..] -> {
+      // Decode the sequence value from stack
+      case decode_script_num(sequence_bytes) {
+        Error(_) -> Error(ScriptInvalid)
+        Ok(sequence) -> {
+          // Sequence must be non-negative
+          case sequence < 0 {
+            True -> Error(ScriptCheckSequenceVerifyFailed)
+            False -> {
+              // If the disable flag is set, CSV is a NOP
+              case int.bitwise_and(sequence, sequence_locktime_disable_flag) != 0 {
+                True -> Ok(ctx)  // CSV disabled, succeed
+                False -> {
+                  // Need transaction context
+                  case ctx.sig_ctx {
+                    SigContextNone -> Error(ScriptCheckSequenceVerifyFailed)
+                    SigContextSome(sig_ctx) -> {
+                      // Transaction version must be >= 2 for CSV
+                      case sig_ctx.tx.version < 2 {
+                        True -> Error(ScriptCheckSequenceVerifyFailed)
+                        False -> {
+                          // Get the input's sequence
+                          case list_nth(sig_ctx.tx.inputs, sig_ctx.input_index) {
+                            Error(_) -> Error(ScriptCheckSequenceVerifyFailed)
+                            Ok(input) -> {
+                              // If input sequence has disable flag set, CSV fails
+                              case int.bitwise_and(input.sequence, sequence_locktime_disable_flag) != 0 {
+                                True -> Error(ScriptCheckSequenceVerifyFailed)
+                                False -> {
+                                  // Both must be same type (blocks or time)
+                                  let stack_is_time = int.bitwise_and(sequence, sequence_locktime_type_flag) != 0
+                                  let input_is_time = int.bitwise_and(input.sequence, sequence_locktime_type_flag) != 0
+
+                                  case stack_is_time == input_is_time {
+                                    False -> Error(ScriptCheckSequenceVerifyFailed)
+                                    True -> {
+                                      // Compare the masked values
+                                      let stack_value = int.bitwise_and(sequence, sequence_locktime_mask)
+                                      let input_value = int.bitwise_and(input.sequence, sequence_locktime_mask)
+
+                                      case input_value >= stack_value {
+                                        True -> Ok(ctx)  // Success
+                                        False -> Error(ScriptCheckSequenceVerifyFailed)
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+// ============================================================================
 // Arithmetic Operations
 // ============================================================================
 
@@ -1661,6 +1817,16 @@ fn binary_num_op(
 // ============================================================================
 // Crypto Operations
 // ============================================================================
+
+fn execute_sha1(ctx: ScriptContext) -> Result(ScriptContext, ConsensusError) {
+  case ctx.stack {
+    [] -> Error(ScriptStackUnderflow)
+    [data, ..rest] -> {
+      let hash = oni_bitcoin.sha1(data)
+      Ok(ScriptContext(..ctx, stack: [hash, ..rest]))
+    }
+  }
+}
 
 fn execute_ripemd160(ctx: ScriptContext) -> Result(ScriptContext, ConsensusError) {
   case ctx.stack {
