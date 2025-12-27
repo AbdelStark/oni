@@ -89,6 +89,16 @@ pub type MempoolQuery {
   QueryMempoolSize(reply: Subject(Int))
   QueryMempoolTxids(reply: Subject(List(oni_bitcoin.Txid)))
   QueryBlockTemplate(reply: Subject(BlockTemplateData))
+  /// Submit a transaction to the mempool
+  SubmitTx(tx: oni_bitcoin.Transaction, reply: Subject(SubmitTxResult))
+}
+
+/// Result of transaction submission
+pub type SubmitTxResult {
+  /// Transaction accepted into mempool, returns txid
+  SubmitTxAccepted(txid: oni_bitcoin.Txid)
+  /// Transaction rejected with reason
+  SubmitTxRejected(reason: String)
 }
 
 /// Block template data for RPC response
@@ -267,6 +277,7 @@ fn register_stateful_handlers(
   |> oni_rpc.server_register("getrawmempool", create_getrawmempool_handler(mempool))
   |> oni_rpc.server_register("getblocktemplate", create_getblocktemplate_handler(chainstate, mempool))
   |> oni_rpc.server_register("submitblock", create_submitblock_handler(chainstate))
+  |> oni_rpc.server_register("sendrawtransaction", create_sendrawtransaction_handler(mempool))
 }
 
 // ============================================================================
@@ -508,6 +519,47 @@ fn submit_block(
   block: oni_bitcoin.Block,
 ) -> SubmitBlockResult {
   process.call(chainstate, SubmitBlock(block, _), 60_000)  // Longer timeout for block validation
+}
+
+/// Create handler for sendrawtransaction that submits a transaction to mempool
+fn create_sendrawtransaction_handler(
+  mempool: Subject(MempoolQuery),
+) -> MethodHandler {
+  fn(params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
+    // Extract transaction hex from params
+    // sendrawtransaction "hexstring" ( maxfeerate maxburnamount )
+    case params {
+      ParamsArray([RpcString(tx_hex), ..]) -> {
+        // Decode hex to bytes
+        case oni_bitcoin.hex_decode(tx_hex) {
+          Error(_) -> Error(InvalidParams("Invalid transaction hex encoding"))
+          Ok(tx_bytes) -> {
+            // Decode transaction from bytes
+            case oni_bitcoin.decode_tx(tx_bytes) {
+              Error(msg) -> Error(InvalidParams("Invalid transaction data: " <> msg))
+              Ok(#(tx, _rest)) -> {
+                // Submit to mempool
+                let result = submit_tx(mempool, tx)
+                case result {
+                  SubmitTxAccepted(txid) -> Ok(RpcString(oni_bitcoin.txid_to_hex(txid)))
+                  SubmitTxRejected(reason) -> Error(Internal(reason))
+                }
+              }
+            }
+          }
+        }
+      }
+      _ -> Error(InvalidParams("sendrawtransaction requires transaction hex as first parameter"))
+    }
+  }
+}
+
+/// Submit a transaction to mempool
+fn submit_tx(
+  mempool: Subject(MempoolQuery),
+  tx: oni_bitcoin.Transaction,
+) -> SubmitTxResult {
+  process.call(mempool, SubmitTx(tx, _), 30_000)
 }
 
 // ============================================================================

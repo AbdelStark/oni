@@ -16,11 +16,11 @@ import oni_bitcoin
 import supervisor
 import rpc_service.{
   type BlockTemplateData, type ChainstateQuery, type MempoolQuery,
-  type SubmitBlockResult, type SyncQuery, type SyncState, type TemplateTxData,
-  BlockTemplateData, QueryBlockTemplate, QueryHeight, QueryMempoolSize,
-  QueryMempoolTxids, QueryNetwork, QuerySyncState, QueryTip, SubmitBlock,
-  SubmitBlockAccepted, SubmitBlockDuplicate, SubmitBlockRejected, SyncState,
-  TemplateTxData,
+  type SubmitBlockResult, type SubmitTxResult, type SyncQuery, type SyncState,
+  type TemplateTxData, BlockTemplateData, QueryBlockTemplate, QueryHeight,
+  QueryMempoolSize, QueryMempoolTxids, QueryNetwork, QuerySyncState, QueryTip,
+  SubmitBlock, SubmitBlockAccepted, SubmitBlockDuplicate, SubmitBlockRejected,
+  SubmitTx, SubmitTxAccepted, SubmitTxRejected, SyncState, TemplateTxData,
 }
 import oni_consensus/block_template
 import oni_consensus/mempool
@@ -171,6 +171,28 @@ fn handle_mempool_query(
       // Convert to RPC template format
       let result = convert_template_data(template_data)
       process.send(reply, result)
+      actor.continue(state)
+    }
+
+    SubmitTx(tx, reply) -> {
+      // Forward to supervisor mempool's AddTx
+      let add_result = process.call(
+        state.target,
+        supervisor.AddTx(tx, _),
+        30_000,
+      )
+
+      // Convert result
+      case add_result {
+        Ok(_) -> {
+          // Transaction accepted, compute txid
+          let txid = oni_bitcoin.txid_from_tx(tx)
+          process.send(reply, SubmitTxAccepted(txid))
+        }
+        Error(reason) -> {
+          process.send(reply, SubmitTxRejected(reason))
+        }
+      }
       actor.continue(state)
     }
   }

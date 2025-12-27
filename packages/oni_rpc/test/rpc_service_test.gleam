@@ -326,3 +326,61 @@ pub fn handle_submitblock_truncated_block_test() {
   // Cleanup
   rpc_service.shutdown(service)
 }
+
+// ============================================================================
+// sendrawtransaction Tests
+// ============================================================================
+
+pub fn handle_sendrawtransaction_missing_param_test() {
+  let config = oni_rpc.default_config()
+  let assert Ok(service) = rpc_service.start(config, None)
+
+  // Send sendrawtransaction without parameters
+  let response = rpc_service.handle_request_sync(
+    service,
+    "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"sendrawtransaction\",\"params\":[]}",
+    True,
+  )
+
+  // Response should contain error for invalid params
+  should.be_true(contains(response, "error"))
+
+  // Cleanup
+  rpc_service.shutdown(service)
+}
+
+pub fn handle_sendrawtransaction_invalid_hex_test() {
+  let config = oni_rpc.default_config()
+  let assert Ok(service) = rpc_service.start(config, None)
+
+  // Send sendrawtransaction with invalid hex
+  let response = rpc_service.handle_request_sync(
+    service,
+    "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"sendrawtransaction\",\"params\":[\"gggg\"]}",
+    True,
+  )
+
+  // Response should contain error for invalid hex
+  should.be_true(contains(response, "error"))
+
+  // Cleanup
+  rpc_service.shutdown(service)
+}
+
+pub fn handle_sendrawtransaction_truncated_tx_test() {
+  let config = oni_rpc.default_config()
+  let assert Ok(service) = rpc_service.start(config, None)
+
+  // Send sendrawtransaction with truncated transaction data (just version bytes)
+  let response = rpc_service.handle_request_sync(
+    service,
+    "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"sendrawtransaction\",\"params\":[\"01000000\"]}",
+    True,
+  )
+
+  // Response should contain error for invalid transaction data
+  should.be_true(contains(response, "error"))
+
+  // Cleanup
+  rpc_service.shutdown(service)
+}
