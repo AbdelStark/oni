@@ -1,7 +1,7 @@
 PACKAGES := $(shell ls -1 packages)
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 
-.PHONY: help fmt fmt-check check test ci clean build docs bench version info nif run run-testnet run-regtest
+.PHONY: help fmt fmt-check check test ci clean build docs bench version info nif run run-testnet run-regtest test-vectors test-differential test-all
 
 help:
 	@echo "oni development commands"
@@ -21,6 +21,11 @@ help:
 	@echo "  make run        - run node in mainnet mode (port 8333/8332)"
 	@echo "  make run-testnet - run node in testnet mode (port 18333/18332)"
 	@echo "  make run-regtest - run node in regtest mode (port 18444/18443)"
+	@echo ""
+	@echo "Testing:"
+	@echo "  make test-vectors     - run test vector suite"
+	@echo "  make test-differential - run differential tests vs bitcoind"
+	@echo "  make test-all         - run all test suites"
 	@echo ""
 	@echo "CI/CD:"
 	@echo "  make ci         - run full CI pipeline (fmt-check + check + test)"
@@ -176,3 +181,19 @@ run-regtest: build
 	  -oni_node p2p_port 18444 \
 	  -oni_node rpc_port 18443 \
 	  -eval 'application:start(oni_node)'
+
+# Run test vectors
+test-vectors:
+	@echo "==> Running test vectors..."
+	@chmod +x scripts/run_regtest_harness.sh
+	@./scripts/run_regtest_harness.sh vectors
+
+# Run differential tests against bitcoind
+test-differential:
+	@echo "==> Running differential tests..."
+	@chmod +x scripts/run_regtest_harness.sh
+	@./scripts/run_regtest_harness.sh differential
+
+# Run all test suites
+test-all: test test-vectors
+	@echo "==> All test suites passed!"
