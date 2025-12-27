@@ -69,6 +69,18 @@ pub type ChainstateQuery {
   QueryTip(reply: Subject(Option(oni_bitcoin.BlockHash)))
   QueryHeight(reply: Subject(Int))
   QueryNetwork(reply: Subject(oni_bitcoin.Network))
+  /// Submit a mined block
+  SubmitBlock(block: oni_bitcoin.Block, reply: Subject(SubmitBlockResult))
+}
+
+/// Result of block submission
+pub type SubmitBlockResult {
+  /// Block accepted and added to chain
+  SubmitBlockAccepted
+  /// Block already known
+  SubmitBlockDuplicate
+  /// Block was rejected with reason
+  SubmitBlockRejected(reason: String)
 }
 
 /// Mempool query messages
@@ -254,6 +266,7 @@ fn register_stateful_handlers(
   |> oni_rpc.server_register("getmempoolinfo", create_getmempoolinfo_handler(mempool))
   |> oni_rpc.server_register("getrawmempool", create_getrawmempool_handler(mempool))
   |> oni_rpc.server_register("getblocktemplate", create_getblocktemplate_handler(chainstate, mempool))
+  |> oni_rpc.server_register("submitblock", create_submitblock_handler(chainstate))
 }
 
 // ============================================================================
@@ -453,6 +466,48 @@ fn create_getblocktemplate_handler(
 /// Convert int to hex string
 fn int_to_hex(n: Int) -> String {
   oni_bitcoin.hex_encode(<<n:32-big>>)
+}
+
+/// Create handler for submitblock that submits a mined block
+fn create_submitblock_handler(
+  chainstate: Subject(ChainstateQuery),
+) -> MethodHandler {
+  fn(params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
+    // Extract block hex from params
+    // submitblock "hexdata" ( "dummy" )
+    case params {
+      ParamsArray([RpcString(block_hex), ..]) -> {
+        // Decode hex to bytes
+        case oni_bitcoin.hex_decode(block_hex) {
+          Error(_) -> Error(InvalidParams("Invalid block hex encoding"))
+          Ok(block_bytes) -> {
+            // Decode block from bytes
+            case oni_bitcoin.decode_block(block_bytes) {
+              Error(msg) -> Error(InvalidParams("Invalid block data: " <> msg))
+              Ok(#(block, _rest)) -> {
+                // Submit to chainstate
+                let result = submit_block(chainstate, block)
+                case result {
+                  SubmitBlockAccepted -> Ok(RpcNull)
+                  SubmitBlockDuplicate -> Ok(RpcString("duplicate"))
+                  SubmitBlockRejected(reason) -> Ok(RpcString(reason))
+                }
+              }
+            }
+          }
+        }
+      }
+      _ -> Error(InvalidParams("submitblock requires block hex as first parameter"))
+    }
+  }
+}
+
+/// Submit a block to chainstate
+fn submit_block(
+  chainstate: Subject(ChainstateQuery),
+  block: oni_bitcoin.Block,
+) -> SubmitBlockResult {
+  process.call(chainstate, SubmitBlock(block, _), 60_000)  // Longer timeout for block validation
 }
 
 // ============================================================================

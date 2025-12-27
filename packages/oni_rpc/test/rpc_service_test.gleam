@@ -267,3 +267,62 @@ fn string_slice(s: String, start: Int, len: Int) -> String
 fn string_drop(s: String, n: Int) -> String {
   string_slice(s, n, string_length(s) - n)
 }
+
+// ============================================================================
+// submitblock Tests
+// ============================================================================
+
+pub fn handle_submitblock_missing_param_test() {
+  let config = oni_rpc.default_config()
+  let assert Ok(service) = rpc_service.start(config, None)
+
+  // Send submitblock without parameters
+  let response = rpc_service.handle_request_sync(
+    service,
+    "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"submitblock\",\"params\":[]}",
+    True,
+  )
+
+  // Response should contain error for invalid params
+  should.be_true(contains(response, "error"))
+
+  // Cleanup
+  rpc_service.shutdown(service)
+}
+
+pub fn handle_submitblock_invalid_hex_test() {
+  let config = oni_rpc.default_config()
+  let assert Ok(service) = rpc_service.start(config, None)
+
+  // Send submitblock with invalid hex
+  let response = rpc_service.handle_request_sync(
+    service,
+    "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"submitblock\",\"params\":[\"notvalidhex\"]}",
+    True,
+  )
+
+  // Response should contain error for invalid hex
+  should.be_true(contains(response, "error"))
+
+  // Cleanup
+  rpc_service.shutdown(service)
+}
+
+pub fn handle_submitblock_truncated_block_test() {
+  let config = oni_rpc.default_config()
+  let assert Ok(service) = rpc_service.start(config, None)
+
+  // Send submitblock with valid hex but truncated block data
+  // This is only the first 40 bytes of a block header (should be 80 bytes)
+  let response = rpc_service.handle_request_sync(
+    service,
+    "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"submitblock\",\"params\":[\"0100000000000000000000000000000000000000000000000000000000000000\"]}",
+    True,
+  )
+
+  // Response should contain error for invalid block data
+  should.be_true(contains(response, "error"))
+
+  // Cleanup
+  rpc_service.shutdown(service)
+}

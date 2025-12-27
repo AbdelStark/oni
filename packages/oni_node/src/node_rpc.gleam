@@ -16,9 +16,10 @@ import oni_bitcoin
 import supervisor
 import rpc_service.{
   type BlockTemplateData, type ChainstateQuery, type MempoolQuery,
-  type SyncQuery, type SyncState, type TemplateTxData,
+  type SubmitBlockResult, type SyncQuery, type SyncState, type TemplateTxData,
   BlockTemplateData, QueryBlockTemplate, QueryHeight, QueryMempoolSize,
-  QueryMempoolTxids, QueryNetwork, QuerySyncState, QueryTip, SyncState,
+  QueryMempoolTxids, QueryNetwork, QuerySyncState, QueryTip, SubmitBlock,
+  SubmitBlockAccepted, SubmitBlockDuplicate, SubmitBlockRejected, SyncState,
   TemplateTxData,
 }
 import oni_consensus/block_template
@@ -65,6 +66,59 @@ fn handle_chainstate_query(
       let result = process.call(state.target, supervisor.GetNetwork, 5000)
       process.send(reply, result)
       actor.continue(state)
+    }
+
+    SubmitBlock(block, reply) -> {
+      // Submit block to chainstate for validation and connection
+      // First check if block connects to our tip (basic validation)
+      let tip_result = process.call(state.target, supervisor.GetTip, 5000)
+
+      case tip_result {
+        None -> {
+          // No tip yet, only genesis allowed
+          process.send(reply, SubmitBlockRejected("no chain tip"))
+          actor.continue(state)
+        }
+        Some(current_tip) -> {
+          // Check if this block's prev_hash matches our tip
+          let block_prev = block.header.prev_block_hash
+          case block_prev == current_tip {
+            False -> {
+              // Could be duplicate or orphan
+              // For now, check if it's our current tip (duplicate)
+              let block_hash = oni_bitcoin.block_hash_from_header(block.header)
+              case block_hash == current_tip {
+                True -> {
+                  process.send(reply, SubmitBlockDuplicate)
+                  actor.continue(state)
+                }
+                False -> {
+                  process.send(reply, SubmitBlockRejected("prev-blk-not-found"))
+                  actor.continue(state)
+                }
+              }
+            }
+            True -> {
+              // Block connects to our tip, try to connect it
+              let connect_result = process.call(
+                state.target,
+                supervisor.ConnectBlock(block, _),
+                60_000,
+              )
+              case connect_result {
+                Ok(_) -> {
+                  process.send(reply, SubmitBlockAccepted)
+                  actor.continue(state)
+                }
+                Error(reason) -> {
+                  process.send(reply, SubmitBlockRejected(reason))
+                  actor.continue(state)
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 }
