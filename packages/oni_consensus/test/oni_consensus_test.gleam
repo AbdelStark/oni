@@ -1,6 +1,7 @@
 import gleeunit
 import gleeunit/should
 import gleam/bit_array
+import gleam/list
 import oni_consensus
 import validation
 import oni_bitcoin
@@ -803,4 +804,456 @@ pub fn sighash_constants_test() {
   oni_consensus.sighash_none |> should.equal(0x02)
   oni_consensus.sighash_single |> should.equal(0x03)
   oni_consensus.sighash_anyonecanpay |> should.equal(0x80)
+}
+
+// ============================================================================
+// Advanced Script Execution Tests
+// ============================================================================
+
+pub fn execute_op_verify_true_test() {
+  let flags = oni_consensus.default_script_flags()
+  // Push 1, then OP_VERIFY - should succeed (consume the 1)
+  let script = <<0x51, 0x69>>
+  let ctx = oni_consensus.script_context_new(script, flags)
+
+  let result = oni_consensus.execute_script(ctx)
+  result |> should.be_ok
+
+  let assert Ok(final_ctx) = result
+  // Stack should be empty after VERIFY consumes the truthy value
+  final_ctx.stack |> should.equal([])
+}
+
+pub fn execute_op_verify_false_test() {
+  let flags = oni_consensus.default_script_flags()
+  // Push 0, then OP_VERIFY - should fail
+  let script = <<0x00, 0x69>>
+  let ctx = oni_consensus.script_context_new(script, flags)
+
+  let result = oni_consensus.execute_script(ctx)
+  // Should fail because 0 is falsy
+  result |> should.be_error
+}
+
+pub fn execute_op_drop_test() {
+  let flags = oni_consensus.default_script_flags()
+  // Push 1, Push 2, then OP_DROP - should leave only 1 on stack
+  let script = <<0x51, 0x52, 0x75>>
+  let ctx = oni_consensus.script_context_new(script, flags)
+
+  let result = oni_consensus.execute_script(ctx)
+  result |> should.be_ok
+
+  let assert Ok(final_ctx) = result
+  case final_ctx.stack {
+    [<<1:8>>] -> should.be_true(True)
+    _ -> should.fail()
+  }
+}
+
+pub fn execute_op_2drop_test() {
+  let flags = oni_consensus.default_script_flags()
+  // Push 1, Push 2, Push 3, then OP_2DROP - should leave only 1 on stack
+  let script = <<0x51, 0x52, 0x53, 0x6d>>
+  let ctx = oni_consensus.script_context_new(script, flags)
+
+  let result = oni_consensus.execute_script(ctx)
+  result |> should.be_ok
+
+  let assert Ok(final_ctx) = result
+  case final_ctx.stack {
+    [<<1:8>>] -> should.be_true(True)
+    _ -> should.fail()
+  }
+}
+
+pub fn execute_op_swap_test() {
+  let flags = oni_consensus.default_script_flags()
+  // Push 1, Push 2, then OP_SWAP - stack should be [1, 2] (top to bottom)
+  let script = <<0x51, 0x52, 0x7c>>
+  let ctx = oni_consensus.script_context_new(script, flags)
+
+  let result = oni_consensus.execute_script(ctx)
+  result |> should.be_ok
+
+  let assert Ok(final_ctx) = result
+  case final_ctx.stack {
+    [<<1:8>>, <<2:8>>] -> should.be_true(True)
+    _ -> should.fail()
+  }
+}
+
+pub fn execute_op_over_test() {
+  let flags = oni_consensus.default_script_flags()
+  // Push 1, Push 2, then OP_OVER - stack should be [1, 2, 1]
+  let script = <<0x51, 0x52, 0x78>>
+  let ctx = oni_consensus.script_context_new(script, flags)
+
+  let result = oni_consensus.execute_script(ctx)
+  result |> should.be_ok
+
+  let assert Ok(final_ctx) = result
+  case final_ctx.stack {
+    [<<1:8>>, <<2:8>>, <<1:8>>] -> should.be_true(True)
+    _ -> should.fail()
+  }
+}
+
+pub fn execute_op_size_test() {
+  let flags = oni_consensus.default_script_flags()
+  // Push 3 bytes, then OP_SIZE - should push 3 on top
+  let script = <<0x03, 0x01, 0x02, 0x03, 0x82>>
+  let ctx = oni_consensus.script_context_new(script, flags)
+
+  let result = oni_consensus.execute_script(ctx)
+  result |> should.be_ok
+
+  let assert Ok(final_ctx) = result
+  case final_ctx.stack {
+    [<<3:8>>, _original] -> should.be_true(True)
+    _ -> should.fail()
+  }
+}
+
+pub fn execute_op_sub_test() {
+  let flags = oni_consensus.default_script_flags()
+  // Push 5, Push 3, OP_SUB -> should leave 2 on stack
+  let script = <<0x55, 0x53, 0x94>>
+  let ctx = oni_consensus.script_context_new(script, flags)
+
+  let result = oni_consensus.execute_script(ctx)
+  result |> should.be_ok
+
+  let assert Ok(final_ctx) = result
+  case final_ctx.stack {
+    [<<2:8>>] -> should.be_true(True)
+    _ -> should.fail()
+  }
+}
+
+pub fn execute_op_negate_test() {
+  let flags = oni_consensus.default_script_flags()
+  // Push 5, OP_NEGATE -> should leave -5 on stack
+  let script = <<0x55, 0x8f>>
+  let ctx = oni_consensus.script_context_new(script, flags)
+
+  let result = oni_consensus.execute_script(ctx)
+  result |> should.be_ok
+
+  let assert Ok(final_ctx) = result
+  case final_ctx.stack {
+    [top] -> {
+      // -5 in script number encoding is 0x85
+      top |> should.equal(<<0x85>>)
+    }
+    _ -> should.fail()
+  }
+}
+
+pub fn execute_op_abs_test() {
+  let flags = oni_consensus.default_script_flags()
+  // Push -5 (0x85), OP_ABS -> should leave 5 on stack
+  let script = <<0x01, 0x85, 0x90>>
+  let ctx = oni_consensus.script_context_new(script, flags)
+
+  let result = oni_consensus.execute_script(ctx)
+  result |> should.be_ok
+
+  let assert Ok(final_ctx) = result
+  case final_ctx.stack {
+    [<<5:8>>] -> should.be_true(True)
+    _ -> should.fail()
+  }
+}
+
+pub fn execute_op_not_true_test() {
+  let flags = oni_consensus.default_script_flags()
+  // Push 0, OP_NOT -> should leave 1 on stack
+  let script = <<0x00, 0x91>>
+  let ctx = oni_consensus.script_context_new(script, flags)
+
+  let result = oni_consensus.execute_script(ctx)
+  result |> should.be_ok
+
+  let assert Ok(final_ctx) = result
+  case final_ctx.stack {
+    [<<1:8>>] -> should.be_true(True)
+    _ -> should.fail()
+  }
+}
+
+pub fn execute_op_not_false_test() {
+  let flags = oni_consensus.default_script_flags()
+  // Push 1, OP_NOT -> should leave 0 on stack
+  let script = <<0x51, 0x91>>
+  let ctx = oni_consensus.script_context_new(script, flags)
+
+  let result = oni_consensus.execute_script(ctx)
+  result |> should.be_ok
+
+  let assert Ok(final_ctx) = result
+  case final_ctx.stack {
+    [<<>>] -> should.be_true(True)
+    _ -> should.fail()
+  }
+}
+
+pub fn execute_op_booland_test() {
+  let flags = oni_consensus.default_script_flags()
+  // Push 1, Push 1, OP_BOOLAND -> should leave 1 on stack
+  let script = <<0x51, 0x51, 0x9a>>
+  let ctx = oni_consensus.script_context_new(script, flags)
+
+  let result = oni_consensus.execute_script(ctx)
+  result |> should.be_ok
+
+  let assert Ok(final_ctx) = result
+  case final_ctx.stack {
+    [<<1:8>>] -> should.be_true(True)
+    _ -> should.fail()
+  }
+}
+
+pub fn execute_op_boolor_test() {
+  let flags = oni_consensus.default_script_flags()
+  // Push 0, Push 1, OP_BOOLOR -> should leave 1 on stack
+  let script = <<0x00, 0x51, 0x9b>>
+  let ctx = oni_consensus.script_context_new(script, flags)
+
+  let result = oni_consensus.execute_script(ctx)
+  result |> should.be_ok
+
+  let assert Ok(final_ctx) = result
+  case final_ctx.stack {
+    [<<1:8>>] -> should.be_true(True)
+    _ -> should.fail()
+  }
+}
+
+pub fn execute_op_numequal_test() {
+  let flags = oni_consensus.default_script_flags()
+  // Push 5, Push 5, OP_NUMEQUAL -> should leave 1 on stack
+  let script = <<0x55, 0x55, 0x9c>>
+  let ctx = oni_consensus.script_context_new(script, flags)
+
+  let result = oni_consensus.execute_script(ctx)
+  result |> should.be_ok
+
+  let assert Ok(final_ctx) = result
+  case final_ctx.stack {
+    [<<1:8>>] -> should.be_true(True)
+    _ -> should.fail()
+  }
+}
+
+pub fn execute_op_numnotequal_test() {
+  let flags = oni_consensus.default_script_flags()
+  // Push 5, Push 3, OP_NUMNOTEQUAL -> should leave 1 on stack
+  let script = <<0x55, 0x53, 0x9e>>
+  let ctx = oni_consensus.script_context_new(script, flags)
+
+  let result = oni_consensus.execute_script(ctx)
+  result |> should.be_ok
+
+  let assert Ok(final_ctx) = result
+  case final_ctx.stack {
+    [<<1:8>>] -> should.be_true(True)
+    _ -> should.fail()
+  }
+}
+
+pub fn execute_op_lessthan_test() {
+  let flags = oni_consensus.default_script_flags()
+  // Push 3, Push 5, OP_LESSTHAN -> should leave 1 on stack (3 < 5)
+  let script = <<0x53, 0x55, 0x9f>>
+  let ctx = oni_consensus.script_context_new(script, flags)
+
+  let result = oni_consensus.execute_script(ctx)
+  result |> should.be_ok
+
+  let assert Ok(final_ctx) = result
+  case final_ctx.stack {
+    [<<1:8>>] -> should.be_true(True)
+    _ -> should.fail()
+  }
+}
+
+pub fn execute_op_greaterthan_test() {
+  let flags = oni_consensus.default_script_flags()
+  // Push 5, Push 3, OP_GREATERTHAN -> should leave 1 on stack (5 > 3)
+  let script = <<0x55, 0x53, 0xa0>>
+  let ctx = oni_consensus.script_context_new(script, flags)
+
+  let result = oni_consensus.execute_script(ctx)
+  result |> should.be_ok
+
+  let assert Ok(final_ctx) = result
+  case final_ctx.stack {
+    [<<1:8>>] -> should.be_true(True)
+    _ -> should.fail()
+  }
+}
+
+pub fn execute_op_within_test() {
+  let flags = oni_consensus.default_script_flags()
+  // Push 5, Push 3, Push 7, OP_WITHIN -> should leave 1 on stack (3 <= 5 < 7)
+  let script = <<0x55, 0x53, 0x57, 0xa5>>
+  let ctx = oni_consensus.script_context_new(script, flags)
+
+  let result = oni_consensus.execute_script(ctx)
+  result |> should.be_ok
+
+  let assert Ok(final_ctx) = result
+  case final_ctx.stack {
+    [<<1:8>>] -> should.be_true(True)
+    _ -> should.fail()
+  }
+}
+
+pub fn execute_op_if_else_endif_true_test() {
+  let flags = oni_consensus.default_script_flags()
+  // Push 1, OP_IF, Push 2, OP_ELSE, Push 3, OP_ENDIF
+  // Should execute the IF branch and push 2
+  let script = <<0x51, 0x63, 0x52, 0x67, 0x53, 0x68>>
+  let ctx = oni_consensus.script_context_new(script, flags)
+
+  let result = oni_consensus.execute_script(ctx)
+  result |> should.be_ok
+
+  let assert Ok(final_ctx) = result
+  case final_ctx.stack {
+    [<<2:8>>] -> should.be_true(True)
+    _ -> should.fail()
+  }
+}
+
+pub fn execute_op_if_else_endif_false_test() {
+  let flags = oni_consensus.default_script_flags()
+  // Push 0, OP_IF, Push 2, OP_ELSE, Push 3, OP_ENDIF
+  // Should execute the ELSE branch and push 3
+  let script = <<0x00, 0x63, 0x52, 0x67, 0x53, 0x68>>
+  let ctx = oni_consensus.script_context_new(script, flags)
+
+  let result = oni_consensus.execute_script(ctx)
+  result |> should.be_ok
+
+  let assert Ok(final_ctx) = result
+  case final_ctx.stack {
+    [<<3:8>>] -> should.be_true(True)
+    _ -> should.fail()
+  }
+}
+
+pub fn execute_op_notif_test() {
+  let flags = oni_consensus.default_script_flags()
+  // Push 0, OP_NOTIF, Push 5, OP_ENDIF
+  // Should execute the NOTIF branch (since condition is false)
+  let script = <<0x00, 0x64, 0x55, 0x68>>
+  let ctx = oni_consensus.script_context_new(script, flags)
+
+  let result = oni_consensus.execute_script(ctx)
+  result |> should.be_ok
+
+  let assert Ok(final_ctx) = result
+  case final_ctx.stack {
+    [<<5:8>>] -> should.be_true(True)
+    _ -> should.fail()
+  }
+}
+
+pub fn execute_op_ripemd160_test() {
+  let flags = oni_consensus.default_script_flags()
+  // Push 1 byte (0x01), then OP_RIPEMD160
+  let script = <<0x01, 0x01, 0xa6>>
+  let ctx = oni_consensus.script_context_new(script, flags)
+
+  let result = oni_consensus.execute_script(ctx)
+  result |> should.be_ok
+
+  let assert Ok(final_ctx) = result
+  case final_ctx.stack {
+    [hash] -> {
+      // RIPEMD160 output should be 20 bytes
+      bit_array.byte_size(hash) |> should.equal(20)
+    }
+    _ -> should.fail()
+  }
+}
+
+// ============================================================================
+// P2PKH Standard Script Test
+// ============================================================================
+
+pub fn parse_p2pkh_script_test() {
+  // Standard P2PKH scriptPubKey: OP_DUP OP_HASH160 <20 bytes> OP_EQUALVERIFY OP_CHECKSIG
+  // We'll use a placeholder 20-byte hash
+  let pubkey_hash = <<
+    0x89, 0xab, 0xcd, 0xef, 0x01, 0x23, 0x45, 0x67, 0x89, 0xab,
+    0xcd, 0xef, 0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef
+  >>
+  let script = bit_array.concat([
+    <<0x76>>,  // OP_DUP
+    <<0xa9>>,  // OP_HASH160
+    <<0x14>>,  // Push 20 bytes
+    pubkey_hash,
+    <<0x88>>,  // OP_EQUALVERIFY
+    <<0xac>>,  // OP_CHECKSIG
+  ])
+
+  let result = oni_consensus.parse_script(script)
+  result |> should.be_ok
+
+  let assert Ok(elements) = result
+  // Should have 5 elements: DUP, HASH160, <pubkey_hash>, EQUALVERIFY, CHECKSIG
+  list.length(elements) |> should.equal(5)
+}
+
+// ============================================================================
+// Disabled Opcodes Tests
+// ============================================================================
+
+pub fn disabled_opcodes_test() {
+  // Verify all disabled opcodes
+  oni_consensus.opcode_is_disabled(oni_consensus.OpCat) |> should.be_true
+  oni_consensus.opcode_is_disabled(oni_consensus.OpSubstr) |> should.be_true
+  oni_consensus.opcode_is_disabled(oni_consensus.OpLeft) |> should.be_true
+  oni_consensus.opcode_is_disabled(oni_consensus.OpRight) |> should.be_true
+  oni_consensus.opcode_is_disabled(oni_consensus.OpInvert) |> should.be_true
+  oni_consensus.opcode_is_disabled(oni_consensus.OpAnd) |> should.be_true
+  oni_consensus.opcode_is_disabled(oni_consensus.OpOr) |> should.be_true
+  oni_consensus.opcode_is_disabled(oni_consensus.OpXor) |> should.be_true
+  oni_consensus.opcode_is_disabled(oni_consensus.Op2Mul) |> should.be_true
+  oni_consensus.opcode_is_disabled(oni_consensus.Op2Div) |> should.be_true
+  oni_consensus.opcode_is_disabled(oni_consensus.OpMul) |> should.be_true
+  oni_consensus.opcode_is_disabled(oni_consensus.OpDiv) |> should.be_true
+  oni_consensus.opcode_is_disabled(oni_consensus.OpMod) |> should.be_true
+  oni_consensus.opcode_is_disabled(oni_consensus.OpLShift) |> should.be_true
+  oni_consensus.opcode_is_disabled(oni_consensus.OpRShift) |> should.be_true
+
+  // Verify enabled opcodes
+  oni_consensus.opcode_is_disabled(oni_consensus.OpDup) |> should.be_false
+  oni_consensus.opcode_is_disabled(oni_consensus.OpHash160) |> should.be_false
+  oni_consensus.opcode_is_disabled(oni_consensus.OpCheckSig) |> should.be_false
+}
+
+// ============================================================================
+// Script Number Edge Cases
+// ============================================================================
+
+pub fn encode_script_num_256_test() {
+  // 256 = 0x0100
+  oni_consensus.encode_script_num(256) |> should.equal(<<0x00, 0x01>>)
+}
+
+pub fn encode_script_num_negative_128_test() {
+  // -128 = 0x8080 (128 with negative sign in next byte)
+  oni_consensus.encode_script_num(-128) |> should.equal(<<0x80, 0x80>>)
+}
+
+pub fn decode_script_num_256_test() {
+  oni_consensus.decode_script_num(<<0x00, 0x01>>) |> should.equal(Ok(256))
+}
+
+pub fn decode_script_num_negative_256_test() {
+  oni_consensus.decode_script_num(<<0x00, 0x81>>) |> should.equal(Ok(-256))
 }
