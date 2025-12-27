@@ -1,0 +1,51 @@
+{application, oni_node,
+ [{description, "oni - A Bitcoin Full Node Implementation in Gleam"},
+  {vsn, "0.1.0"},
+  {registered, [
+    oni_sup,
+    oni_storage_sup,
+    oni_block_store,
+    oni_chainstate,
+    oni_p2p_sup,
+    oni_peer_manager,
+    oni_addr_manager,
+    oni_listener,
+    oni_conn_sup,
+    oni_sync_server,
+    oni_mempool_server,
+    oni_rpc_server,
+    oni_health_server
+  ]},
+  {applications, [
+    kernel,
+    stdlib,
+    crypto,
+    ssl,
+    inets
+  ]},
+  {mod, {oni_app, []}},
+  {env, [
+    {network, mainnet},
+    {data_dir, "~/.oni"},
+    {p2p_port, 8333},
+    {rpc_port, 8332},
+    {max_connections, 125}
+  ]},
+  {modules, [
+    oni_app,
+    oni_sup,
+    oni_storage_sup,
+    oni_block_store,
+    oni_chainstate,
+    oni_p2p_sup,
+    oni_conn_sup,
+    oni_peer,
+    oni_peer_manager,
+    oni_addr_manager,
+    oni_listener,
+    oni_sync_server,
+    oni_mempool_server,
+    oni_rpc_server,
+    oni_health_server
+  ]}
+ ]}.
