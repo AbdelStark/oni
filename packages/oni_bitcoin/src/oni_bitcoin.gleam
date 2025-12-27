@@ -2070,3 +2070,1066 @@ pub fn script_from_hex(hex: String) -> Result(Script, String) {
 pub fn sats(value: Int) -> Amount {
   Amount(value)
 }
+
+// ============================================================================
+// PSBT (Partially Signed Bitcoin Transaction) - BIP174/BIP370
+// ============================================================================
+
+/// PSBT magic bytes "psbt\xff"
+const psbt_magic = <<0x70, 0x73, 0x62, 0x74, 0xFF>>
+
+/// PSBT key types for global map
+pub type PsbtGlobalKey {
+  PsbtGlobalUnsignedTx       // 0x00
+  PsbtGlobalXpub             // 0x01
+  PsbtGlobalTxVersion        // 0x02 (PSBT v2)
+  PsbtGlobalFallbackLocktime // 0x03 (PSBT v2)
+  PsbtGlobalInputCount       // 0x04 (PSBT v2)
+  PsbtGlobalOutputCount      // 0x05 (PSBT v2)
+  PsbtGlobalTxModifiable     // 0x06 (PSBT v2)
+  PsbtGlobalVersion          // 0xFB
+  PsbtGlobalProprietary      // 0xFC
+  PsbtGlobalUnknown(Int)
+}
+
+/// PSBT key types for input map
+pub type PsbtInputKey {
+  PsbtInNonWitnessUtxo       // 0x00
+  PsbtInWitnessUtxo          // 0x01
+  PsbtInPartialSig           // 0x02
+  PsbtInSighashType          // 0x03
+  PsbtInRedeemScript         // 0x04
+  PsbtInWitnessScript        // 0x05
+  PsbtInBip32Derivation      // 0x06
+  PsbtInFinalScriptsig       // 0x07
+  PsbtInFinalScriptwitness   // 0x08
+  PsbtInPorCommitment        // 0x09
+  PsbtInRipemd160            // 0x0A
+  PsbtInSha256               // 0x0B
+  PsbtInHash160              // 0x0C
+  PsbtInHash256              // 0x0D
+  PsbtInPreviousTxid         // 0x0E (PSBT v2)
+  PsbtInOutputIndex          // 0x0F (PSBT v2)
+  PsbtInSequence             // 0x10 (PSBT v2)
+  PsbtInRequiredTimeLocktime // 0x11 (PSBT v2)
+  PsbtInRequiredHeightLocktime // 0x12 (PSBT v2)
+  PsbtInTapKeySig            // 0x13
+  PsbtInTapScriptSig         // 0x14
+  PsbtInTapLeafScript        // 0x15
+  PsbtInTapBip32Derivation   // 0x16
+  PsbtInTapInternalKey       // 0x17
+  PsbtInTapMerkleRoot        // 0x18
+  PsbtInProprietary          // 0xFC
+  PsbtInUnknown(Int)
+}
+
+/// PSBT key types for output map
+pub type PsbtOutputKey {
+  PsbtOutRedeemScript        // 0x00
+  PsbtOutWitnessScript       // 0x01
+  PsbtOutBip32Derivation     // 0x02
+  PsbtOutAmount              // 0x03 (PSBT v2)
+  PsbtOutScript              // 0x04 (PSBT v2)
+  PsbtOutTapInternalKey      // 0x05
+  PsbtOutTapTree             // 0x06
+  PsbtOutTapBip32Derivation  // 0x07
+  PsbtOutProprietary         // 0xFC
+  PsbtOutUnknown(Int)
+}
+
+/// A PSBT input
+pub type PsbtInput {
+  PsbtInput(
+    non_witness_utxo: Option(Transaction),
+    witness_utxo: Option(TxOut),
+    partial_sigs: List(#(BitArray, BitArray)),
+    sighash_type: Option(Int),
+    redeem_script: Option(Script),
+    witness_script: Option(Script),
+    bip32_derivation: List(#(BitArray, BitArray)),
+    final_script_sig: Option(Script),
+    final_script_witness: Option(List(BitArray)),
+    tap_key_sig: Option(BitArray),
+    tap_script_sigs: List(#(BitArray, BitArray)),
+    tap_leaf_scripts: List(#(BitArray, BitArray)),
+    tap_internal_key: Option(BitArray),
+    tap_merkle_root: Option(BitArray),
+    unknown: List(#(BitArray, BitArray)),
+  )
+}
+
+/// A PSBT output
+pub type PsbtOutput {
+  PsbtOutput(
+    redeem_script: Option(Script),
+    witness_script: Option(Script),
+    bip32_derivation: List(#(BitArray, BitArray)),
+    tap_internal_key: Option(BitArray),
+    tap_tree: Option(BitArray),
+    unknown: List(#(BitArray, BitArray)),
+  )
+}
+
+/// Partially Signed Bitcoin Transaction
+pub type Psbt {
+  Psbt(
+    unsigned_tx: Transaction,
+    version: Int,
+    xpubs: List(#(BitArray, BitArray)),
+    inputs: List(PsbtInput),
+    outputs: List(PsbtOutput),
+    unknown: List(#(BitArray, BitArray)),
+  )
+}
+
+/// PSBT errors
+pub type PsbtError {
+  PsbtInvalidMagic
+  PsbtInvalidFormat(String)
+  PsbtMissingUnsignedTx
+  PsbtDuplicateKey
+  PsbtInvalidKeyType
+  PsbtInputCountMismatch
+  PsbtOutputCountMismatch
+  PsbtAlreadyFinalized
+  PsbtNotFinalized
+}
+
+/// Create an empty PSBT input
+pub fn psbt_input_new() -> PsbtInput {
+  PsbtInput(
+    non_witness_utxo: option.None,
+    witness_utxo: option.None,
+    partial_sigs: [],
+    sighash_type: option.None,
+    redeem_script: option.None,
+    witness_script: option.None,
+    bip32_derivation: [],
+    final_script_sig: option.None,
+    final_script_witness: option.None,
+    tap_key_sig: option.None,
+    tap_script_sigs: [],
+    tap_leaf_scripts: [],
+    tap_internal_key: option.None,
+    tap_merkle_root: option.None,
+    unknown: [],
+  )
+}
+
+/// Create an empty PSBT output
+pub fn psbt_output_new() -> PsbtOutput {
+  PsbtOutput(
+    redeem_script: option.None,
+    witness_script: option.None,
+    bip32_derivation: [],
+    tap_internal_key: option.None,
+    tap_tree: option.None,
+    unknown: [],
+  )
+}
+
+/// Create a PSBT from an unsigned transaction
+pub fn psbt_from_unsigned_tx(tx: Transaction) -> Result(Psbt, PsbtError) {
+  // Verify transaction has no signatures
+  let has_sigs = list.any(tx.inputs, fn(input) {
+    !script_is_empty(input.script_sig) || !list.is_empty(input.witness)
+  })
+
+  case has_sigs {
+    True -> Error(PsbtAlreadyFinalized)
+    False -> {
+      // Create empty inputs and outputs
+      let inputs = list.map(tx.inputs, fn(_) { psbt_input_new() })
+      let outputs = list.map(tx.outputs, fn(_) { psbt_output_new() })
+
+      Ok(Psbt(
+        unsigned_tx: tx,
+        version: 0,
+        xpubs: [],
+        inputs: inputs,
+        outputs: outputs,
+        unknown: [],
+      ))
+    }
+  }
+}
+
+/// Serialize a PSBT to bytes
+pub fn psbt_serialize(psbt: Psbt) -> BitArray {
+  let global_map = serialize_psbt_global(psbt)
+  let input_maps = list.map(psbt.inputs, serialize_psbt_input)
+  let output_maps = list.map(psbt.outputs, serialize_psbt_output)
+
+  bit_array.concat([
+    psbt_magic,
+    global_map,
+    ..list.append(input_maps, output_maps)
+  ])
+}
+
+fn serialize_psbt_global(psbt: Psbt) -> BitArray {
+  // Serialize unsigned transaction
+  let tx_bytes = encode_tx_legacy(psbt.unsigned_tx)
+  let tx_key = <<0x00>>
+  let tx_entry = serialize_psbt_entry(tx_key, tx_bytes)
+
+  // Serialize version if non-zero
+  let version_entry = case psbt.version {
+    0 -> <<>>
+    v -> {
+      let version_key = <<0xFB>>
+      let version_value = <<v:32-little>>
+      serialize_psbt_entry(version_key, version_value)
+    }
+  }
+
+  // Serialize xpubs
+  let xpub_entries = list.fold(psbt.xpubs, <<>>, fn(acc, xpub) {
+    let #(key, value) = xpub
+    let full_key = bit_array.append(<<0x01>>, key)
+    bit_array.append(acc, serialize_psbt_entry(full_key, value))
+  })
+
+  // Serialize unknown entries
+  let unknown_entries = list.fold(psbt.unknown, <<>>, fn(acc, entry) {
+    let #(key, value) = entry
+    bit_array.append(acc, serialize_psbt_entry(key, value))
+  })
+
+  // End with separator (0x00)
+  bit_array.concat([tx_entry, version_entry, xpub_entries, unknown_entries, <<0x00>>])
+}
+
+fn serialize_psbt_entry(key: BitArray, value: BitArray) -> BitArray {
+  let key_len = compact_size_encode(bit_array.byte_size(key))
+  let value_len = compact_size_encode(bit_array.byte_size(value))
+  bit_array.concat([key_len, key, value_len, value])
+}
+
+fn serialize_psbt_input(input: PsbtInput) -> BitArray {
+  let mut_data = <<>>
+
+  // Non-witness UTXO
+  let data = case input.non_witness_utxo {
+    option.Some(tx) -> {
+      let tx_bytes = encode_tx(tx)
+      bit_array.append(mut_data, serialize_psbt_entry(<<0x00>>, tx_bytes))
+    }
+    option.None -> mut_data
+  }
+
+  // Witness UTXO
+  let data = case input.witness_utxo {
+    option.Some(utxo) -> {
+      let utxo_bytes = serialize_txout(utxo)
+      bit_array.append(data, serialize_psbt_entry(<<0x01>>, utxo_bytes))
+    }
+    option.None -> data
+  }
+
+  // Partial signatures
+  let data = list.fold(input.partial_sigs, data, fn(acc, sig) {
+    let #(pubkey, signature) = sig
+    let key = bit_array.append(<<0x02>>, pubkey)
+    bit_array.append(acc, serialize_psbt_entry(key, signature))
+  })
+
+  // Sighash type
+  let data = case input.sighash_type {
+    option.Some(sighash) -> {
+      bit_array.append(data, serialize_psbt_entry(<<0x03>>, <<sighash:32-little>>))
+    }
+    option.None -> data
+  }
+
+  // Redeem script
+  let data = case input.redeem_script {
+    option.Some(script) -> {
+      bit_array.append(data, serialize_psbt_entry(<<0x04>>, script_to_bytes(script)))
+    }
+    option.None -> data
+  }
+
+  // Witness script
+  let data = case input.witness_script {
+    option.Some(script) -> {
+      bit_array.append(data, serialize_psbt_entry(<<0x05>>, script_to_bytes(script)))
+    }
+    option.None -> data
+  }
+
+  // Final scriptsig
+  let data = case input.final_script_sig {
+    option.Some(script) -> {
+      bit_array.append(data, serialize_psbt_entry(<<0x07>>, script_to_bytes(script)))
+    }
+    option.None -> data
+  }
+
+  // Final scriptwitness
+  let data = case input.final_script_witness {
+    option.Some(witness) -> {
+      let witness_bytes = serialize_witness_stack(witness)
+      bit_array.append(data, serialize_psbt_entry(<<0x08>>, witness_bytes))
+    }
+    option.None -> data
+  }
+
+  // Tap key signature
+  let data = case input.tap_key_sig {
+    option.Some(sig) -> {
+      bit_array.append(data, serialize_psbt_entry(<<0x13>>, sig))
+    }
+    option.None -> data
+  }
+
+  // Tap internal key
+  let data = case input.tap_internal_key {
+    option.Some(key) -> {
+      bit_array.append(data, serialize_psbt_entry(<<0x17>>, key))
+    }
+    option.None -> data
+  }
+
+  // Unknown entries
+  let data = list.fold(input.unknown, data, fn(acc, entry) {
+    let #(key, value) = entry
+    bit_array.append(acc, serialize_psbt_entry(key, value))
+  })
+
+  // End with separator
+  bit_array.append(data, <<0x00>>)
+}
+
+fn serialize_psbt_output(output: PsbtOutput) -> BitArray {
+  let mut_data = <<>>
+
+  // Redeem script
+  let data = case output.redeem_script {
+    option.Some(script) -> {
+      bit_array.append(mut_data, serialize_psbt_entry(<<0x00>>, script_to_bytes(script)))
+    }
+    option.None -> mut_data
+  }
+
+  // Witness script
+  let data = case output.witness_script {
+    option.Some(script) -> {
+      bit_array.append(data, serialize_psbt_entry(<<0x01>>, script_to_bytes(script)))
+    }
+    option.None -> data
+  }
+
+  // BIP32 derivation paths
+  let data = list.fold(output.bip32_derivation, data, fn(acc, deriv) {
+    let #(pubkey, path) = deriv
+    let key = bit_array.append(<<0x02>>, pubkey)
+    bit_array.append(acc, serialize_psbt_entry(key, path))
+  })
+
+  // Tap internal key
+  let data = case output.tap_internal_key {
+    option.Some(key) -> {
+      bit_array.append(data, serialize_psbt_entry(<<0x05>>, key))
+    }
+    option.None -> data
+  }
+
+  // Tap tree
+  let data = case output.tap_tree {
+    option.Some(tree) -> {
+      bit_array.append(data, serialize_psbt_entry(<<0x06>>, tree))
+    }
+    option.None -> data
+  }
+
+  // Unknown entries
+  let data = list.fold(output.unknown, data, fn(acc, entry) {
+    let #(key, value) = entry
+    bit_array.append(acc, serialize_psbt_entry(key, value))
+  })
+
+  // End with separator
+  bit_array.append(data, <<0x00>>)
+}
+
+fn serialize_txout(output: TxOut) -> BitArray {
+  let script = script_to_bytes(output.script_pubkey)
+  let value = amount_to_sats(output.value)
+  bit_array.concat([
+    <<value:64-little>>,
+    compact_size_encode(bit_array.byte_size(script)),
+    script,
+  ])
+}
+
+fn serialize_witness_stack(witness: List(BitArray)) -> BitArray {
+  let count = compact_size_encode(list.length(witness))
+  let items = list.fold(witness, <<>>, fn(acc, item) {
+    let item_len = compact_size_encode(bit_array.byte_size(item))
+    bit_array.concat([acc, item_len, item])
+  })
+  bit_array.append(count, items)
+}
+
+/// Parse a PSBT from bytes
+pub fn psbt_parse(bytes: BitArray) -> Result(Psbt, PsbtError) {
+  // Check magic
+  case bytes {
+    <<0x70, 0x73, 0x62, 0x74, 0xFF, rest:bits>> -> {
+      parse_psbt_maps(rest)
+    }
+    _ -> Error(PsbtInvalidMagic)
+  }
+}
+
+fn parse_psbt_maps(bytes: BitArray) -> Result(Psbt, PsbtError) {
+  // Parse global map
+  case parse_psbt_global_map(bytes, option.None, 0, [], []) {
+    Error(e) -> Error(e)
+    Ok(#(unsigned_tx, version, xpubs, unknown, rest)) -> {
+      case unsigned_tx {
+        option.None -> Error(PsbtMissingUnsignedTx)
+        option.Some(tx) -> {
+          let input_count = list.length(tx.inputs)
+          let output_count = list.length(tx.outputs)
+
+          // Parse input maps
+          case parse_psbt_input_maps(rest, input_count, []) {
+            Error(e) -> Error(e)
+            Ok(#(inputs, rest2)) -> {
+              // Parse output maps
+              case parse_psbt_output_maps(rest2, output_count, []) {
+                Error(e) -> Error(e)
+                Ok(#(outputs, _rest3)) -> {
+                  Ok(Psbt(
+                    unsigned_tx: tx,
+                    version: version,
+                    xpubs: xpubs,
+                    inputs: inputs,
+                    outputs: outputs,
+                    unknown: unknown,
+                  ))
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fn parse_psbt_global_map(
+  bytes: BitArray,
+  tx: Option(Transaction),
+  version: Int,
+  xpubs: List(#(BitArray, BitArray)),
+  unknown: List(#(BitArray, BitArray)),
+) -> Result(#(Option(Transaction), Int, List(#(BitArray, BitArray)), List(#(BitArray, BitArray)), BitArray), PsbtError) {
+  // Read key length
+  case compact_size_decode(bytes) {
+    Error(_) -> Error(PsbtInvalidFormat("Failed to read key length"))
+    Ok(#(0, rest)) -> {
+      // Separator - end of global map
+      Ok(#(tx, version, list.reverse(xpubs), list.reverse(unknown), rest))
+    }
+    Ok(#(key_len, rest)) -> {
+      // Read key
+      case bit_array.slice(rest, 0, key_len) {
+        Error(_) -> Error(PsbtInvalidFormat("Failed to read key"))
+        Ok(key) -> {
+          let after_key = slice_after(rest, key_len)
+          // Read value length
+          case compact_size_decode(after_key) {
+            Error(_) -> Error(PsbtInvalidFormat("Failed to read value length"))
+            Ok(#(value_len, after_value_len)) -> {
+              case bit_array.slice(after_value_len, 0, value_len) {
+                Error(_) -> Error(PsbtInvalidFormat("Failed to read value"))
+                Ok(value) -> {
+                  let after_value = slice_after(after_value_len, value_len)
+                  // Process based on key type
+                  case key {
+                    <<0x00>> -> {
+                      // Unsigned transaction
+                      case decode_tx(value) {
+                        Error(_) -> Error(PsbtInvalidFormat("Invalid unsigned tx"))
+                        Ok(#(parsed_tx, _)) -> {
+                          parse_psbt_global_map(after_value, option.Some(parsed_tx), version, xpubs, unknown)
+                        }
+                      }
+                    }
+                    <<0x01, xpub_key:bits>> -> {
+                      // Xpub
+                      let new_xpubs = [#(<<xpub_key:bits>>, value), ..xpubs]
+                      parse_psbt_global_map(after_value, tx, version, new_xpubs, unknown)
+                    }
+                    <<0xFB>> -> {
+                      // Version
+                      case value {
+                        <<v:32-little>> -> {
+                          parse_psbt_global_map(after_value, tx, v, xpubs, unknown)
+                        }
+                        _ -> Error(PsbtInvalidFormat("Invalid version"))
+                      }
+                    }
+                    _ -> {
+                      // Unknown
+                      let new_unknown = [#(key, value), ..unknown]
+                      parse_psbt_global_map(after_value, tx, version, xpubs, new_unknown)
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fn parse_psbt_input_maps(
+  bytes: BitArray,
+  remaining: Int,
+  acc: List(PsbtInput),
+) -> Result(#(List(PsbtInput), BitArray), PsbtError) {
+  case remaining {
+    0 -> Ok(#(list.reverse(acc), bytes))
+    _ -> {
+      case parse_psbt_input_map(bytes, psbt_input_new()) {
+        Error(e) -> Error(e)
+        Ok(#(input, rest)) -> {
+          parse_psbt_input_maps(rest, remaining - 1, [input, ..acc])
+        }
+      }
+    }
+  }
+}
+
+fn parse_psbt_input_map(
+  bytes: BitArray,
+  input: PsbtInput,
+) -> Result(#(PsbtInput, BitArray), PsbtError) {
+  case compact_size_decode(bytes) {
+    Error(_) -> Error(PsbtInvalidFormat("Failed to read input key length"))
+    Ok(#(0, rest)) -> {
+      // Separator
+      Ok(#(input, rest))
+    }
+    Ok(#(key_len, rest)) -> {
+      case bit_array.slice(rest, 0, key_len) {
+        Error(_) -> Error(PsbtInvalidFormat("Failed to read input key"))
+        Ok(key) -> {
+          let after_key = slice_after(rest, key_len)
+          case compact_size_decode(after_key) {
+            Error(_) -> Error(PsbtInvalidFormat("Failed to read input value length"))
+            Ok(#(value_len, after_value_len)) -> {
+              case bit_array.slice(after_value_len, 0, value_len) {
+                Error(_) -> Error(PsbtInvalidFormat("Failed to read input value"))
+                Ok(value) -> {
+                  let after_value = slice_after(after_value_len, value_len)
+                  let new_input = update_psbt_input(input, key, value)
+                  parse_psbt_input_map(after_value, new_input)
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fn update_psbt_input(input: PsbtInput, key: BitArray, value: BitArray) -> PsbtInput {
+  case key {
+    <<0x00>> -> {
+      // Non-witness UTXO
+      case decode_tx(value) {
+        Ok(#(tx, _)) -> PsbtInput(..input, non_witness_utxo: option.Some(tx))
+        Error(_) -> input
+      }
+    }
+    <<0x01>> -> {
+      // Witness UTXO
+      case parse_txout(value) {
+        Ok(#(utxo, _)) -> PsbtInput(..input, witness_utxo: option.Some(utxo))
+        Error(_) -> input
+      }
+    }
+    <<0x02, pubkey:bits>> -> {
+      // Partial signature
+      PsbtInput(..input, partial_sigs: [#(<<pubkey:bits>>, value), ..input.partial_sigs])
+    }
+    <<0x03>> -> {
+      // Sighash type
+      case value {
+        <<sighash:32-little>> -> PsbtInput(..input, sighash_type: option.Some(sighash))
+        _ -> input
+      }
+    }
+    <<0x04>> -> {
+      // Redeem script
+      PsbtInput(..input, redeem_script: option.Some(Script(value)))
+    }
+    <<0x05>> -> {
+      // Witness script
+      PsbtInput(..input, witness_script: option.Some(Script(value)))
+    }
+    <<0x07>> -> {
+      // Final scriptsig
+      PsbtInput(..input, final_script_sig: option.Some(Script(value)))
+    }
+    <<0x08>> -> {
+      // Final scriptwitness
+      case parse_witness_stack(value) {
+        Ok(witness) -> PsbtInput(..input, final_script_witness: option.Some(witness))
+        Error(_) -> input
+      }
+    }
+    <<0x13>> -> {
+      // Tap key sig
+      PsbtInput(..input, tap_key_sig: option.Some(value))
+    }
+    <<0x17>> -> {
+      // Tap internal key
+      PsbtInput(..input, tap_internal_key: option.Some(value))
+    }
+    <<0x18>> -> {
+      // Tap merkle root
+      PsbtInput(..input, tap_merkle_root: option.Some(value))
+    }
+    _ -> {
+      // Unknown
+      PsbtInput(..input, unknown: [#(key, value), ..input.unknown])
+    }
+  }
+}
+
+fn parse_psbt_output_maps(
+  bytes: BitArray,
+  remaining: Int,
+  acc: List(PsbtOutput),
+) -> Result(#(List(PsbtOutput), BitArray), PsbtError) {
+  case remaining {
+    0 -> Ok(#(list.reverse(acc), bytes))
+    _ -> {
+      case parse_psbt_output_map(bytes, psbt_output_new()) {
+        Error(e) -> Error(e)
+        Ok(#(output, rest)) -> {
+          parse_psbt_output_maps(rest, remaining - 1, [output, ..acc])
+        }
+      }
+    }
+  }
+}
+
+fn parse_psbt_output_map(
+  bytes: BitArray,
+  output: PsbtOutput,
+) -> Result(#(PsbtOutput, BitArray), PsbtError) {
+  case compact_size_decode(bytes) {
+    Error(_) -> Error(PsbtInvalidFormat("Failed to read output key length"))
+    Ok(#(0, rest)) -> {
+      // Separator
+      Ok(#(output, rest))
+    }
+    Ok(#(key_len, rest)) -> {
+      case bit_array.slice(rest, 0, key_len) {
+        Error(_) -> Error(PsbtInvalidFormat("Failed to read output key"))
+        Ok(key) -> {
+          let after_key = slice_after(rest, key_len)
+          case compact_size_decode(after_key) {
+            Error(_) -> Error(PsbtInvalidFormat("Failed to read output value length"))
+            Ok(#(value_len, after_value_len)) -> {
+              case bit_array.slice(after_value_len, 0, value_len) {
+                Error(_) -> Error(PsbtInvalidFormat("Failed to read output value"))
+                Ok(value) -> {
+                  let after_value = slice_after(after_value_len, value_len)
+                  let new_output = update_psbt_output(output, key, value)
+                  parse_psbt_output_map(after_value, new_output)
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fn update_psbt_output(output: PsbtOutput, key: BitArray, value: BitArray) -> PsbtOutput {
+  case key {
+    <<0x00>> -> {
+      // Redeem script
+      PsbtOutput(..output, redeem_script: option.Some(Script(value)))
+    }
+    <<0x01>> -> {
+      // Witness script
+      PsbtOutput(..output, witness_script: option.Some(Script(value)))
+    }
+    <<0x02, pubkey:bits>> -> {
+      // BIP32 derivation
+      PsbtOutput(..output, bip32_derivation: [#(<<pubkey:bits>>, value), ..output.bip32_derivation])
+    }
+    <<0x05>> -> {
+      // Tap internal key
+      PsbtOutput(..output, tap_internal_key: option.Some(value))
+    }
+    <<0x06>> -> {
+      // Tap tree
+      PsbtOutput(..output, tap_tree: option.Some(value))
+    }
+    _ -> {
+      // Unknown
+      PsbtOutput(..output, unknown: [#(key, value), ..output.unknown])
+    }
+  }
+}
+
+fn parse_txout(bytes: BitArray) -> Result(#(TxOut, BitArray), String) {
+  case bytes {
+    <<value:64-little, rest:bits>> -> {
+      case compact_size_decode(rest) {
+        Error(e) -> Error(e)
+        Ok(#(script_len, after_len)) -> {
+          case bit_array.slice(after_len, 0, script_len) {
+            Error(_) -> Error("Failed to read script")
+            Ok(script_bytes) -> {
+              let remaining = slice_after(after_len, script_len)
+              case amount_from_sats(value) {
+                Error(e) -> Error(e)
+                Ok(amount) -> {
+                  Ok(#(TxOut(amount, Script(script_bytes)), remaining))
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    _ -> Error("Invalid txout")
+  }
+}
+
+fn parse_witness_stack(bytes: BitArray) -> Result(List(BitArray), String) {
+  case compact_size_decode(bytes) {
+    Error(e) -> Error(e)
+    Ok(#(count, rest)) -> {
+      parse_witness_items(rest, count, [])
+    }
+  }
+}
+
+fn parse_witness_items(
+  bytes: BitArray,
+  remaining: Int,
+  acc: List(BitArray),
+) -> Result(List(BitArray), String) {
+  case remaining {
+    0 -> Ok(list.reverse(acc))
+    _ -> {
+      case compact_size_decode(bytes) {
+        Error(e) -> Error(e)
+        Ok(#(item_len, rest)) -> {
+          case bit_array.slice(rest, 0, item_len) {
+            Error(_) -> Error("Failed to read witness item")
+            Ok(item) -> {
+              let after = slice_after(rest, item_len)
+              parse_witness_items(after, remaining - 1, [item, ..acc])
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fn slice_after(bytes: BitArray, offset: Int) -> BitArray {
+  let size = bit_array.byte_size(bytes)
+  case bit_array.slice(bytes, offset, size - offset) {
+    Ok(rest) -> rest
+    Error(_) -> <<>>
+  }
+}
+
+/// Convert PSBT to base64 string
+pub fn psbt_to_base64(psbt: Psbt) -> String {
+  let bytes = psbt_serialize(psbt)
+  base64_encode(bytes)
+}
+
+/// Parse PSBT from base64 string
+pub fn psbt_from_base64(input: String) -> Result(Psbt, PsbtError) {
+  case base64_decode(input) {
+    Error(_) -> Error(PsbtInvalidFormat("Invalid base64"))
+    Ok(bytes) -> psbt_parse(bytes)
+  }
+}
+
+/// Add a partial signature to a PSBT input
+pub fn psbt_add_partial_sig(
+  psbt: Psbt,
+  input_index: Int,
+  pubkey: BitArray,
+  signature: BitArray,
+) -> Result(Psbt, PsbtError) {
+  case list_update_at(psbt.inputs, input_index, fn(input) {
+    PsbtInput(..input, partial_sigs: [#(pubkey, signature), ..input.partial_sigs])
+  }) {
+    Error(_) -> Error(PsbtInputCountMismatch)
+    Ok(new_inputs) -> Ok(Psbt(..psbt, inputs: new_inputs))
+  }
+}
+
+/// Check if a PSBT is complete (all inputs have signatures)
+pub fn psbt_is_complete(psbt: Psbt) -> Bool {
+  list.all(psbt.inputs, fn(input) {
+    option.is_some(input.final_script_sig) ||
+    option.is_some(input.final_script_witness) ||
+    !list.is_empty(input.partial_sigs) ||
+    option.is_some(input.tap_key_sig)
+  })
+}
+
+/// Extract the final signed transaction from a finalized PSBT
+pub fn psbt_extract_tx(psbt: Psbt) -> Result(Transaction, PsbtError) {
+  let all_finalized = list.all(psbt.inputs, fn(input) {
+    option.is_some(input.final_script_sig) ||
+    option.is_some(input.final_script_witness)
+  })
+
+  case all_finalized {
+    False -> Error(PsbtNotFinalized)
+    True -> {
+      // Build the final transaction
+      let new_inputs = list.map2(psbt.unsigned_tx.inputs, psbt.inputs, fn(tx_input, psbt_input) {
+        let final_sig = case psbt_input.final_script_sig {
+          option.Some(script) -> script
+          option.None -> script_empty()
+        }
+        let final_witness = case psbt_input.final_script_witness {
+          option.Some(witness) -> witness
+          option.None -> []
+        }
+        TxIn(..tx_input, script_sig: final_sig, witness: final_witness)
+      })
+
+      Ok(Transaction(..psbt.unsigned_tx, inputs: new_inputs))
+    }
+  }
+}
+
+fn list_update_at(lst: List(a), index: Int, f: fn(a) -> a) -> Result(List(a), Nil) {
+  case lst, index {
+    [], _ -> Error(Nil)
+    [head, ..tail], 0 -> Ok([f(head), ..tail])
+    [head, ..tail], n -> {
+      case list_update_at(tail, n - 1, f) {
+        Error(e) -> Error(e)
+        Ok(new_tail) -> Ok([head, ..new_tail])
+      }
+    }
+  }
+}
+
+// ============================================================================
+// Base64 Encoding/Decoding
+// ============================================================================
+
+const base64_alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+
+/// Encode bytes to base64 string
+pub fn base64_encode(bytes: BitArray) -> String {
+  do_base64_encode(bytes, "")
+}
+
+fn do_base64_encode(bytes: BitArray, acc: String) -> String {
+  case bytes {
+    <<a:6, b:6, c:6, d:6, rest:bits>> -> {
+      let chars = string_char_at(base64_alphabet, a)
+        <> string_char_at(base64_alphabet, b)
+        <> string_char_at(base64_alphabet, c)
+        <> string_char_at(base64_alphabet, d)
+      do_base64_encode(rest, acc <> chars)
+    }
+    <<a:6, b:6, c:4>> -> {
+      let chars = string_char_at(base64_alphabet, a)
+        <> string_char_at(base64_alphabet, b)
+        <> string_char_at(base64_alphabet, int.bitwise_shift_left(c, 2))
+        <> "="
+      acc <> chars
+    }
+    <<a:6, b:2>> -> {
+      let chars = string_char_at(base64_alphabet, a)
+        <> string_char_at(base64_alphabet, int.bitwise_shift_left(b, 4))
+        <> "=="
+      acc <> chars
+    }
+    <<>> -> acc
+    _ -> acc
+  }
+}
+
+/// Decode base64 string to bytes
+pub fn base64_decode(input: String) -> Result(BitArray, String) {
+  // Remove padding
+  let cleaned = string.replace(input, "=", "")
+  do_base64_decode(cleaned, <<>>)
+}
+
+fn do_base64_decode(input: String, acc: BitArray) -> Result(BitArray, String) {
+  case string.length(input) {
+    0 -> Ok(acc)
+    1 -> Error("Invalid base64 length")
+    2 -> {
+      case string.pop_grapheme(input) {
+        Error(_) -> Ok(acc)
+        Ok(#(c1, rest)) -> {
+          case string.pop_grapheme(rest) {
+            Error(_) -> Ok(acc)
+            Ok(#(c2, _)) -> {
+              case base64_char_value(c1), base64_char_value(c2) {
+                Ok(v1), Ok(v2) -> {
+                  let byte = int.bitwise_or(
+                    int.bitwise_shift_left(v1, 2),
+                    int.bitwise_shift_right(v2, 4),
+                  )
+                  Ok(bit_array.append(acc, <<byte:8>>))
+                }
+                _, _ -> Error("Invalid base64 character")
+              }
+            }
+          }
+        }
+      }
+    }
+    3 -> {
+      case take_n_chars(input, 3) {
+        Error(_) -> Ok(acc)
+        Ok(#(chars, _)) -> {
+          case chars {
+            [c1, c2, c3] -> {
+              case base64_char_value(c1), base64_char_value(c2), base64_char_value(c3) {
+                Ok(v1), Ok(v2), Ok(v3) -> {
+                  let b1 = int.bitwise_or(
+                    int.bitwise_shift_left(v1, 2),
+                    int.bitwise_shift_right(v2, 4),
+                  )
+                  let b2 = int.bitwise_or(
+                    int.bitwise_and(int.bitwise_shift_left(v2, 4), 0xF0),
+                    int.bitwise_shift_right(v3, 2),
+                  )
+                  Ok(bit_array.concat([acc, <<b1:8, b2:8>>]))
+                }
+                _, _, _ -> Error("Invalid base64 character")
+              }
+            }
+            _ -> Error("Invalid base64")
+          }
+        }
+      }
+    }
+    _ -> {
+      case take_n_chars(input, 4) {
+        Error(_) -> Ok(acc)
+        Ok(#(chars, rest)) -> {
+          case chars {
+            [c1, c2, c3, c4] -> {
+              case base64_char_value(c1), base64_char_value(c2),
+                   base64_char_value(c3), base64_char_value(c4) {
+                Ok(v1), Ok(v2), Ok(v3), Ok(v4) -> {
+                  let b1 = int.bitwise_or(
+                    int.bitwise_shift_left(v1, 2),
+                    int.bitwise_shift_right(v2, 4),
+                  )
+                  let b2 = int.bitwise_or(
+                    int.bitwise_and(int.bitwise_shift_left(v2, 4), 0xF0),
+                    int.bitwise_shift_right(v3, 2),
+                  )
+                  let b3 = int.bitwise_or(
+                    int.bitwise_and(int.bitwise_shift_left(v3, 6), 0xC0),
+                    v4,
+                  )
+                  let new_acc = bit_array.concat([acc, <<b1:8, b2:8, b3:8>>])
+                  do_base64_decode(rest, new_acc)
+                }
+                _, _, _, _ -> Error("Invalid base64 character")
+              }
+            }
+            _ -> Error("Invalid base64")
+          }
+        }
+      }
+    }
+  }
+}
+
+fn base64_char_value(c: String) -> Result(Int, String) {
+  case string.contains(base64_alphabet, c) {
+    False -> Error("Invalid base64 character: " <> c)
+    True -> find_char_index(base64_alphabet, c, 0)
+  }
+}
+
+fn take_n_chars(s: String, n: Int) -> Result(#(List(String), String), Nil) {
+  take_n_chars_acc(s, n, [])
+}
+
+fn take_n_chars_acc(s: String, n: Int, acc: List(String)) -> Result(#(List(String), String), Nil) {
+  case n {
+    0 -> Ok(#(list.reverse(acc), s))
+    _ -> {
+      case string.pop_grapheme(s) {
+        Error(_) -> Error(Nil)
+        Ok(#(c, rest)) -> take_n_chars_acc(rest, n - 1, [c, ..acc])
+      }
+    }
+  }
+}
+
+// ============================================================================
+// Transaction Fee Utilities
+// ============================================================================
+
+/// Calculate fee rate in satoshis per virtual byte
+pub fn fee_rate(fee_sats: Int, vsize: Int) -> Float {
+  case vsize > 0 {
+    True -> int.to_float(fee_sats) /. int.to_float(vsize)
+    False -> 0.0
+  }
+}
+
+/// Calculate fee rate in satoshis per weight unit
+pub fn fee_rate_per_wu(fee_sats: Int, weight: Int) -> Float {
+  case weight > 0 {
+    True -> int.to_float(fee_sats) /. int.to_float(weight)
+    False -> 0.0
+  }
+}
+
+/// Estimate transaction fee given a fee rate (sat/vB) and transaction
+pub fn estimate_tx_fee(tx: Transaction, fee_rate_sat_per_vb: Float) -> Int {
+  let vsize = tx_vsize(tx)
+  float_to_int(int.to_float(vsize) *. fee_rate_sat_per_vb)
+}
+
+/// Dust threshold for an output (based on fee rate)
+/// An output is considered dust if spending it would cost more than its value
+pub fn dust_threshold(script_pubkey: Script, fee_rate_sat_per_vb: Float) -> Int {
+  let script_size = script_size(script_pubkey)
+  // Input size estimate: outpoint(36) + scriptSig length(1) + sequence(4) + scriptSig
+  // For P2PKH: scriptSig is ~107 bytes (sig + pubkey)
+  // For P2WPKH: witness is ~107 bytes but counted at 1/4 weight
+  let input_size = case script_size {
+    // P2PKH (OP_DUP OP_HASH160 <20> OP_EQUALVERIFY OP_CHECKSIG)
+    25 -> 148  // 36 + 1 + 4 + 107
+    // P2WPKH (OP_0 <20>)
+    22 -> 68   // (36 + 1 + 4) * 4 + 107 / 4 ≈ 68 vbytes
+    // P2WSH (OP_0 <32>)
+    34 -> 104  // rough estimate
+    // P2TR (OP_1 <32>)
+    _ -> 58    // Taproot keypath
+  }
+  float_to_int(int.to_float(input_size) *. fee_rate_sat_per_vb)
+}

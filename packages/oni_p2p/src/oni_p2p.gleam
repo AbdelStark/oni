@@ -1503,3 +1503,272 @@ pub fn create_getdata_txs(txids: List(Txid), witness: Bool) -> Message {
   })
   MsgGetData(items)
 }
+
+// ============================================================================
+// DNS Seeds
+// ============================================================================
+
+/// DNS seeds for mainnet peer discovery
+pub const mainnet_dns_seeds = [
+  "seed.bitcoin.sipa.be",
+  "dnsseed.bluematt.me",
+  "dnsseed.bitcoin.dashjr-list-of-hierarchical-deterministic-seeds.today",
+  "seed.bitcoinstats.com",
+  "seed.bitcoin.jonasschnelli.ch",
+  "seed.btc.petertodd.net",
+  "seed.bitcoin.sprovoost.nl",
+  "dnsseed.emzy.de",
+  "seed.bitcoin.wiz.biz",
+]
+
+/// DNS seeds for testnet peer discovery
+pub const testnet_dns_seeds = [
+  "testnet-seed.bitcoin.jonasschnelli.ch",
+  "seed.tbtc.petertodd.net",
+  "testnet-seed.bluematt.me",
+]
+
+/// DNS seeds for signet peer discovery
+pub const signet_dns_seeds = [
+  "seed.signet.bitcoin.sprovoost.nl",
+]
+
+/// Network type for DNS seed selection
+pub type Network {
+  Mainnet
+  Testnet
+  Signet
+  Regtest
+}
+
+/// Get DNS seeds for a network
+pub fn get_dns_seeds(network: Network) -> List(String) {
+  case network {
+    Mainnet -> mainnet_dns_seeds
+    Testnet -> testnet_dns_seeds
+    Signet -> signet_dns_seeds
+    Regtest -> []  // No DNS seeds for regtest
+  }
+}
+
+/// Get default port for a network
+pub fn get_default_port(network: Network) -> Int {
+  case network {
+    Mainnet -> 8333
+    Testnet -> 18333
+    Signet -> 38333
+    Regtest -> 18444
+  }
+}
+
+/// Peer address discovered from DNS
+pub type DnsAddress {
+  DnsAddress(
+    ip: String,
+    port: Int,
+    source_seed: String,
+  )
+}
+
+/// DNS lookup result (placeholder - actual implementation needs native code)
+pub type DnsResult {
+  DnsOk(addresses: List(DnsAddress))
+  DnsError(reason: String)
+  DnsTimeout
+}
+
+/// Query a single DNS seed (returns placeholder - actual impl in native code)
+pub fn query_dns_seed(seed: String, port: Int) -> DnsResult {
+  // This is a placeholder - actual DNS resolution needs native code
+  // In a real implementation, this would use erlang's inet module
+  // or a NIF for asynchronous DNS resolution
+  DnsOk([DnsAddress(ip: "127.0.0.1", port: port, source_seed: seed)])
+}
+
+/// Get network magic bytes
+pub fn get_network_magic(network: Network) -> BitArray {
+  case network {
+    Mainnet -> <<0xF9, 0xBE, 0xB4, 0xD9>>
+    Testnet -> <<0x0B, 0x11, 0x09, 0x07>>
+    Signet -> <<0x0A, 0x03, 0xCF, 0x40>>
+    Regtest -> <<0xFA, 0xBF, 0xB5, 0xDA>>
+  }
+}
+
+/// Get network name
+pub fn network_to_string(network: Network) -> String {
+  case network {
+    Mainnet -> "mainnet"
+    Testnet -> "testnet"
+    Signet -> "signet"
+    Regtest -> "regtest"
+  }
+}
+
+/// Parse network from string
+pub fn network_from_string(s: String) -> Result(Network, String) {
+  case s {
+    "mainnet" | "main" -> Ok(Mainnet)
+    "testnet" | "test" | "testnet3" -> Ok(Testnet)
+    "signet" -> Ok(Signet)
+    "regtest" -> Ok(Regtest)
+    _ -> Error("Unknown network: " <> s)
+  }
+}
+
+// ============================================================================
+// Peer Selection
+// ============================================================================
+
+/// Peer quality score
+pub type PeerScore {
+  PeerScore(
+    /// Base score
+    score: Int,
+    /// Whether peer supports services we need
+    has_required_services: Bool,
+    /// Latency in milliseconds
+    latency_ms: Int,
+    /// Number of successful connections
+    connection_count: Int,
+    /// Last connection timestamp
+    last_connected: Int,
+    /// Number of times peer misbehaved
+    misbehavior_count: Int,
+  )
+}
+
+/// Calculate peer priority score
+pub fn calculate_peer_score(score: PeerScore) -> Int {
+  let base = score.score
+
+  // Bonus for required services
+  let service_bonus = case score.has_required_services {
+    True -> 100
+    False -> 0
+  }
+
+  // Penalty for high latency
+  let latency_penalty = case score.latency_ms {
+    ms if ms < 100 -> 0
+    ms if ms < 500 -> -10
+    ms if ms < 1000 -> -30
+    _ -> -50
+  }
+
+  // Bonus for reliable peers
+  let reliability_bonus = int.min(score.connection_count * 5, 50)
+
+  // Penalty for misbehavior
+  let misbehavior_penalty = score.misbehavior_count * 20
+
+  base + service_bonus + latency_penalty + reliability_bonus - misbehavior_penalty
+}
+
+/// Default peer score for new peer
+pub fn default_peer_score() -> PeerScore {
+  PeerScore(
+    score: 50,
+    has_required_services: False,
+    latency_ms: 0,
+    connection_count: 0,
+    last_connected: 0,
+    misbehavior_count: 0,
+  )
+}
+
+/// Update score when peer connects successfully
+pub fn peer_score_on_connect(score: PeerScore, timestamp: Int) -> PeerScore {
+  PeerScore(
+    ..score,
+    connection_count: score.connection_count + 1,
+    last_connected: timestamp,
+  )
+}
+
+/// Update score when peer misbehaves
+pub fn peer_score_on_misbehavior(score: PeerScore, severity: Int) -> PeerScore {
+  PeerScore(
+    ..score,
+    misbehavior_count: score.misbehavior_count + 1,
+    score: score.score - severity,
+  )
+}
+
+/// Update score with measured latency
+pub fn peer_score_set_latency(score: PeerScore, latency_ms: Int) -> PeerScore {
+  PeerScore(..score, latency_ms: latency_ms)
+}
+
+/// Check if peer should be banned based on score
+pub fn peer_should_ban(score: PeerScore) -> Bool {
+  score.score < -100 || score.misbehavior_count > 10
+}
+
+// ============================================================================
+// Connection Slots
+// ============================================================================
+
+/// Connection slot manager for outbound connections
+pub type ConnectionSlots {
+  ConnectionSlots(
+    /// Maximum outbound connections
+    max_outbound: Int,
+    /// Current outbound count
+    current_outbound: Int,
+    /// Maximum inbound connections
+    max_inbound: Int,
+    /// Current inbound count
+    current_inbound: Int,
+    /// Reserved slots for specific purposes
+    reserved_feeler: Int,
+    reserved_block_relay: Int,
+  )
+}
+
+/// Create default connection slots
+pub fn connection_slots_new() -> ConnectionSlots {
+  ConnectionSlots(
+    max_outbound: 10,
+    current_outbound: 0,
+    max_inbound: 125,
+    current_inbound: 0,
+    reserved_feeler: 1,
+    reserved_block_relay: 2,
+  )
+}
+
+/// Check if we can make a new outbound connection
+pub fn can_connect_outbound(slots: ConnectionSlots) -> Bool {
+  slots.current_outbound < slots.max_outbound
+}
+
+/// Check if we can accept a new inbound connection
+pub fn can_accept_inbound(slots: ConnectionSlots) -> Bool {
+  slots.current_inbound < slots.max_inbound
+}
+
+/// Register new outbound connection
+pub fn slots_add_outbound(slots: ConnectionSlots) -> ConnectionSlots {
+  ConnectionSlots(..slots, current_outbound: slots.current_outbound + 1)
+}
+
+/// Register new inbound connection
+pub fn slots_add_inbound(slots: ConnectionSlots) -> ConnectionSlots {
+  ConnectionSlots(..slots, current_inbound: slots.current_inbound + 1)
+}
+
+/// Remove outbound connection
+pub fn slots_remove_outbound(slots: ConnectionSlots) -> ConnectionSlots {
+  ConnectionSlots(..slots, current_outbound: int.max(0, slots.current_outbound - 1))
+}
+
+/// Remove inbound connection
+pub fn slots_remove_inbound(slots: ConnectionSlots) -> ConnectionSlots {
+  ConnectionSlots(..slots, current_inbound: int.max(0, slots.current_inbound - 1))
+}
+
+/// Get total connection count
+pub fn slots_total_connections(slots: ConnectionSlots) -> Int {
+  slots.current_outbound + slots.current_inbound
+}
