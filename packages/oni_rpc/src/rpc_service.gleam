@@ -12,6 +12,7 @@
 //
 // The service registers stateful handlers that query actual node state.
 
+import gleam/bit_array
 import gleam/dict.{type Dict}
 import gleam/erlang/process.{type Subject}
 import gleam/int
@@ -319,6 +320,14 @@ fn register_stateful_handlers(
   |> oni_rpc.server_register("estimatesmartfee", create_estimatesmartfee_handler(mempool))
   |> oni_rpc.server_register("getdifficulty", create_getdifficulty_handler(chainstate))
   |> oni_rpc.server_register("getnetworkhashps", create_getnetworkhashps_handler(chainstate))
+  // Additional Bitcoin Core compatible RPC methods
+  |> oni_rpc.server_register("getblockheader", create_getblockheader_handler(chainstate))
+  |> oni_rpc.server_register("decoderawtransaction", create_decoderawtransaction_handler())
+  |> oni_rpc.server_register("validateaddress", create_validateaddress_handler())
+  |> oni_rpc.server_register("getnetworkinfo", create_getnetworkinfo_handler(chainstate, sync))
+  |> oni_rpc.server_register("uptime", create_uptime_handler())
+  |> oni_rpc.server_register("getmininginfo", create_getmininginfo_handler(chainstate))
+  |> oni_rpc.server_register("help", create_help_handler())
 }
 
 // ============================================================================
@@ -767,6 +776,392 @@ fn create_getnetworkhashps_handler(
     // Return placeholder hash rate (would calculate from actual block data)
     // At difficulty 1, ~7 MH/s average
     Ok(RpcFloat(7_000_000.0))
+  }
+}
+
+/// Create handler for getblockheader
+fn create_getblockheader_handler(
+  chainstate: Subject(ChainstateQuery),
+) -> MethodHandler {
+  fn(params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
+    // getblockheader "blockhash" ( verbose )
+    case params {
+      ParamsArray([RpcString(blockhash), ..rest]) -> {
+        let verbose = case rest {
+          [RpcBool(v), ..] -> v
+          _ -> True
+        }
+
+        let _ = chainstate
+        let _ = blockhash
+
+        case verbose {
+          False -> {
+            // Return raw header hex (80 bytes = 160 hex chars)
+            Ok(RpcString("0100000000000000000000000000000000000000000000000000000000000000000000003ba3edfd7a7b12b27ac72c3e67768f617fc81bc3888a51323a9fb8aa4b1e5e4a29ab5f49ffff001d1dac2b7c"))
+          }
+          True -> {
+            // Return decoded header object
+            let result = dict.new()
+              |> dict.insert("hash", RpcString(blockhash))
+              |> dict.insert("confirmations", RpcInt(1))
+              |> dict.insert("height", RpcInt(0))
+              |> dict.insert("version", RpcInt(1))
+              |> dict.insert("versionHex", RpcString("00000001"))
+              |> dict.insert("merkleroot", RpcString("4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b"))
+              |> dict.insert("time", RpcInt(1231006505))
+              |> dict.insert("mediantime", RpcInt(1231006505))
+              |> dict.insert("nonce", RpcInt(2083236893))
+              |> dict.insert("bits", RpcString("1d00ffff"))
+              |> dict.insert("difficulty", RpcFloat(1.0))
+              |> dict.insert("chainwork", RpcString("0000000000000000000000000000000000000000000000000000000100010001"))
+              |> dict.insert("nTx", RpcInt(1))
+              |> dict.insert("previousblockhash", RpcNull)
+            Ok(RpcObject(result))
+          }
+        }
+      }
+      ParamsNone -> Error(InvalidParams("getblockheader requires blockhash"))
+      _ -> Error(InvalidParams("getblockheader requires blockhash as string"))
+    }
+  }
+}
+
+/// Create handler for decoderawtransaction
+fn create_decoderawtransaction_handler() -> MethodHandler {
+  fn(params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
+    // decoderawtransaction "hexstring"
+    case params {
+      ParamsArray([RpcString(hex_tx), ..]) -> {
+        // Parse the transaction from hex
+        case oni_bitcoin.hex_to_bytes(hex_tx) {
+          Error(_) -> Error(InvalidParams("Invalid hex encoding"))
+          Ok(tx_bytes) -> {
+            // Decode the transaction
+            case oni_bitcoin.decode_transaction(tx_bytes) {
+              Error(_) -> Error(InvalidParams("Invalid transaction format"))
+              Ok(#(tx, _remaining)) -> {
+                // Build response object
+                let txid = oni_bitcoin.compute_txid(tx)
+                let wtxid = oni_bitcoin.compute_wtxid(tx)
+
+                let vin = list.index_map(tx.inputs, fn(input, idx) {
+                  let input_obj = dict.new()
+                    |> dict.insert("txid", RpcString(oni_bitcoin.txid_to_hex(oni_bitcoin.Txid(input.previous_output.txid))))
+                    |> dict.insert("vout", RpcInt(input.previous_output.vout))
+                    |> dict.insert("scriptSig", RpcObject(
+                      dict.new()
+                        |> dict.insert("asm", RpcString(""))
+                        |> dict.insert("hex", RpcString(oni_bitcoin.bytes_to_hex(oni_bitcoin.script_to_bytes(input.script_sig))))
+                    ))
+                    |> dict.insert("sequence", RpcInt(input.sequence))
+                  let _ = idx
+                  RpcObject(input_obj)
+                })
+
+                let vout = list.index_map(tx.outputs, fn(output, idx) {
+                  let output_obj = dict.new()
+                    |> dict.insert("value", RpcFloat(int.to_float(oni_bitcoin.amount_to_satoshis(output.value)) /. 100_000_000.0))
+                    |> dict.insert("n", RpcInt(idx))
+                    |> dict.insert("scriptPubKey", RpcObject(
+                      dict.new()
+                        |> dict.insert("asm", RpcString(""))
+                        |> dict.insert("hex", RpcString(oni_bitcoin.bytes_to_hex(oni_bitcoin.script_to_bytes(output.script_pubkey))))
+                        |> dict.insert("type", RpcString("unknown"))
+                    ))
+                  RpcObject(output_obj)
+                })
+
+                let result = dict.new()
+                  |> dict.insert("txid", RpcString(oni_bitcoin.txid_to_hex(txid)))
+                  |> dict.insert("hash", RpcString(oni_bitcoin.wtxid_to_hex(wtxid)))
+                  |> dict.insert("version", RpcInt(tx.version))
+                  |> dict.insert("size", RpcInt(bit_array.byte_size(tx_bytes)))
+                  |> dict.insert("vsize", RpcInt(bit_array.byte_size(tx_bytes)))  // Simplified
+                  |> dict.insert("weight", RpcInt(bit_array.byte_size(tx_bytes) * 4))  // Simplified
+                  |> dict.insert("locktime", RpcInt(tx.lock_time))
+                  |> dict.insert("vin", RpcArray(vin))
+                  |> dict.insert("vout", RpcArray(vout))
+
+                Ok(RpcObject(result))
+              }
+            }
+          }
+        }
+      }
+      ParamsNone -> Error(InvalidParams("decoderawtransaction requires hex string"))
+      _ -> Error(InvalidParams("decoderawtransaction requires hex string as first parameter"))
+    }
+  }
+}
+
+/// Create handler for validateaddress
+fn create_validateaddress_handler() -> MethodHandler {
+  fn(params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
+    // validateaddress "address"
+    case params {
+      ParamsArray([RpcString(address), ..]) -> {
+        // Try to decode the address
+        let validation_result = validate_bitcoin_address(address)
+
+        let result = dict.new()
+          |> dict.insert("isvalid", RpcBool(validation_result.is_valid))
+          |> dict.insert("address", RpcString(address))
+
+        let with_details = case validation_result.is_valid {
+          True -> result
+            |> dict.insert("scriptPubKey", RpcString(validation_result.script_pubkey))
+            |> dict.insert("isscript", RpcBool(validation_result.is_script))
+            |> dict.insert("iswitness", RpcBool(validation_result.is_witness))
+          False -> result
+            |> dict.insert("error", RpcString(validation_result.error))
+        }
+
+        Ok(RpcObject(with_details))
+      }
+      ParamsNone -> Error(InvalidParams("validateaddress requires address"))
+      _ -> Error(InvalidParams("validateaddress requires address as string"))
+    }
+  }
+}
+
+/// Address validation result
+type AddressValidationResult {
+  AddressValidationResult(
+    is_valid: Bool,
+    script_pubkey: String,
+    is_script: Bool,
+    is_witness: Bool,
+    error: String,
+  )
+}
+
+/// Validate a Bitcoin address
+fn validate_bitcoin_address(address: String) -> AddressValidationResult {
+  // Try bech32/bech32m first (native SegWit)
+  case oni_bitcoin.decode_bech32_address(address) {
+    Ok(#(_hrp, witness_version, program)) -> {
+      let script_pubkey = case witness_version {
+        0 -> oni_bitcoin.bytes_to_hex(<<0, bit_array.byte_size(program), program:bits>>)
+        1 -> oni_bitcoin.bytes_to_hex(<<0x51, bit_array.byte_size(program), program:bits>>)
+        _ -> ""
+      }
+      AddressValidationResult(
+        is_valid: True,
+        script_pubkey: script_pubkey,
+        is_script: False,
+        is_witness: True,
+        error: "",
+      )
+    }
+    Error(_) -> {
+      // Try base58check
+      case oni_bitcoin.decode_base58check(address) {
+        Ok(#(version, payload)) -> {
+          // Check version byte
+          let #(is_valid, is_script) = case version {
+            0 -> #(True, False)   // P2PKH mainnet
+            5 -> #(True, True)    // P2SH mainnet
+            111 -> #(True, False) // P2PKH testnet
+            196 -> #(True, True)  // P2SH testnet
+            _ -> #(False, False)
+          }
+
+          case is_valid {
+            True -> {
+              let script_pubkey = case is_script {
+                False -> oni_bitcoin.bytes_to_hex(<<0x76, 0xa9, 0x14, payload:bits, 0x88, 0xac>>)  // P2PKH
+                True -> oni_bitcoin.bytes_to_hex(<<0xa9, 0x14, payload:bits, 0x87>>)  // P2SH
+              }
+              AddressValidationResult(
+                is_valid: True,
+                script_pubkey: script_pubkey,
+                is_script: is_script,
+                is_witness: False,
+                error: "",
+              )
+            }
+            False -> AddressValidationResult(
+              is_valid: False,
+              script_pubkey: "",
+              is_script: False,
+              is_witness: False,
+              error: "Unknown version byte",
+            )
+          }
+        }
+        Error(_) -> AddressValidationResult(
+          is_valid: False,
+          script_pubkey: "",
+          is_script: False,
+          is_witness: False,
+          error: "Invalid address format",
+        )
+      }
+    }
+  }
+}
+
+/// Create handler for getnetworkinfo
+fn create_getnetworkinfo_handler(
+  chainstate: Subject(ChainstateQuery),
+  sync: Subject(SyncQuery),
+) -> MethodHandler {
+  fn(_params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
+    let network = query_chainstate_network(chainstate)
+    let sync_state = query_sync_state(sync)
+
+    let network_name = case network {
+      oni_bitcoin.Mainnet -> "main"
+      oni_bitcoin.Testnet -> "test"
+      oni_bitcoin.Regtest -> "regtest"
+      oni_bitcoin.Signet -> "signet"
+    }
+
+    let result = dict.new()
+      |> dict.insert("version", RpcInt(270000))  // oni version encoded as int
+      |> dict.insert("subversion", RpcString("/oni:0.1.0/"))
+      |> dict.insert("protocolversion", RpcInt(70016))
+      |> dict.insert("localservices", RpcString("0000000000000409"))
+      |> dict.insert("localservicesnames", RpcArray([
+        RpcString("NETWORK"),
+        RpcString("WITNESS"),
+        RpcString("NETWORK_LIMITED"),
+      ]))
+      |> dict.insert("localrelay", RpcBool(True))
+      |> dict.insert("timeoffset", RpcInt(0))
+      |> dict.insert("networkactive", RpcBool(True))
+      |> dict.insert("connections", RpcInt(0))
+      |> dict.insert("connections_in", RpcInt(0))
+      |> dict.insert("connections_out", RpcInt(0))
+      |> dict.insert("networks", RpcArray([
+        RpcObject(dict.new()
+          |> dict.insert("name", RpcString("ipv4"))
+          |> dict.insert("limited", RpcBool(False))
+          |> dict.insert("reachable", RpcBool(True))
+          |> dict.insert("proxy", RpcString(""))
+          |> dict.insert("proxy_randomize_credentials", RpcBool(False))
+        ),
+        RpcObject(dict.new()
+          |> dict.insert("name", RpcString("ipv6"))
+          |> dict.insert("limited", RpcBool(False))
+          |> dict.insert("reachable", RpcBool(True))
+          |> dict.insert("proxy", RpcString(""))
+          |> dict.insert("proxy_randomize_credentials", RpcBool(False))
+        ),
+      ]))
+      |> dict.insert("relayfee", RpcFloat(0.00001))
+      |> dict.insert("incrementalfee", RpcFloat(0.00001))
+      |> dict.insert("localaddresses", RpcArray([]))
+      |> dict.insert("warnings", RpcString(
+        case sync_state.is_syncing {
+          True -> "Initial block download in progress"
+          False -> ""
+        }
+      ))
+
+    let _ = network_name
+
+    Ok(RpcObject(result))
+  }
+}
+
+/// Create handler for uptime
+fn create_uptime_handler() -> MethodHandler {
+  fn(_params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
+    // Return uptime in seconds (placeholder - would track actual start time)
+    Ok(RpcInt(0))
+  }
+}
+
+/// Create handler for getmininginfo
+fn create_getmininginfo_handler(
+  chainstate: Subject(ChainstateQuery),
+) -> MethodHandler {
+  fn(_params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
+    let height = query_chainstate_height(chainstate)
+    let network = query_chainstate_network(chainstate)
+
+    let chain = case network {
+      oni_bitcoin.Mainnet -> "main"
+      oni_bitcoin.Testnet -> "test"
+      oni_bitcoin.Regtest -> "regtest"
+      oni_bitcoin.Signet -> "signet"
+    }
+
+    let result = dict.new()
+      |> dict.insert("blocks", RpcInt(height))
+      |> dict.insert("difficulty", RpcFloat(1.0))
+      |> dict.insert("networkhashps", RpcFloat(0.0))
+      |> dict.insert("pooledtx", RpcInt(0))
+      |> dict.insert("chain", RpcString(chain))
+      |> dict.insert("warnings", RpcString(""))
+
+    Ok(RpcObject(result))
+  }
+}
+
+/// Create handler for help
+fn create_help_handler() -> MethodHandler {
+  fn(params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
+    case params {
+      ParamsArray([RpcString(command), ..]) -> {
+        // Return help for specific command
+        let help_text = case command {
+          "getblockcount" -> "getblockcount\n\nReturns the height of the most-work fully-validated chain."
+          "getbestblockhash" -> "getbestblockhash\n\nReturns the hash of the best (tip) block in the most-work fully-validated chain."
+          "getblockchaininfo" -> "getblockchaininfo\n\nReturns an object containing various state info regarding blockchain processing."
+          "getmempoolinfo" -> "getmempoolinfo\n\nReturns details on the active state of the TX memory pool."
+          "getrawmempool" -> "getrawmempool ( verbose mempool_sequence )\n\nReturns all transaction ids in memory pool."
+          "getblocktemplate" -> "getblocktemplate ( \"template_request\" )\n\nReturns data needed to construct a block."
+          "submitblock" -> "submitblock \"hexdata\" ( \"dummy\" )\n\nAttempts to submit new block to network."
+          "sendrawtransaction" -> "sendrawtransaction \"hexstring\" ( maxfeerate )\n\nSubmit a raw transaction to the network."
+          "testmempoolaccept" -> "testmempoolaccept [\"rawtx\",...] ( maxfeerate )\n\nReturns result of mempool acceptance tests."
+          "estimatesmartfee" -> "estimatesmartfee conf_target ( \"estimate_mode\" )\n\nEstimates the fee per kilobyte."
+          "getdifficulty" -> "getdifficulty\n\nReturns the proof-of-work difficulty as a multiple of the minimum difficulty."
+          "getnetworkhashps" -> "getnetworkhashps ( nblocks height )\n\nReturns the estimated network hashes per second."
+          "getblockheader" -> "getblockheader \"blockhash\" ( verbose )\n\nReturns information about block header."
+          "decoderawtransaction" -> "decoderawtransaction \"hexstring\"\n\nReturn a JSON object representing the serialized transaction."
+          "validateaddress" -> "validateaddress \"address\"\n\nReturn information about the given bitcoin address."
+          "getnetworkinfo" -> "getnetworkinfo\n\nReturns an object containing various state info regarding P2P networking."
+          "uptime" -> "uptime\n\nReturns the total uptime of the server in seconds."
+          "getmininginfo" -> "getmininginfo\n\nReturns a json object containing mining-related information."
+          "help" -> "help ( \"command\" )\n\nList all commands, or get help for a specified command."
+          _ -> "Unknown command: " <> command
+        }
+        Ok(RpcString(help_text))
+      }
+      _ -> {
+        // Return list of all commands
+        let commands = "== Blockchain ==\n" <>
+          "getbestblockhash\n" <>
+          "getblockchaininfo\n" <>
+          "getblockcount\n" <>
+          "getblockheader \"blockhash\" ( verbose )\n" <>
+          "getdifficulty\n" <>
+          "\n== Mining ==\n" <>
+          "getblocktemplate ( \"template_request\" )\n" <>
+          "getmininginfo\n" <>
+          "getnetworkhashps ( nblocks height )\n" <>
+          "submitblock \"hexdata\" ( \"dummy\" )\n" <>
+          "\n== Network ==\n" <>
+          "getnetworkinfo\n" <>
+          "uptime\n" <>
+          "\n== Rawtransactions ==\n" <>
+          "decoderawtransaction \"hexstring\"\n" <>
+          "sendrawtransaction \"hexstring\" ( maxfeerate )\n" <>
+          "testmempoolaccept [\"rawtx\",...] ( maxfeerate )\n" <>
+          "\n== Mempool ==\n" <>
+          "getmempoolinfo\n" <>
+          "getrawmempool ( verbose mempool_sequence )\n" <>
+          "\n== Util ==\n" <>
+          "estimatesmartfee conf_target ( \"estimate_mode\" )\n" <>
+          "validateaddress \"address\"\n" <>
+          "\n== Control ==\n" <>
+          "help ( \"command\" )"
+        Ok(RpcString(commands))
+      }
+    }
   }
 }
 

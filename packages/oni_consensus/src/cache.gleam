@@ -12,6 +12,7 @@
 import gleam/dict.{type Dict}
 import gleam/list
 import gleam/option.{type Option, None, Some}
+import gleam/order
 import gleam/result
 import oni_bitcoin
 
@@ -210,6 +211,120 @@ pub fn sig_cache_clear(cache: SigCache) -> SigCache {
 }
 
 // ============================================================================
+// Batch Signature Verification
+// ============================================================================
+
+/// A batch of signatures to verify together
+pub type SigBatch {
+  SigBatch(
+    /// Signatures pending verification
+    pending: List(SigBatchEntry),
+    /// Maximum batch size before auto-flush
+    max_size: Int,
+  )
+}
+
+/// Entry in a signature batch
+pub type SigBatchEntry {
+  SigBatchEntry(
+    sighash: BitArray,
+    pubkey: BitArray,
+    signature: BitArray,
+  )
+}
+
+/// Result of batch verification
+pub type BatchVerifyResult {
+  /// All signatures in batch are valid
+  BatchValid
+  /// At least one signature is invalid, with index
+  BatchInvalid(failed_index: Int)
+  /// Batch is empty
+  BatchEmpty
+}
+
+/// Create a new signature batch
+pub fn sig_batch_new(max_size: Int) -> SigBatch {
+  SigBatch(pending: [], max_size: max_size)
+}
+
+/// Default batch size (64 signatures)
+pub const default_batch_size = 64
+
+/// Create a batch with default size
+pub fn sig_batch_default() -> SigBatch {
+  sig_batch_new(default_batch_size)
+}
+
+/// Add a signature to the batch
+pub fn sig_batch_add(
+  batch: SigBatch,
+  sighash: BitArray,
+  pubkey: BitArray,
+  signature: BitArray,
+) -> SigBatch {
+  let entry = SigBatchEntry(
+    sighash: sighash,
+    pubkey: pubkey,
+    signature: signature,
+  )
+  SigBatch(..batch, pending: [entry, ..batch.pending])
+}
+
+/// Check if batch is full and should be verified
+pub fn sig_batch_is_full(batch: SigBatch) -> Bool {
+  list.length(batch.pending) >= batch.max_size
+}
+
+/// Get number of pending signatures
+pub fn sig_batch_size(batch: SigBatch) -> Int {
+  list.length(batch.pending)
+}
+
+/// Clear the batch
+pub fn sig_batch_clear(batch: SigBatch) -> SigBatch {
+  SigBatch(..batch, pending: [])
+}
+
+/// Check batch against cache, returning entries that need verification
+pub fn sig_batch_check_cache(
+  batch: SigBatch,
+  cache: SigCache,
+) -> #(SigCache, List(SigBatchEntry)) {
+  // Check each entry against cache, collect those not found
+  list.fold(batch.pending, #(cache, []), fn(acc, entry) {
+    let #(current_cache, uncached) = acc
+    let #(new_cache, found) = sig_cache_contains(
+      current_cache,
+      entry.sighash,
+      entry.pubkey,
+      entry.signature,
+    )
+    case found {
+      True -> #(new_cache, uncached)
+      False -> #(new_cache, [entry, ..uncached])
+    }
+  })
+}
+
+/// Add verified batch results to cache
+pub fn sig_batch_add_to_cache(
+  entries: List(SigBatchEntry),
+  cache: SigCache,
+  timestamp: Int,
+) -> SigCache {
+  list.fold(entries, cache, fn(current_cache, entry) {
+    sig_cache_add(
+      current_cache,
+      entry.sighash,
+      entry.pubkey,
+      entry.signature,
+      timestamp,
+    )
+  })
+}
+
+// ============================================================================
 // Script Cache
 // ============================================================================
 
@@ -224,6 +339,8 @@ pub type ScriptCacheEntry {
     flags: Int,
     /// Result of verification
     valid: Bool,
+    /// When this was added (for LRU eviction)
+    added_at: Int,
   )
 }
 
@@ -275,13 +392,14 @@ pub fn script_cache_check(
   }
 }
 
-/// Add a script verification result to the cache
+/// Add a script verification result to the cache with LRU eviction
 pub fn script_cache_add(
   cache: ScriptCache,
   txid: oni_bitcoin.Txid,
   input_index: Int,
   flags: Int,
   valid: Bool,
+  timestamp: Int,
 ) -> ScriptCache {
   let key = script_cache_key(txid, input_index, flags)
 
@@ -293,23 +411,77 @@ pub fn script_cache_add(
         input_index: input_index,
         flags: flags,
         valid: valid,
+        added_at: timestamp,
       )
 
-      // Simple size check (no eviction for now, just reject if full)
-      case cache.size >= cache.max_size {
-        True -> cache
-        False -> {
-          let new_entries = dict.insert(cache.entries, key, entry)
-          ScriptCache(
-            entries: new_entries,
-            max_size: cache.max_size,
-            size: cache.size + 1,
-            stats: cache.stats,
-          )
-        }
+      // Evict if at capacity using LRU strategy
+      let #(cache_evicted, evictions) = case cache.size >= cache.max_size {
+        True -> script_cache_evict_oldest(cache, cache.max_size / 10)  // Evict 10%
+        False -> #(cache, 0)
       }
+
+      let new_entries = dict.insert(cache_evicted.entries, key, entry)
+      let new_stats = CacheStats(
+        ..cache_evicted.stats,
+        evictions: cache_evicted.stats.evictions + evictions,
+      )
+
+      ScriptCache(
+        entries: new_entries,
+        max_size: cache.max_size,
+        size: cache_evicted.size + 1,
+        stats: new_stats,
+      )
     }
   }
+}
+
+/// Evict oldest entries from the script cache (LRU eviction)
+fn script_cache_evict_oldest(cache: ScriptCache, count: Int) -> #(ScriptCache, Int) {
+  // Get all entries sorted by timestamp
+  let entries_list = dict.to_list(cache.entries)
+
+  // Sort by added_at timestamp (oldest first)
+  let sorted = list.sort(entries_list, fn(a, b) {
+    let #(_, entry_a) = a
+    let #(_, entry_b) = b
+    case entry_a.added_at < entry_b.added_at {
+      True -> order.Lt
+      False -> case entry_a.added_at > entry_b.added_at {
+        True -> order.Gt
+        False -> order.Eq
+      }
+    }
+  })
+
+  // Remove oldest entries
+  let to_keep = list.drop(sorted, count)
+  let new_entries = dict.from_list(to_keep)
+  let evicted = cache.size - list.length(to_keep)
+
+  #(
+    ScriptCache(
+      ..cache,
+      entries: new_entries,
+      size: list.length(to_keep),
+    ),
+    evicted,
+  )
+}
+
+/// Clear the script cache
+pub fn script_cache_clear(cache: ScriptCache) -> ScriptCache {
+  ScriptCache(
+    entries: dict.new(),
+    max_size: cache.max_size,
+    size: 0,
+    stats: cache.stats,  // Keep stats
+  )
+}
+
+/// Get script cache statistics
+pub fn script_cache_stats(cache: ScriptCache) -> CacheStats {
+  cache.stats
 }
 
 // ============================================================================
@@ -411,23 +583,7 @@ fn block_hash_to_bytes(hash: oni_bitcoin.BlockHash) -> BitArray {
   oni_bitcoin.hash256_to_bytes(h)
 }
 
-fn int_to_float(n: Int) -> Float {
-  case n {
-    0 -> 0.0
-    _ -> do_int_to_float(n, 0.0)
-  }
-}
-
-fn do_int_to_float(n: Int, acc: Float) -> Float {
-  case n {
-    0 -> acc
-    _ -> do_int_to_float(n - 1, acc +. 1.0)
-  }
-}
-
-// Order type for sorting
-type Order {
-  Lt
-  Eq
-  Gt
-}
+/// Convert integer to float using Erlang's built-in conversion
+/// This is O(1) unlike the previous O(n) implementation
+@external(erlang, "erlang", "float")
+fn int_to_float(n: Int) -> Float
