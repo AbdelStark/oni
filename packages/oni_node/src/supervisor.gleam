@@ -44,6 +44,8 @@ pub type ChainstateMsg {
   GetTip(reply: Subject(Option(oni_bitcoin.BlockHash)))
   /// Get the current tip height
   GetHeight(reply: Subject(Int))
+  /// Get the network type
+  GetNetwork(reply: Subject(oni_bitcoin.Network))
   /// Connect a block to the chain
   ConnectBlock(block: oni_bitcoin.Block, reply: Subject(Result(Nil, String)))
   /// Disconnect the tip block
@@ -111,6 +113,11 @@ fn handle_chainstate_msg(
 
     GetHeight(reply) -> {
       process.send(reply, state.tip_height)
+      actor.continue(state)
+    }
+
+    GetNetwork(reply) -> {
+      process.send(reply, state.network)
       actor.continue(state)
     }
 
@@ -432,8 +439,10 @@ pub type SyncMsg {
   OnHeaders(peer_id: String, count: Int)
   /// Block received from peer
   OnBlock(hash: oni_bitcoin.BlockHash)
-  /// Get sync status
+  /// Get sync status (full status object)
   GetStatus(reply: Subject(SyncStatus))
+  /// Get sync state string (simple state query)
+  GetSyncState(reply: Subject(String))
   /// Shutdown sync coordinator
   SyncShutdown
 }
@@ -513,6 +522,11 @@ fn handle_sync_msg(
         peers_syncing: peers,
       )
       process.send(reply, status)
+      actor.continue(state)
+    }
+
+    GetSyncState(reply) -> {
+      process.send(reply, state.state)
       actor.continue(state)
     }
 
