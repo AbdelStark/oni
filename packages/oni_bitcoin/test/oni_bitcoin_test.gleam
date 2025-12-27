@@ -694,7 +694,7 @@ pub fn block_header_encode_decode_roundtrip_test() {
   let header = oni_bitcoin.BlockHeader(
     version: 1,
     prev_block: oni_bitcoin.BlockHash(prev_hash),
-    merkle_root: oni_bitcoin.MerkleRoot(merkle_hash),
+    merkle_root: merkle_hash,
     timestamp: 1231006505,
     bits: 0x1d00ffff,
     nonce: 2083236893,
@@ -729,7 +729,7 @@ pub fn block_hash_from_header_test() {
   let header = oni_bitcoin.BlockHeader(
     version: 1,
     prev_block: oni_bitcoin.BlockHash(prev_hash),
-    merkle_root: oni_bitcoin.MerkleRoot(merkle_hash),
+    merkle_root: merkle_hash,
     timestamp: 0,
     bits: 0x1d00ffff,
     nonce: 0,
