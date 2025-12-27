@@ -56,10 +56,10 @@ init(Config) ->
         type => supervisor
     },
 
-    %% Sync coordinator
+    %% Sync coordinator (IBD and steady-state sync)
     Sync = #{
         id => oni_sync,
-        start => {oni_sync_server, start_link, [Config]},
+        start => {oni_sync, start_link, [Config]},
         restart => permanent,
         shutdown => 5000,
         type => worker
