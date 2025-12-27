@@ -37,6 +37,7 @@ pub type ConsensusError {
   ScriptWitnessMalleated
   ScriptWitnessUnexpected
   ScriptCleanStack
+  ScriptSizeTooLarge
 
   // Transaction errors
   TxMissingInputs
