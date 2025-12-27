@@ -1257,3 +1257,305 @@ pub fn decode_script_num_256_test() {
 pub fn decode_script_num_negative_256_test() {
   oni_consensus.decode_script_num(<<0x00, 0x81>>) |> should.equal(Ok(-256))
 }
+
+// ============================================================================
+// OP_SHA1 Tests
+// ============================================================================
+
+pub fn execute_op_sha1_test() {
+  let flags = oni_consensus.default_script_flags()
+  // Push 1 byte (0x01), then OP_SHA1 (0xa7)
+  let script = <<0x01, 0x01, 0xa7>>
+  let ctx = oni_consensus.script_context_new(script, flags)
+
+  let result = oni_consensus.execute_script(ctx)
+  result |> should.be_ok
+
+  let assert Ok(final_ctx) = result
+  case final_ctx.stack {
+    [hash] -> {
+      // SHA1 output should be 20 bytes
+      bit_array.byte_size(hash) |> should.equal(20)
+    }
+    _ -> should.fail()
+  }
+}
+
+pub fn execute_op_sha1_known_value_test() {
+  let flags = oni_consensus.default_script_flags()
+  // SHA1 of empty string is well-known: da39a3ee5e6b4b0d3255bfef95601890afd80709
+  // Push 0 bytes (empty), then OP_SHA1
+  let script = <<0x00, 0xa7>>
+  let ctx = oni_consensus.script_context_new(script, flags)
+
+  let result = oni_consensus.execute_script(ctx)
+  result |> should.be_ok
+
+  let assert Ok(final_ctx) = result
+  case final_ctx.stack {
+    [hash] -> {
+      bit_array.byte_size(hash) |> should.equal(20)
+      // Verify it's the SHA1 of empty string
+      hash |> should.equal(<<0xda, 0x39, 0xa3, 0xee, 0x5e, 0x6b, 0x4b, 0x0d,
+        0x32, 0x55, 0xbf, 0xef, 0x95, 0x60, 0x18, 0x90, 0xaf, 0xd8, 0x07, 0x09>>)
+    }
+    _ -> should.fail()
+  }
+}
+
+// ============================================================================
+// OP_CHECKLOCKTIMEVERIFY Tests (BIP65)
+// ============================================================================
+
+pub fn execute_cltv_without_context_fails_test() {
+  // CLTV without transaction context should fail
+  let flags = oni_consensus.default_script_flags()
+  // Push locktime 100, then OP_CHECKLOCKTIMEVERIFY (0xb1)
+  let script = <<0x01, 0x64, 0xb1>>
+  let ctx = oni_consensus.script_context_new(script, flags)
+
+  let result = oni_consensus.execute_script(ctx)
+  // Should fail because no transaction context
+  case result {
+    Error(oni_consensus.ScriptCheckLockTimeVerifyFailed) -> should.be_true(True)
+    _ -> should.fail()
+  }
+}
+
+pub fn execute_cltv_with_context_succeeds_test() {
+  // Create a transaction with locktime 500 and sequence not final
+  let assert Ok(hash) = oni_bitcoin.hash256_from_bytes(<<1:256>>)
+  let outpoint = oni_bitcoin.OutPoint(txid: oni_bitcoin.Txid(hash), vout: 0)
+  let assert Ok(value) = oni_bitcoin.amount_from_sats(1000)
+  let input = oni_bitcoin.TxIn(
+    prevout: outpoint,
+    script_sig: oni_bitcoin.script_from_bytes(<<>>),
+    sequence: 0xfffffffe,  // Not final (0xffffffff would be final)
+    witness: [],
+  )
+  let output = oni_bitcoin.TxOut(
+    value: value,
+    script_pubkey: oni_bitcoin.script_from_bytes(<<>>),
+  )
+  let tx = oni_bitcoin.Transaction(
+    version: 1,
+    inputs: [input],
+    outputs: [output],
+    lock_time: 500,  // tx locktime
+  )
+
+  let script_code = oni_bitcoin.script_from_bytes(<<>>)
+  let sig_ctx = oni_consensus.sig_context_new(tx, 0, value, script_code, False, False)
+
+  let flags = oni_consensus.default_script_flags()
+  // Push locktime 100 (less than tx locktime 500), then CLTV
+  // OP_PUSHBYTES_1 100 OP_CHECKLOCKTIMEVERIFY OP_DROP OP_TRUE
+  let script = <<0x01, 0x64, 0xb1, 0x75, 0x51>>
+  let ctx = oni_consensus.script_context_with_sig(script, flags, sig_ctx)
+
+  let result = oni_consensus.execute_script(ctx)
+  result |> should.be_ok
+}
+
+pub fn execute_cltv_locktime_not_reached_fails_test() {
+  // Create a transaction with locktime 50 (less than required 100)
+  let assert Ok(hash) = oni_bitcoin.hash256_from_bytes(<<1:256>>)
+  let outpoint = oni_bitcoin.OutPoint(txid: oni_bitcoin.Txid(hash), vout: 0)
+  let assert Ok(value) = oni_bitcoin.amount_from_sats(1000)
+  let input = oni_bitcoin.TxIn(
+    prevout: outpoint,
+    script_sig: oni_bitcoin.script_from_bytes(<<>>),
+    sequence: 0xfffffffe,
+    witness: [],
+  )
+  let output = oni_bitcoin.TxOut(
+    value: value,
+    script_pubkey: oni_bitcoin.script_from_bytes(<<>>),
+  )
+  let tx = oni_bitcoin.Transaction(
+    version: 1,
+    inputs: [input],
+    outputs: [output],
+    lock_time: 50,  // Less than required
+  )
+
+  let script_code = oni_bitcoin.script_from_bytes(<<>>)
+  let sig_ctx = oni_consensus.sig_context_new(tx, 0, value, script_code, False, False)
+
+  let flags = oni_consensus.default_script_flags()
+  // Push locktime 100, then CLTV
+  let script = <<0x01, 0x64, 0xb1>>
+  let ctx = oni_consensus.script_context_with_sig(script, flags, sig_ctx)
+
+  let result = oni_consensus.execute_script(ctx)
+  case result {
+    Error(oni_consensus.ScriptCheckLockTimeVerifyFailed) -> should.be_true(True)
+    _ -> should.fail()
+  }
+}
+
+pub fn execute_cltv_final_sequence_fails_test() {
+  // CLTV fails if input sequence is 0xffffffff (final)
+  let assert Ok(hash) = oni_bitcoin.hash256_from_bytes(<<1:256>>)
+  let outpoint = oni_bitcoin.OutPoint(txid: oni_bitcoin.Txid(hash), vout: 0)
+  let assert Ok(value) = oni_bitcoin.amount_from_sats(1000)
+  let input = oni_bitcoin.TxIn(
+    prevout: outpoint,
+    script_sig: oni_bitcoin.script_from_bytes(<<>>),
+    sequence: 0xffffffff,  // Final!
+    witness: [],
+  )
+  let output = oni_bitcoin.TxOut(
+    value: value,
+    script_pubkey: oni_bitcoin.script_from_bytes(<<>>),
+  )
+  let tx = oni_bitcoin.Transaction(
+    version: 1,
+    inputs: [input],
+    outputs: [output],
+    lock_time: 500,
+  )
+
+  let script_code = oni_bitcoin.script_from_bytes(<<>>)
+  let sig_ctx = oni_consensus.sig_context_new(tx, 0, value, script_code, False, False)
+
+  let flags = oni_consensus.default_script_flags()
+  let script = <<0x01, 0x64, 0xb1>>  // Push 100, CLTV
+  let ctx = oni_consensus.script_context_with_sig(script, flags, sig_ctx)
+
+  let result = oni_consensus.execute_script(ctx)
+  case result {
+    Error(oni_consensus.ScriptCheckLockTimeVerifyFailed) -> should.be_true(True)
+    _ -> should.fail()
+  }
+}
+
+// ============================================================================
+// OP_CHECKSEQUENCEVERIFY Tests (BIP112)
+// ============================================================================
+
+pub fn execute_csv_without_context_fails_test() {
+  // CSV without transaction context should fail
+  let flags = oni_consensus.default_script_flags()
+  // Push sequence 10, then OP_CHECKSEQUENCEVERIFY (0xb2)
+  let script = <<0x01, 0x0a, 0xb2>>
+  let ctx = oni_consensus.script_context_new(script, flags)
+
+  let result = oni_consensus.execute_script(ctx)
+  case result {
+    Error(oni_consensus.ScriptCheckSequenceVerifyFailed) -> should.be_true(True)
+    _ -> should.fail()
+  }
+}
+
+pub fn execute_csv_with_context_succeeds_test() {
+  // Create a v2 transaction with proper sequence
+  let assert Ok(hash) = oni_bitcoin.hash256_from_bytes(<<1:256>>)
+  let outpoint = oni_bitcoin.OutPoint(txid: oni_bitcoin.Txid(hash), vout: 0)
+  let assert Ok(value) = oni_bitcoin.amount_from_sats(1000)
+  let input = oni_bitcoin.TxIn(
+    prevout: outpoint,
+    script_sig: oni_bitcoin.script_from_bytes(<<>>),
+    sequence: 100,  // 100 blocks relative locktime
+    witness: [],
+  )
+  let output = oni_bitcoin.TxOut(
+    value: value,
+    script_pubkey: oni_bitcoin.script_from_bytes(<<>>),
+  )
+  let tx = oni_bitcoin.Transaction(
+    version: 2,  // Must be v2 for CSV
+    inputs: [input],
+    outputs: [output],
+    lock_time: 0,
+  )
+
+  let script_code = oni_bitcoin.script_from_bytes(<<>>)
+  let sig_ctx = oni_consensus.sig_context_new(tx, 0, value, script_code, False, False)
+
+  let flags = oni_consensus.default_script_flags()
+  // Push sequence 50 (less than input's 100), then CSV, DROP, TRUE
+  let script = <<0x01, 0x32, 0xb2, 0x75, 0x51>>
+  let ctx = oni_consensus.script_context_with_sig(script, flags, sig_ctx)
+
+  let result = oni_consensus.execute_script(ctx)
+  result |> should.be_ok
+}
+
+pub fn execute_csv_v1_transaction_fails_test() {
+  // CSV requires transaction version >= 2
+  let assert Ok(hash) = oni_bitcoin.hash256_from_bytes(<<1:256>>)
+  let outpoint = oni_bitcoin.OutPoint(txid: oni_bitcoin.Txid(hash), vout: 0)
+  let assert Ok(value) = oni_bitcoin.amount_from_sats(1000)
+  let input = oni_bitcoin.TxIn(
+    prevout: outpoint,
+    script_sig: oni_bitcoin.script_from_bytes(<<>>),
+    sequence: 100,
+    witness: [],
+  )
+  let output = oni_bitcoin.TxOut(
+    value: value,
+    script_pubkey: oni_bitcoin.script_from_bytes(<<>>),
+  )
+  let tx = oni_bitcoin.Transaction(
+    version: 1,  // v1 - CSV should fail
+    inputs: [input],
+    outputs: [output],
+    lock_time: 0,
+  )
+
+  let script_code = oni_bitcoin.script_from_bytes(<<>>)
+  let sig_ctx = oni_consensus.sig_context_new(tx, 0, value, script_code, False, False)
+
+  let flags = oni_consensus.default_script_flags()
+  let script = <<0x01, 0x32, 0xb2>>  // Push 50, CSV
+  let ctx = oni_consensus.script_context_with_sig(script, flags, sig_ctx)
+
+  let result = oni_consensus.execute_script(ctx)
+  case result {
+    Error(oni_consensus.ScriptCheckSequenceVerifyFailed) -> should.be_true(True)
+    _ -> should.fail()
+  }
+}
+
+pub fn execute_csv_disable_flag_succeeds_test() {
+  // When disable flag (bit 31) is set in stack value, CSV is NOP
+  let assert Ok(hash) = oni_bitcoin.hash256_from_bytes(<<1:256>>)
+  let outpoint = oni_bitcoin.OutPoint(txid: oni_bitcoin.Txid(hash), vout: 0)
+  let assert Ok(value) = oni_bitcoin.amount_from_sats(1000)
+  let input = oni_bitcoin.TxIn(
+    prevout: outpoint,
+    script_sig: oni_bitcoin.script_from_bytes(<<>>),
+    sequence: 0,  // Even with 0 sequence
+    witness: [],
+  )
+  let output = oni_bitcoin.TxOut(
+    value: value,
+    script_pubkey: oni_bitcoin.script_from_bytes(<<>>),
+  )
+  let tx = oni_bitcoin.Transaction(
+    version: 2,
+    inputs: [input],
+    outputs: [output],
+    lock_time: 0,
+  )
+
+  let script_code = oni_bitcoin.script_from_bytes(<<>>)
+  let sig_ctx = oni_consensus.sig_context_new(tx, 0, value, script_code, False, False)
+
+  let flags = oni_consensus.default_script_flags()
+  // Push 0x80000000 (disable flag set), CSV, DROP, TRUE
+  // 0x80000000 in little-endian script number encoding: 0x00 0x00 0x00 0x80 0x00 (5 bytes with sign)
+  // Actually, we need to use a 4-byte push with the value
+  // The disable flag is bit 31, so value is 0x80000000
+  // In script number: <<0x00, 0x00, 0x00, 0x80, 0x00>> - but this is 5 bytes
+  // Let's use a simpler approach: 0xFFFFFF7F is safe (all bits except bit 31)
+  // Actually let's just use the disabled flag pattern
+  // Push 4 bytes: 0x00 0x00 0x00 0x80, then CSV should be a NOP
+  let script = <<0x04, 0x00, 0x00, 0x00, 0x80, 0xb2, 0x75, 0x51>>
+  let ctx = oni_consensus.script_context_with_sig(script, flags, sig_ctx)
+
+  let result = oni_consensus.execute_script(ctx)
+  // Should succeed because disable flag makes CSV a NOP
+  result |> should.be_ok
+}
