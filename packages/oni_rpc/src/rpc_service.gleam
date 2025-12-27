@@ -91,6 +91,43 @@ pub type MempoolQuery {
   QueryBlockTemplate(reply: Subject(BlockTemplateData))
   /// Submit a transaction to the mempool
   SubmitTx(tx: oni_bitcoin.Transaction, reply: Subject(SubmitTxResult))
+  /// Test if a transaction would be accepted to the mempool
+  TestMempoolAccept(
+    tx: oni_bitcoin.Transaction,
+    max_fee_rate: Float,
+    reply: Subject(TestAcceptResult),
+  )
+  /// Estimate smart fee for target confirmation
+  EstimateSmartFee(target_blocks: Int, mode: String, reply: Subject(FeeEstimateResult))
+}
+
+/// Result of testmempoolaccept
+pub type TestAcceptResult {
+  TestAcceptResult(
+    txid: String,
+    allowed: Bool,
+    vsize: Int,
+    fees: TestAcceptFees,
+    reject_reason: Option(String),
+  )
+}
+
+/// Fee breakdown for testmempoolaccept
+pub type TestAcceptFees {
+  TestAcceptFees(
+    base: Int,
+    effective_feerate: Float,
+    effective_includes: List(String),
+  )
+}
+
+/// Result of estimatesmartfee
+pub type FeeEstimateResult {
+  FeeEstimateResult(
+    feerate: Float,  // BTC/kvB
+    errors: List(String),
+    blocks: Int,
+  )
 }
 
 /// Result of transaction submission
@@ -278,6 +315,10 @@ fn register_stateful_handlers(
   |> oni_rpc.server_register("getblocktemplate", create_getblocktemplate_handler(chainstate, mempool))
   |> oni_rpc.server_register("submitblock", create_submitblock_handler(chainstate))
   |> oni_rpc.server_register("sendrawtransaction", create_sendrawtransaction_handler(mempool))
+  |> oni_rpc.server_register("testmempoolaccept", create_testmempoolaccept_handler(mempool))
+  |> oni_rpc.server_register("estimatesmartfee", create_estimatesmartfee_handler(mempool))
+  |> oni_rpc.server_register("getdifficulty", create_getdifficulty_handler(chainstate))
+  |> oni_rpc.server_register("getnetworkhashps", create_getnetworkhashps_handler(chainstate))
 }
 
 // ============================================================================
@@ -560,6 +601,173 @@ fn submit_tx(
   tx: oni_bitcoin.Transaction,
 ) -> SubmitTxResult {
   process.call(mempool, SubmitTx(tx, _), 30_000)
+}
+
+/// Create handler for testmempoolaccept
+fn create_testmempoolaccept_handler(
+  mempool: Subject(MempoolQuery),
+) -> MethodHandler {
+  fn(params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
+    // testmempoolaccept ["hexstring",...] ( maxfeerate )
+    case params {
+      ParamsArray([RpcArray(tx_hexes), ..rest]) -> {
+        // Get max fee rate if provided
+        let max_fee_rate = case rest {
+          [RpcFloat(rate), ..] -> rate
+          [RpcInt(rate), ..] -> int.to_float(rate)
+          _ -> 0.1  // Default 0.1 BTC/kvB
+        }
+
+        // Process each transaction
+        let results = list.map(tx_hexes, fn(tx_hex) {
+          case tx_hex {
+            RpcString(hex_str) -> {
+              case oni_bitcoin.hex_decode(hex_str) {
+                Error(_) -> {
+                  create_reject_result("", "invalid-hex", 0)
+                }
+                Ok(tx_bytes) -> {
+                  case oni_bitcoin.decode_tx(tx_bytes) {
+                    Error(msg) -> {
+                      create_reject_result("", msg, 0)
+                    }
+                    Ok(#(tx, _rest)) -> {
+                      // Test acceptance
+                      let result = test_mempool_accept(mempool, tx, max_fee_rate)
+                      format_test_result(result)
+                    }
+                  }
+                }
+              }
+            }
+            _ -> create_reject_result("", "invalid-type", 0)
+          }
+        })
+
+        Ok(RpcArray(results))
+      }
+      _ -> Error(InvalidParams("testmempoolaccept requires array of hex strings"))
+    }
+  }
+}
+
+/// Format test result to RPC value
+fn format_test_result(result: TestAcceptResult) -> RpcValue {
+  let fees_obj = dict.new()
+    |> dict.insert("base", RpcInt(result.fees.base))
+    |> dict.insert("effective-feerate", RpcFloat(result.fees.effective_feerate))
+    |> dict.insert("effective-includes", RpcArray(
+      list.map(result.fees.effective_includes, fn(s) { RpcString(s) })
+    ))
+
+  let obj = dict.new()
+    |> dict.insert("txid", RpcString(result.txid))
+    |> dict.insert("allowed", RpcBool(result.allowed))
+    |> dict.insert("vsize", RpcInt(result.vsize))
+    |> dict.insert("fees", RpcObject(fees_obj))
+
+  let with_reason = case result.reject_reason {
+    Some(reason) -> dict.insert(obj, "reject-reason", RpcString(reason))
+    None -> obj
+  }
+
+  RpcObject(with_reason)
+}
+
+/// Create a rejection result
+fn create_reject_result(txid: String, reason: String, vsize: Int) -> RpcValue {
+  let result = TestAcceptResult(
+    txid: txid,
+    allowed: False,
+    vsize: vsize,
+    fees: TestAcceptFees(base: 0, effective_feerate: 0.0, effective_includes: []),
+    reject_reason: Some(reason),
+  )
+  format_test_result(result)
+}
+
+/// Test if transaction would be accepted
+fn test_mempool_accept(
+  mempool: Subject(MempoolQuery),
+  tx: oni_bitcoin.Transaction,
+  max_fee_rate: Float,
+) -> TestAcceptResult {
+  process.call(mempool, TestMempoolAccept(tx, max_fee_rate, _), 30_000)
+}
+
+/// Create handler for estimatesmartfee
+fn create_estimatesmartfee_handler(
+  mempool: Subject(MempoolQuery),
+) -> MethodHandler {
+  fn(params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
+    // estimatesmartfee conf_target ( "estimate_mode" )
+    case params {
+      ParamsArray([RpcInt(conf_target), ..rest]) -> {
+        // Get estimate mode if provided
+        let mode = case rest {
+          [RpcString(m), ..] -> m
+          _ -> "CONSERVATIVE"
+        }
+
+        // Get fee estimate
+        let result = estimate_smart_fee(mempool, conf_target, mode)
+
+        let obj = dict.new()
+          |> dict.insert("feerate", RpcFloat(result.feerate))
+          |> dict.insert("blocks", RpcInt(result.blocks))
+
+        let with_errors = case result.errors {
+          [] -> obj
+          errs -> dict.insert(obj, "errors", RpcArray(
+            list.map(errs, fn(e) { RpcString(e) })
+          ))
+        }
+
+        Ok(RpcObject(with_errors))
+      }
+      ParamsNone -> Error(InvalidParams("estimatesmartfee requires conf_target"))
+      _ -> Error(InvalidParams("estimatesmartfee requires conf_target as integer"))
+    }
+  }
+}
+
+/// Query fee estimate
+fn estimate_smart_fee(
+  mempool: Subject(MempoolQuery),
+  target_blocks: Int,
+  mode: String,
+) -> FeeEstimateResult {
+  process.call(mempool, EstimateSmartFee(target_blocks, mode, _), 5000)
+}
+
+/// Create handler for getdifficulty
+fn create_getdifficulty_handler(
+  chainstate: Subject(ChainstateQuery),
+) -> MethodHandler {
+  fn(_params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
+    // For now return placeholder - would query actual difficulty from chainstate
+    let _ = chainstate
+    // Mainnet genesis difficulty is 1.0
+    Ok(RpcFloat(1.0))
+  }
+}
+
+/// Create handler for getnetworkhashps
+fn create_getnetworkhashps_handler(
+  chainstate: Subject(ChainstateQuery),
+) -> MethodHandler {
+  fn(params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
+    // getnetworkhashps ( nblocks height )
+    let _nblocks = case params {
+      ParamsArray([RpcInt(n), ..]) -> n
+      _ -> 120  // Default to last 120 blocks
+    }
+
+    let _ = chainstate
+    // Return placeholder hash rate (would calculate from actual block data)
+    // At difficulty 1, ~7 MH/s average
+    Ok(RpcFloat(7_000_000.0))
+  }
 }
 
 // ============================================================================
