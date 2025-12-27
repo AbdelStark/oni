@@ -1872,9 +1872,8 @@ fn verify_signature(ctx: ScriptContext, sig: BitArray, pubkey: BitArray) -> Bool
                 Ok(sig_bytes) -> {
                   // Compute sighash
                   let sighash = compute_sighash_for_verify(sig_context, sighash_type)
-                  // Verify using secp256k1
-                  // NOTE: This is a stub - real implementation requires NIF
-                  verify_ecdsa_stub(sighash.bytes, sig_bytes, pubkey)
+                  // Verify using secp256k1 via Erlang crypto
+                  verify_ecdsa(sighash.bytes, sig_bytes, pubkey)
                 }
               }
             }
@@ -2128,12 +2127,25 @@ fn serialize_tx_for_sighash(tx: Transaction) -> BitArray {
   ])
 }
 
-/// Stub for ECDSA verification - needs NIF implementation
-fn verify_ecdsa_stub(_sighash: BitArray, _signature: BitArray, _pubkey: BitArray) -> Bool {
-  // TODO: Implement using secp256k1 NIF
-  // For now, return true to allow testing of script logic
-  // This MUST be replaced with actual verification in production
-  True
+/// ECDSA signature verification using secp256k1
+fn verify_ecdsa(sighash: BitArray, signature: BitArray, pubkey: BitArray) -> Bool {
+  // Parse the public key
+  case oni_bitcoin.pubkey_from_bytes(pubkey) {
+    Error(_) -> False
+    Ok(pk) -> {
+      // Parse the DER signature
+      case oni_bitcoin.signature_from_der(signature) {
+        Error(_) -> False
+        Ok(sig) -> {
+          // Perform ECDSA verification using Erlang crypto
+          case oni_bitcoin.ecdsa_verify(sig, sighash, pk) {
+            Error(_) -> False
+            Ok(result) -> result
+          }
+        }
+      }
+    }
+  }
 }
 
 /// Verify multiple signatures against pubkeys (CHECKMULTISIG)

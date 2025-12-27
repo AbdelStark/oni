@@ -1982,3 +1982,85 @@ pub fn chain_code_from_bytes(bytes: BitArray) -> Result(ChainCode, String) {
     _ -> Error("Chain code must be 32 bytes")
   }
 }
+
+// ============================================================================
+// Schnorr Signature Verification (BIP-340)
+// ============================================================================
+
+/// Verify a BIP-340 Schnorr signature
+/// Uses the secp256k1 NIF for actual verification
+pub fn schnorr_verify_nif(
+  sig: SchnorrSig,
+  msg_hash: BitArray,
+  pubkey: XOnlyPubKey,
+) -> Result(Bool, CryptoError) {
+  case bit_array.byte_size(msg_hash) {
+    32 -> {
+      // Call the Erlang NIF module
+      case erlang_schnorr_verify(msg_hash, sig.bytes, pubkey.bytes) {
+        #(True, True) -> Ok(True)
+        #(True, False) -> Ok(False)
+        _ -> Error(VerificationFailed)
+      }
+    }
+    _ -> Error(InvalidMessage)
+  }
+}
+
+/// Erlang FFI for Schnorr verification
+@external(erlang, "oni_secp256k1", "schnorr_verify")
+fn erlang_schnorr_verify(
+  msg_hash: BitArray,
+  signature: BitArray,
+  pubkey: BitArray,
+) -> #(Bool, Bool)
+
+/// Tweak a public key for Taproot (BIP-341)
+pub fn tweak_pubkey_for_taproot(
+  internal_key: XOnlyPubKey,
+  tweak_hash: BitArray,
+) -> Result(#(XOnlyPubKey, Int), CryptoError) {
+  case bit_array.byte_size(tweak_hash) {
+    32 -> {
+      case erlang_tweak_pubkey(internal_key.bytes, tweak_hash) {
+        #(True, #(output_key, parity)) -> {
+          case xonly_pubkey_from_bytes(output_key) {
+            Ok(pk) -> Ok(#(pk, parity))
+            Error(_) -> Error(InvalidPublicKey)
+          }
+        }
+        _ -> Error(UnsupportedOperation)
+      }
+    }
+    _ -> Error(InvalidMessage)
+  }
+}
+
+/// Erlang FFI for Taproot pubkey tweaking
+@external(erlang, "oni_secp256k1", "tweak_pubkey")
+fn erlang_tweak_pubkey(
+  internal_key: BitArray,
+  tweak_hash: BitArray,
+) -> #(Bool, #(BitArray, Int))
+
+// ============================================================================
+// Script Helper Functions
+// ============================================================================
+
+/// Create an empty script
+pub fn script_empty() -> Script {
+  Script(<<>>)
+}
+
+/// Create a script from hex string
+pub fn script_from_hex(hex: String) -> Result(Script, String) {
+  case hex_decode(hex) {
+    Ok(bytes) -> Ok(Script(bytes))
+    Error(e) -> Error(e)
+  }
+}
+
+/// Create satoshi amount directly (for internal use)
+pub fn sats(value: Int) -> Amount {
+  Amount(value)
+}

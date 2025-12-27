@@ -1,7 +1,7 @@
 PACKAGES := $(shell ls -1 packages)
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 
-.PHONY: help fmt fmt-check check test ci clean build docs bench version info
+.PHONY: help fmt fmt-check check test ci clean build docs bench version info nif run run-testnet run-regtest
 
 help:
 	@echo "oni development commands"
@@ -12,9 +12,15 @@ help:
 	@echo "  make check      - typecheck all packages"
 	@echo "  make test       - run tests for all packages"
 	@echo "  make build      - build all packages"
+	@echo "  make nif        - build secp256k1 NIF (requires libsecp256k1)"
 	@echo "  make docs       - generate documentation"
 	@echo "  make bench      - run benchmarks"
 	@echo "  make clean      - remove build artifacts"
+	@echo ""
+	@echo "Running:"
+	@echo "  make run        - run node in mainnet mode (port 8333/8332)"
+	@echo "  make run-testnet - run node in testnet mode (port 18333/18332)"
+	@echo "  make run-regtest - run node in regtest mode (port 18444/18443)"
 	@echo ""
 	@echo "CI/CD:"
 	@echo "  make ci         - run full CI pipeline (fmt-check + check + test)"
@@ -119,3 +125,54 @@ info:
 	  tests=$$(find packages/$$p/test -name "*.gleam" -exec cat {} \; 2>/dev/null | wc -l); \
 	  echo "  $$p: $$lines source lines, $$tests test lines"; \
 	done
+
+# Build secp256k1 NIF
+nif:
+	@echo "==> Building secp256k1 NIF..."
+	@if [ -f packages/oni_bitcoin/c_src/Makefile ]; then \
+	  (cd packages/oni_bitcoin/c_src && make); \
+	else \
+	  echo "NIF Makefile not found. Skipping NIF build."; \
+	fi
+
+# Run node in mainnet mode
+run: build
+	@echo "==> Starting oni node (mainnet)..."
+	@cd packages/oni_node && erl \
+	  -pa build/dev/erlang/*/ebin \
+	  -pa ../oni_bitcoin/build/dev/erlang/*/ebin \
+	  -pa ../oni_consensus/build/dev/erlang/*/ebin \
+	  -pa ../oni_storage/build/dev/erlang/*/ebin \
+	  -pa ../oni_p2p/build/dev/erlang/*/ebin \
+	  -pa ../oni_rpc/build/dev/erlang/*/ebin \
+	  -eval 'application:start(oni_node)'
+
+# Run node in testnet mode
+run-testnet: build
+	@echo "==> Starting oni node (testnet)..."
+	@cd packages/oni_node && erl \
+	  -pa build/dev/erlang/*/ebin \
+	  -pa ../oni_bitcoin/build/dev/erlang/*/ebin \
+	  -pa ../oni_consensus/build/dev/erlang/*/ebin \
+	  -pa ../oni_storage/build/dev/erlang/*/ebin \
+	  -pa ../oni_p2p/build/dev/erlang/*/ebin \
+	  -pa ../oni_rpc/build/dev/erlang/*/ebin \
+	  -oni_node network testnet \
+	  -oni_node p2p_port 18333 \
+	  -oni_node rpc_port 18332 \
+	  -eval 'application:start(oni_node)'
+
+# Run node in regtest mode
+run-regtest: build
+	@echo "==> Starting oni node (regtest)..."
+	@cd packages/oni_node && erl \
+	  -pa build/dev/erlang/*/ebin \
+	  -pa ../oni_bitcoin/build/dev/erlang/*/ebin \
+	  -pa ../oni_consensus/build/dev/erlang/*/ebin \
+	  -pa ../oni_storage/build/dev/erlang/*/ebin \
+	  -pa ../oni_p2p/build/dev/erlang/*/ebin \
+	  -pa ../oni_rpc/build/dev/erlang/*/ebin \
+	  -oni_node network regtest \
+	  -oni_node p2p_port 18444 \
+	  -oni_node rpc_port 18443 \
+	  -eval 'application:start(oni_node)'
