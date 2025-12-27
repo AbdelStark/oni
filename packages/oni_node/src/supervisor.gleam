@@ -44,6 +44,8 @@ pub type ChainstateMsg {
   GetTip(reply: Subject(Option(oni_bitcoin.BlockHash)))
   /// Get the current tip height
   GetHeight(reply: Subject(Int))
+  /// Get the network type
+  GetNetwork(reply: Subject(oni_bitcoin.Network))
   /// Connect a block to the chain
   ConnectBlock(block: oni_bitcoin.Block, reply: Subject(Result(Nil, String)))
   /// Disconnect the tip block
@@ -111,6 +113,11 @@ fn handle_chainstate_msg(
 
     GetHeight(reply) -> {
       process.send(reply, state.tip_height)
+      actor.continue(state)
+    }
+
+    GetNetwork(reply) -> {
+      process.send(reply, state.network)
       actor.continue(state)
     }
 
@@ -228,10 +235,35 @@ pub type MempoolMsg {
   GetSize(reply: Subject(Int))
   /// Get all transaction IDs in mempool
   GetTxids(reply: Subject(List(oni_bitcoin.Txid)))
+  /// Get template transactions for mining
+  GetTemplateData(height: Int, bits: Int, reply: Subject(MempoolTemplateData))
   /// Clear the mempool (e.g., after a block is connected)
   ClearConfirmed(txids: List(oni_bitcoin.Txid))
   /// Shutdown the mempool
   MempoolShutdown
+}
+
+/// Template data from mempool for block creation
+pub type MempoolTemplateData {
+  MempoolTemplateData(
+    transactions: List(TemplateTxInfo),
+    total_fees: Int,
+    weight_used: Int,
+    sigops_used: Int,
+  )
+}
+
+/// Transaction info for template
+pub type TemplateTxInfo {
+  TemplateTxInfo(
+    data_hex: String,
+    txid_hex: String,
+    hash_hex: String,
+    fee: Int,
+    sigops: Int,
+    weight: Int,
+    depends: List(Int),
+  )
 }
 
 /// Mempool actor state
@@ -355,6 +387,14 @@ fn handle_mempool_msg(
       actor.continue(new_state)
     }
 
+    GetTemplateData(height, bits, reply) -> {
+      // Build template data from mempool transactions
+      // For now, return empty template if mempool is empty or simplified
+      let template_data = build_template_data(state, height, bits)
+      process.send(reply, template_data)
+      actor.continue(state)
+    }
+
     MempoolShutdown -> {
       actor.Stop(process.Normal)
     }
@@ -420,6 +460,84 @@ fn consensus_error_to_string(error: oni_consensus.ConsensusError) -> String {
   }
 }
 
+/// Build template data from mempool state
+fn build_template_data(state: MempoolState, height: Int, bits: Int) -> MempoolTemplateData {
+  // Get transactions sorted by some fee metric (simplified)
+  let txs = dict.values(state.txs)
+
+  // Calculate subsidy
+  let halving_interval = 210_000
+  let initial_subsidy = 5_000_000_000  // 50 BTC
+  let halvings = height / halving_interval
+  let subsidy = case halvings >= 64 {
+    True -> 0
+    False -> int.bitwise_shift_right(initial_subsidy, halvings)
+  }
+
+  // Build template transactions
+  let #(template_txs, total_fees, total_weight, total_sigops) =
+    build_template_txs(txs, [], 0, 0, 0, 0)
+
+  MempoolTemplateData(
+    transactions: template_txs,
+    total_fees: total_fees,
+    weight_used: total_weight,
+    sigops_used: total_sigops,
+  )
+}
+
+fn build_template_txs(
+  remaining: List(oni_bitcoin.Transaction),
+  acc: List(TemplateTxInfo),
+  idx: Int,
+  fees: Int,
+  weight: Int,
+  sigops: Int,
+) -> #(List(TemplateTxInfo), Int, Int, Int) {
+  // Max weight for block (minus coinbase overhead)
+  let max_weight = 4_000_000 - 1000
+
+  case remaining {
+    [] -> #(list.reverse(acc), fees, weight, sigops)
+    [tx, ..rest] -> {
+      // Estimate tx weight and sigops
+      let tx_weight = oni_bitcoin.tx_weight(tx)
+      let tx_sigops = list.length(tx.inputs) + list.length(tx.outputs)
+      let tx_fee = 1000  // Placeholder fee (would come from mempool entry)
+
+      // Check if fits
+      case weight + tx_weight <= max_weight {
+        False -> #(list.reverse(acc), fees, weight, sigops)
+        True -> {
+          // Encode transaction
+          let txid = oni_bitcoin.txid_from_tx(tx)
+          let wtxid = oni_bitcoin.wtxid_from_tx(tx)
+          let tx_data = oni_bitcoin.encode_tx(tx)
+
+          let info = TemplateTxInfo(
+            data_hex: oni_bitcoin.hex_encode(tx_data),
+            txid_hex: oni_bitcoin.txid_to_hex(txid),
+            hash_hex: oni_bitcoin.hash256_to_hex(wtxid.hash),
+            fee: tx_fee,
+            sigops: tx_sigops,
+            weight: tx_weight,
+            depends: [],  // Simplified - no dependency tracking
+          )
+
+          build_template_txs(
+            rest,
+            [info, ..acc],
+            idx + 1,
+            fees + tx_fee,
+            weight + tx_weight,
+            sigops + tx_sigops,
+          )
+        }
+      }
+    }
+  }
+}
+
 // ============================================================================
 // Sync Coordinator Actor
 // ============================================================================
@@ -432,8 +550,10 @@ pub type SyncMsg {
   OnHeaders(peer_id: String, count: Int)
   /// Block received from peer
   OnBlock(hash: oni_bitcoin.BlockHash)
-  /// Get sync status
+  /// Get sync status (full status object)
   GetStatus(reply: Subject(SyncStatus))
+  /// Get sync state string (simple state query)
+  GetSyncState(reply: Subject(String))
   /// Shutdown sync coordinator
   SyncShutdown
 }
@@ -513,6 +633,11 @@ fn handle_sync_msg(
         peers_syncing: peers,
       )
       process.send(reply, status)
+      actor.continue(state)
+    }
+
+    GetSyncState(reply) -> {
+      process.send(reply, state.state)
       actor.continue(state)
     }
 
