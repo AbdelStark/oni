@@ -10,11 +10,16 @@
 // The supervision strategy is rest-for-one: if a critical component fails,
 // all components started after it are restarted.
 
+import gleam/dict.{type Dict}
 import gleam/erlang/process.{type Subject}
+import gleam/list
 import gleam/otp/actor
 import gleam/otp/supervisor
 import gleam/option.{type Option, None, Some}
 import oni_bitcoin
+import oni_consensus
+import oni_consensus/validation
+import oni_storage.{type Storage}
 
 // ============================================================================
 // Node Handles
@@ -65,6 +70,7 @@ pub type ChainstateState {
     tip_hash: Option(oni_bitcoin.BlockHash),
     tip_height: Int,
     network: oni_bitcoin.Network,
+    storage: Storage,
   )
 }
 
@@ -72,10 +78,22 @@ pub type ChainstateState {
 pub fn start_chainstate(
   network: oni_bitcoin.Network,
 ) -> Result(Subject(ChainstateMsg), actor.StartError) {
+  // Get genesis hash for the network
+  let params = case network {
+    oni_bitcoin.Mainnet -> oni_bitcoin.mainnet_params()
+    oni_bitcoin.Testnet -> oni_bitcoin.testnet_params()
+    oni_bitcoin.Regtest -> oni_bitcoin.regtest_params()
+    oni_bitcoin.Signet -> oni_bitcoin.testnet_params()
+  }
+
+  // Initialize storage with genesis
+  let storage = oni_storage.storage_new(params.genesis_hash)
+
   let initial_state = ChainstateState(
-    tip_hash: None,
+    tip_hash: Some(params.genesis_hash),
     tip_height: 0,
     network: network,
+    storage: storage,
   )
 
   actor.start(initial_state, handle_chainstate_msg)
@@ -96,44 +114,103 @@ fn handle_chainstate_msg(
       actor.continue(state)
     }
 
-    ConnectBlock(_block, reply) -> {
-      // TODO: Implement actual block connection
-      // For now, just increment height
-      let new_state = ChainstateState(
-        ..state,
-        tip_height: state.tip_height + 1,
-      )
-      process.send(reply, Ok(Nil))
-      actor.continue(new_state)
-    }
+    ConnectBlock(block, reply) -> {
+      // Compute block hash from header
+      let block_hash = oni_bitcoin.block_hash_from_header(block.header)
+      let new_height = state.tip_height + 1
 
-    DisconnectBlock(reply) -> {
-      // TODO: Implement actual block disconnection
-      case state.tip_height > 0 {
-        True -> {
+      // Connect block using storage layer
+      case oni_storage.storage_connect_block(state.storage, block, block_hash, new_height) {
+        Ok(#(new_storage, _undo)) -> {
           let new_state = ChainstateState(
             ..state,
-            tip_height: state.tip_height - 1,
+            tip_hash: Some(block_hash),
+            tip_height: new_height,
+            storage: new_storage,
           )
           process.send(reply, Ok(Nil))
           actor.continue(new_state)
         }
-        False -> {
+        Error(storage_error) -> {
+          let error_msg = storage_error_to_string(storage_error)
+          process.send(reply, Error(error_msg))
+          actor.continue(state)
+        }
+      }
+    }
+
+    DisconnectBlock(reply) -> {
+      case state.tip_height > 0, state.tip_hash {
+        True, Some(tip_hash) -> {
+          // Disconnect block using storage layer
+          case oni_storage.storage_disconnect_block(state.storage, tip_hash) {
+            Ok(new_storage) -> {
+              let new_tip = oni_storage.storage_get_tip(new_storage)
+              let new_height = oni_storage.storage_get_height(new_storage)
+              let new_state = ChainstateState(
+                ..state,
+                tip_hash: Some(new_tip),
+                tip_height: new_height,
+                storage: new_storage,
+              )
+              process.send(reply, Ok(Nil))
+              actor.continue(new_state)
+            }
+            Error(storage_error) -> {
+              let error_msg = storage_error_to_string(storage_error)
+              process.send(reply, Error(error_msg))
+              actor.continue(state)
+            }
+          }
+        }
+        _, _ -> {
           process.send(reply, Error("Cannot disconnect genesis"))
           actor.continue(state)
         }
       }
     }
 
-    GetUtxo(_outpoint, reply) -> {
-      // TODO: Implement actual UTXO lookup
-      process.send(reply, None)
+    GetUtxo(outpoint, reply) -> {
+      // Lookup UTXO in the storage layer
+      case oni_storage.storage_get_utxo(state.storage, outpoint) {
+        Some(coin) -> {
+          // Convert storage Coin to CoinInfo
+          let coin_info = CoinInfo(
+            value: coin.output.value,
+            script_pubkey: coin.output.script_pubkey,
+            height: coin.height,
+            is_coinbase: coin.is_coinbase,
+          )
+          process.send(reply, Some(coin_info))
+        }
+        None -> {
+          process.send(reply, None)
+        }
+      }
       actor.continue(state)
     }
 
     ChainstateShutdown -> {
       actor.Stop(process.Normal)
     }
+  }
+}
+
+/// Convert storage error to string for error messages
+fn storage_error_to_string(error: oni_storage.StorageError) -> String {
+  case error {
+    oni_storage.NotFound -> "Block or UTXO not found"
+    oni_storage.CorruptData -> "Corrupt data in storage"
+    oni_storage.DatabaseError(msg) -> "Database error: " <> msg
+    oni_storage.IoError(msg) -> "IO error: " <> msg
+    oni_storage.MigrationRequired -> "Database migration required"
+    oni_storage.ChecksumMismatch -> "Checksum mismatch"
+    oni_storage.OutOfSpace -> "Out of disk space"
+    oni_storage.BlockNotInMainChain -> "Block not in main chain"
+    oni_storage.InvalidBlockHeight -> "Invalid block height"
+    oni_storage.UndoDataMissing -> "Undo data missing"
+    oni_storage.InvalidUndoData -> "Invalid undo data"
+    oni_storage.Other(msg) -> msg
   }
 }
 
@@ -160,8 +237,11 @@ pub type MempoolMsg {
 /// Mempool actor state
 pub type MempoolState {
   MempoolState(
-    txs: List(oni_bitcoin.Transaction),
+    /// Transactions indexed by txid hex
+    txs: Dict(String, oni_bitcoin.Transaction),
+    /// Number of transactions
     size: Int,
+    /// Maximum number of transactions
     max_size: Int,
   )
 }
@@ -171,7 +251,7 @@ pub fn start_mempool(
   max_size: Int,
 ) -> Result(Subject(MempoolMsg), actor.StartError) {
   let initial_state = MempoolState(
-    txs: [],
+    txs: dict.new(),
     size: 0,
     max_size: max_size,
   )
@@ -185,27 +265,62 @@ fn handle_mempool_msg(
 ) -> actor.Next(MempoolMsg, MempoolState) {
   case msg {
     AddTx(tx, reply) -> {
-      // TODO: Implement validation
+      // Check mempool size limit
       case state.size >= state.max_size {
         True -> {
           process.send(reply, Error("Mempool full"))
           actor.continue(state)
         }
         False -> {
-          let new_state = MempoolState(
-            ..state,
-            txs: [tx, ..state.txs],
-            size: state.size + 1,
-          )
-          process.send(reply, Ok(Nil))
-          actor.continue(new_state)
+          // Perform stateless validation
+          case validation.validate_tx_stateless(tx) {
+            Error(consensus_error) -> {
+              let error_msg = consensus_error_to_string(consensus_error)
+              process.send(reply, Error(error_msg))
+              actor.continue(state)
+            }
+            Ok(_) -> {
+              // Compute txid and add to mempool
+              let txid = oni_bitcoin.txid_from_tx(tx)
+              let txid_hex = oni_bitcoin.txid_to_hex(txid)
+
+              // Check if already in mempool
+              case dict.has_key(state.txs, txid_hex) {
+                True -> {
+                  process.send(reply, Error("Transaction already in mempool"))
+                  actor.continue(state)
+                }
+                False -> {
+                  let new_txs = dict.insert(state.txs, txid_hex, tx)
+                  let new_state = MempoolState(
+                    ..state,
+                    txs: new_txs,
+                    size: state.size + 1,
+                  )
+                  process.send(reply, Ok(Nil))
+                  actor.continue(new_state)
+                }
+              }
+            }
+          }
         }
       }
     }
 
-    RemoveTx(_txid) -> {
-      // TODO: Implement removal by txid
-      actor.continue(state)
+    RemoveTx(txid) -> {
+      let txid_hex = oni_bitcoin.txid_to_hex(txid)
+      case dict.has_key(state.txs, txid_hex) {
+        False -> actor.continue(state)
+        True -> {
+          let new_txs = dict.delete(state.txs, txid_hex)
+          let new_state = MempoolState(
+            ..state,
+            txs: new_txs,
+            size: state.size - 1,
+          )
+          actor.continue(new_state)
+        }
+      }
     }
 
     GetSize(reply) -> {
@@ -214,19 +329,94 @@ fn handle_mempool_msg(
     }
 
     GetTxids(reply) -> {
-      let txids = []  // TODO: Extract txids from transactions
+      // Extract txids from the dict keys
+      let txids = dict.fold(state.txs, [], fn(acc, txid_hex, _tx) {
+        case oni_bitcoin.txid_from_hex(txid_hex) {
+          Ok(txid) -> [txid, ..acc]
+          Error(_) -> acc
+        }
+      })
       process.send(reply, txids)
       actor.continue(state)
     }
 
-    ClearConfirmed(_txids) -> {
-      // TODO: Remove confirmed transactions
-      actor.continue(state)
+    ClearConfirmed(txids) -> {
+      // Remove all confirmed transactions from mempool
+      let new_txs = list.fold(txids, state.txs, fn(txs, txid) {
+        let txid_hex = oni_bitcoin.txid_to_hex(txid)
+        dict.delete(txs, txid_hex)
+      })
+      let new_size = dict.size(new_txs)
+      let new_state = MempoolState(
+        ..state,
+        txs: new_txs,
+        size: new_size,
+      )
+      actor.continue(new_state)
     }
 
     MempoolShutdown -> {
       actor.Stop(process.Normal)
     }
+  }
+}
+
+/// Convert consensus error to string for error messages
+fn consensus_error_to_string(error: oni_consensus.ConsensusError) -> String {
+  case error {
+    // Script errors
+    oni_consensus.ScriptInvalid -> "Invalid script"
+    oni_consensus.ScriptDisabledOpcode -> "Disabled opcode"
+    oni_consensus.ScriptStackUnderflow -> "Stack underflow"
+    oni_consensus.ScriptStackOverflow -> "Stack overflow"
+    oni_consensus.ScriptVerifyFailed -> "Verify failed"
+    oni_consensus.ScriptEqualVerifyFailed -> "Equal verify failed"
+    oni_consensus.ScriptCheckSigFailed -> "Signature verification failed"
+    oni_consensus.ScriptCheckMultisigFailed -> "Multisig verification failed"
+    oni_consensus.ScriptCheckLockTimeVerifyFailed -> "CLTV verification failed"
+    oni_consensus.ScriptCheckSequenceVerifyFailed -> "CSV verification failed"
+    oni_consensus.ScriptPushSizeExceeded -> "Push size exceeded"
+    oni_consensus.ScriptOpCountExceeded -> "Op count exceeded"
+    oni_consensus.ScriptBadOpcode -> "Bad opcode"
+    oni_consensus.ScriptMinimalData -> "Non-minimal data encoding"
+    oni_consensus.ScriptWitnessMalleated -> "Witness malleated"
+    oni_consensus.ScriptWitnessUnexpected -> "Unexpected witness"
+    oni_consensus.ScriptCleanStack -> "Clean stack requirement not met"
+    oni_consensus.ScriptSizeTooLarge -> "Script too large"
+
+    // Transaction errors
+    oni_consensus.TxMissingInputs -> "Missing inputs"
+    oni_consensus.TxDuplicateInputs -> "Duplicate inputs"
+    oni_consensus.TxEmptyInputs -> "Transaction has no inputs"
+    oni_consensus.TxEmptyOutputs -> "Transaction has no outputs"
+    oni_consensus.TxOversized -> "Transaction too large"
+    oni_consensus.TxBadVersion -> "Bad transaction version"
+    oni_consensus.TxInvalidAmount -> "Invalid transaction amount"
+    oni_consensus.TxOutputValueOverflow -> "Output value overflow"
+    oni_consensus.TxInputNotFound -> "Input not found"
+    oni_consensus.TxInputSpent -> "Input already spent"
+    oni_consensus.TxInputsNotAvailable -> "Inputs not available"
+    oni_consensus.TxPrematureCoinbaseSpend -> "Premature coinbase spend"
+    oni_consensus.TxSequenceLockNotMet -> "Sequence lock not met"
+    oni_consensus.TxLockTimeNotMet -> "Locktime not met"
+    oni_consensus.TxSigOpCountExceeded -> "Sigop count exceeded"
+
+    // Block errors
+    oni_consensus.BlockInvalidHeader -> "Invalid block header"
+    oni_consensus.BlockInvalidPoW -> "Invalid proof of work"
+    oni_consensus.BlockInvalidMerkleRoot -> "Invalid merkle root"
+    oni_consensus.BlockInvalidWitnessCommitment -> "Invalid witness commitment"
+    oni_consensus.BlockTimestampTooOld -> "Block timestamp too old"
+    oni_consensus.BlockTimestampTooFar -> "Block timestamp too far in future"
+    oni_consensus.BlockBadVersion -> "Bad block version"
+    oni_consensus.BlockTooLarge -> "Block too large"
+    oni_consensus.BlockWeightExceeded -> "Block weight exceeded"
+    oni_consensus.BlockBadCoinbase -> "Bad coinbase"
+    oni_consensus.BlockDuplicateTx -> "Duplicate transaction in block"
+    oni_consensus.BlockBadPrevBlock -> "Bad previous block"
+
+    // Other
+    oni_consensus.Other(msg) -> msg
   }
 }
 
