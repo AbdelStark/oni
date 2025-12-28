@@ -454,11 +454,11 @@ fn handle_post_request(
       // Check authentication
       let authenticated = check_auth(request, config)
 
-      case authenticated {
-        False when config.allow_anonymous == False -> {
+      case authenticated, config.allow_anonymous {
+        False, False -> {
           #(server, auth_required_response())
         }
-        _ -> {
+        _, _ -> {
           // Parse and handle RPC request
           case bit_array.to_string(request.body) {
             Error(_) -> #(server, error_response(HttpBadRequest("Invalid body encoding")))

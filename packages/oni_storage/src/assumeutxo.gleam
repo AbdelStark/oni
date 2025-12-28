@@ -172,7 +172,7 @@ pub fn find_snapshot_at_height(
 /// Find the latest known snapshot
 pub fn find_latest_snapshot(network: Network) -> Option(KnownSnapshot) {
   let snapshots = get_known_snapshots(network)
-  list.fold(snapshots, None, fn(acc, snap) {
+  list.fold(snapshots, None, fn(acc: Option(KnownSnapshot), snap: KnownSnapshot) {
     case acc {
       None -> Some(snap)
       Some(current) -> {

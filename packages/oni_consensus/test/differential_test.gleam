@@ -123,23 +123,23 @@ pub fn parse_script_flags(flags_str: String) -> ScriptTestFlags {
 pub fn script_test_flags_to_consensus_flags(test_flags: ScriptTestFlags) -> oni_consensus.ScriptFlags {
   oni_consensus.ScriptFlags(
     verify_p2sh: test_flags.p2sh,
-    verify_strictenc: test_flags.strictenc,
+    verify_witness: test_flags.witness,
+    verify_minimaldata: test_flags.minimaldata,
+    verify_cleanstack: test_flags.cleanstack,
     verify_dersig: test_flags.dersig,
     verify_low_s: test_flags.low_s,
     verify_nulldummy: test_flags.nulldummy,
     verify_sigpushonly: test_flags.sigpushonly,
-    verify_minimaldata: test_flags.minimaldata,
-    verify_discourage_upgradable_nops: test_flags.discourage_upgradable_nops,
-    verify_cleanstack: test_flags.cleanstack,
-    verify_checklocktimeverify: test_flags.checklocktimeverify,
-    verify_checksequenceverify: test_flags.checksequenceverify,
-    verify_witness: test_flags.witness,
-    verify_discourage_upgradable_witness_program: test_flags.discourage_upgradable_witness_program,
+    verify_strictenc: test_flags.strictenc,
     verify_minimalif: test_flags.minimalif,
     verify_nullfail: test_flags.nullfail,
     verify_witness_pubkeytype: test_flags.witness_pubkeytype,
-    verify_const_scriptcode: test_flags.const_scriptcode,
     verify_taproot: test_flags.taproot,
+    verify_discourage_upgradable_nops: test_flags.discourage_upgradable_nops,
+    verify_discourage_upgradable_witness_program: test_flags.discourage_upgradable_witness_program,
+    verify_discourage_upgradable_taproot_version: False,
+    verify_discourage_op_success: False,
+    verify_discourage_upgradable_pubkeytype: False,
   )
 }
 
@@ -376,22 +376,24 @@ pub fn run_script_test(test_case: ScriptTestCase) -> Result(Nil, String) {
 
 fn error_to_string(err: oni_consensus.ConsensusError) -> String {
   case err {
-    oni_consensus.ScriptInvalidOpcode -> "INVALID_OPCODE"
+    oni_consensus.ScriptInvalid -> "INVALID"
     oni_consensus.ScriptDisabledOpcode -> "DISABLED_OPCODE"
     oni_consensus.ScriptStackUnderflow -> "STACK_UNDERFLOW"
     oni_consensus.ScriptStackOverflow -> "STACK_OVERFLOW"
     oni_consensus.ScriptVerifyFailed -> "VERIFY"
-    oni_consensus.ScriptOpReturnEncountered -> "OP_RETURN"
+    oni_consensus.ScriptEqualVerifyFailed -> "EQUALVERIFY"
     oni_consensus.ScriptCheckSigFailed -> "CHECKSIG_FAILED"
     oni_consensus.ScriptCheckMultisigFailed -> "CHECKMULTISIG_FAILED"
-    oni_consensus.ScriptInvalidPushSize -> "INVALID_PUSH_SIZE"
-    oni_consensus.ScriptElementSizeExceeded -> "ELEMENT_SIZE_EXCEEDED"
+    oni_consensus.ScriptCheckLockTimeVerifyFailed -> "CHECKLOCKTIMEVERIFY_FAILED"
+    oni_consensus.ScriptCheckSequenceVerifyFailed -> "CHECKSEQUENCEVERIFY_FAILED"
+    oni_consensus.ScriptPushSizeExceeded -> "PUSH_SIZE_EXCEEDED"
     oni_consensus.ScriptOpCountExceeded -> "OP_COUNT_EXCEEDED"
-    oni_consensus.ScriptScriptSizeExceeded -> "SCRIPT_SIZE_EXCEEDED"
-    oni_consensus.ScriptInvalidScriptNum -> "INVALID_SCRIPT_NUM"
-    oni_consensus.ScriptDivByZero -> "DIV_BY_ZERO"
-    oni_consensus.ScriptNegativeLocktime -> "NEGATIVE_LOCKTIME"
-    oni_consensus.ScriptUnsatisfiedLocktime -> "UNSATISFIED_LOCKTIME"
+    oni_consensus.ScriptBadOpcode -> "BAD_OPCODE"
+    oni_consensus.ScriptMinimalData -> "MINIMAL_DATA"
+    oni_consensus.ScriptWitnessMalleated -> "WITNESS_MALLEATED"
+    oni_consensus.ScriptWitnessUnexpected -> "WITNESS_UNEXPECTED"
+    oni_consensus.ScriptCleanStack -> "CLEAN_STACK"
+    oni_consensus.ScriptSizeTooLarge -> "SCRIPT_SIZE"
     _ -> "UNKNOWN_ERROR"
   }
 }
@@ -413,11 +415,11 @@ fn run_tests_accumulator(
 ) -> #(Int, Int, List(String)) {
   case tests {
     [] -> #(passed, failed, list.reverse(failures))
-    [test, ..rest] -> {
-      case run_script_test(test) {
+    [test_case, ..rest] -> {
+      case run_script_test(test_case) {
         Ok(Nil) -> run_tests_accumulator(rest, passed + 1, failed, failures)
         Error(msg) -> {
-          let failure_msg = test.comment <> ": " <> msg
+          let failure_msg = test_case.comment <> ": " <> msg
           run_tests_accumulator(rest, passed, failed + 1, [failure_msg, ..failures])
         }
       }
@@ -516,7 +518,7 @@ fn parse_sighash_type(type_str: String) -> oni_consensus.SighashType {
       oni_consensus.SighashAnyoneCanPay(oni_consensus.SighashNone)
     "SIGHASH_SINGLE|SIGHASH_ANYONECANPAY" ->
       oni_consensus.SighashAnyoneCanPay(oni_consensus.SighashSingle)
-    "SIGHASH_DEFAULT" -> oni_consensus.SighashDefault
+    "SIGHASH_DEFAULT" -> oni_consensus.SighashAll  // Default = ALL for Taproot
     "TAPSCRIPT" -> oni_consensus.SighashAll  // Use ALL for tapscript
     _ -> oni_consensus.SighashAll
   }

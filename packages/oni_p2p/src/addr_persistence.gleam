@@ -158,7 +158,8 @@ fn check_magic(bytes: BitArray) -> Bool {
 }
 
 /// Entry size in bytes (fixed)
-const entry_size = 8 + 16 + 2 + 8 + 8 + 4 + 4  // = 50 bytes
+/// 8 (timestamp) + 16 (ip) + 2 (port) + 8 (services) + 8 (last_connect) + 4 (attempts) + 4 (success) = 50 bytes
+const entry_size = 50
 
 fn parse_entries(
   data: BitArray,

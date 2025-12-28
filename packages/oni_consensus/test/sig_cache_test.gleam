@@ -5,7 +5,7 @@ import gleam/option.{None, Some}
 import gleeunit
 import gleeunit/should
 import oni_bitcoin
-import oni_consensus/sig_cache
+import sig_cache
 
 pub fn main() {
   gleeunit.main()
@@ -182,7 +182,7 @@ pub fn sig_cache_hit_ratio_test() {
   // Hit ratio should be 3/4 = 0.75
   let ratio = sig_cache.sig_cache_hit_ratio(cache6)
   // Allow small floating point error
-  should.be_true(ratio > 0.74 && ratio < 0.76)
+  should.be_true(ratio >. 0.74 && ratio <. 0.76)
 }
 
 pub fn sig_cache_invalid_cached_count_test() {
@@ -210,11 +210,11 @@ pub fn sig_cache_eviction_test() {
 
   // Size should be reduced
   let size = sig_cache.sig_cache_size(filled)
-  size |> should.be_true(size <= 100)
+  should.be_true(size <= 100)
 
   // Stats should show evictions
   let stats = sig_cache.sig_cache_stats(filled)
-  stats.evictions |> should.be_true(stats.evictions > 0)
+  should.be_true(stats.evictions > 0)
 }
 
 // ============================================================================
@@ -334,7 +334,7 @@ pub fn sig_cache_detailed_stats_test() {
   stats.size |> should.equal(2)
   stats.max_size |> should.equal(1000)
   stats.additions |> should.equal(2)
-  stats.memory_estimate_bytes |> should.be_true(stats.memory_estimate_bytes > 0)
+  should.be_true(stats.memory_estimate_bytes > 0)
 }
 
 // ============================================================================

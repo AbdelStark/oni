@@ -797,27 +797,34 @@ pub fn fee_estimator_estimate(
 
   // Look for exact match first
   case dict.get(est.history, target_blocks) {
-    Ok(samples) when list.length(samples) >= 10 -> {
-      let fee_rate = percentile(samples, 50)
-      Some(FeeEstimate(
-        fee_rate: fee_rate,
-        target_blocks: target_blocks,
-        confidence: calculate_confidence(list.length(samples)),
-      ))
-    }
-    _ -> {
-      // Fall back to recent block median
-      case list.is_empty(est.block_rates) {
-        True -> None
-        False -> {
-          let fee_rate = percentile(est.block_rates, 50)
+    Ok(samples) -> {
+      case list.length(samples) >= 10 {
+        True -> {
+          let fee_rate = percentile(samples, 50)
           Some(FeeEstimate(
             fee_rate: fee_rate,
             target_blocks: target_blocks,
-            confidence: 0.5,  // Lower confidence
+            confidence: calculate_confidence(list.length(samples)),
           ))
         }
+        False -> fallback_estimate(est, target_blocks)
       }
+    }
+    _ -> fallback_estimate(est, target_blocks)
+  }
+}
+
+/// Fallback fee estimation using recent block median
+fn fallback_estimate(est: FeeEstimator, target_blocks: Int) -> Option(FeeEstimate) {
+  case list.is_empty(est.block_rates) {
+    True -> None
+    False -> {
+      let fee_rate = percentile(est.block_rates, 50)
+      Some(FeeEstimate(
+        fee_rate: fee_rate,
+        target_blocks: target_blocks,
+        confidence: 0.5,  // Lower confidence
+      ))
     }
   }
 }

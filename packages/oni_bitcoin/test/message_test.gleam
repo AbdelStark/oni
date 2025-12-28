@@ -2,7 +2,7 @@
 
 import gleam/bit_array
 import gleam/result
-import oni_bitcoin/message.{
+import message.{
   AddressMismatch, InvalidSignatureFormat, InvalidSignatureHeader,
   InvalidSignatureLength, P2PKH, P2SHP2WPKH, P2WPKH,
 }
@@ -17,14 +17,14 @@ pub fn message_hash_deterministic_test() {
   let hash1 = message.message_hash(msg)
   let hash2 = message.message_hash(msg)
 
-  assert hash1 == hash2
+  let assert True = hash1 == hash2
 }
 
 pub fn message_hash_different_messages_test() {
   let hash1 = message.message_hash("Hello")
   let hash2 = message.message_hash("World")
 
-  assert hash1 != hash2
+  let assert True = hash1 != hash2
 }
 
 pub fn message_preimage_includes_magic_test() {
@@ -34,8 +34,8 @@ pub fn message_preimage_includes_magic_test() {
   // Preimage should start with magic bytes
   // Magic: "\x18Bitcoin Signed Message:\n"
   case preimage {
-    <<24, 66, 105, 116, 99, 111, 105, 110, _rest:bits>> -> assert True
-    _ -> assert False
+    <<24, 66, 105, 116, 99, 111, 105, 110, _rest:bits>> -> Nil
+    _ -> panic as "Preimage should start with magic bytes"
   }
 }
 
@@ -51,8 +51,8 @@ pub fn parse_valid_signature_test() {
   let result = message.parse_signature(sig_base64)
 
   case result {
-    Ok(_sig) -> assert True
-    Error(_) -> assert False
+    Ok(_sig) -> Nil
+    Error(_) -> panic as "Should parse valid signature"
   }
 }
 
@@ -63,7 +63,7 @@ pub fn parse_invalid_length_signature_test() {
 
   let result = message.parse_signature(sig_base64)
 
-  assert result == Error(InvalidSignatureLength)
+  let assert True = result == Error(InvalidSignatureLength)
 }
 
 pub fn get_signature_header_test() {
@@ -71,7 +71,7 @@ pub fn get_signature_header_test() {
 
   let result = message.get_signature_header(sig)
 
-  assert result == Ok(31)
+  let assert True = result == Ok(31)
 }
 
 pub fn get_signature_r_test() {
@@ -81,7 +81,7 @@ pub fn get_signature_r_test() {
 
   let result = message.get_signature_r(sig)
 
-  assert result == Ok(r_bytes)
+  let assert True = result == Ok(r_bytes)
 }
 
 // ============================================================================
@@ -93,8 +93,8 @@ pub fn address_type_uncompressed_p2pkh_test() {
   let result = message.address_type_from_header(27)
 
   case result {
-    Ok(#(P2PKH, False, 0)) -> assert True
-    _ -> assert False
+    Ok(#(P2PKH, False, 0)) -> Nil
+    _ -> panic as "Should detect uncompressed P2PKH"
   }
 }
 
@@ -103,8 +103,8 @@ pub fn address_type_compressed_p2pkh_test() {
   let result = message.address_type_from_header(31)
 
   case result {
-    Ok(#(P2PKH, True, 0)) -> assert True
-    _ -> assert False
+    Ok(#(P2PKH, True, 0)) -> Nil
+    _ -> panic as "Should detect compressed P2PKH"
   }
 }
 
@@ -113,8 +113,8 @@ pub fn address_type_p2sh_p2wpkh_test() {
   let result = message.address_type_from_header(35)
 
   case result {
-    Ok(#(P2SHP2WPKH, True, 0)) -> assert True
-    _ -> assert False
+    Ok(#(P2SHP2WPKH, True, 0)) -> Nil
+    _ -> panic as "Should detect P2SH-P2WPKH"
   }
 }
 
@@ -123,8 +123,8 @@ pub fn address_type_p2wpkh_test() {
   let result = message.address_type_from_header(39)
 
   case result {
-    Ok(#(P2WPKH, True, 0)) -> assert True
-    _ -> assert False
+    Ok(#(P2WPKH, True, 0)) -> Nil
+    _ -> panic as "Should detect P2WPKH"
   }
 }
 
@@ -132,7 +132,7 @@ pub fn address_type_invalid_header_test() {
   // Header 99 is invalid
   let result = message.address_type_from_header(99)
 
-  assert result == Error(InvalidSignatureHeader)
+  let assert True = result == Error(InvalidSignatureHeader)
 }
 
 // ============================================================================
@@ -152,10 +152,10 @@ pub fn prepare_verification_valid_test() {
 
   case result {
     Ok(ctx) -> {
-      assert ctx.address == "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2"
-      assert ctx.compressed == True
+      let assert True = ctx.address == "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2"
+      let assert True = ctx.compressed == True
     }
-    Error(_) -> assert False
+    Error(_) -> panic as "Should prepare verification context"
   }
 }
 
@@ -170,7 +170,7 @@ pub fn prepare_verification_address_mismatch_test() {
     "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4",  // P2WPKH address
   )
 
-  assert result == Error(AddressMismatch)
+  let assert True = result == Error(AddressMismatch)
 }
 
 // ============================================================================
@@ -180,18 +180,18 @@ pub fn prepare_verification_address_mismatch_test() {
 pub fn prepare_signing_test() {
   let ctx = message.prepare_signing("Test message", P2PKH, True)
 
-  assert ctx.message == "Test message"
-  assert ctx.compressed == True
+  let assert True = ctx.message == "Test message"
+  let assert True = ctx.compressed == True
 }
 
 pub fn calculate_signature_header_test() {
   // Compressed P2PKH with recovery ID 0
   let header = message.calculate_signature_header(P2PKH, True, 0)
-  assert header == 31
+  let assert True = header == 31
 
   // Uncompressed P2PKH with recovery ID 1
   let header2 = message.calculate_signature_header(P2PKH, False, 1)
-  assert header2 == 28
+  let assert True = header2 == 28
 }
 
 // ============================================================================
@@ -201,13 +201,13 @@ pub fn calculate_signature_header_test() {
 pub fn validate_message_normal_test() {
   let result = message.validate_message("Normal message")
 
-  assert result == Ok(Nil)
+  let assert True = result == Ok(Nil)
 }
 
 pub fn validate_message_empty_test() {
   let result = message.validate_message("")
 
-  assert result == Ok(Nil)
+  let assert True = result == Ok(Nil)
 }
 
 // ============================================================================
@@ -224,11 +224,11 @@ pub fn format_signed_message_test() {
   )
 
   // Should contain the expected sections
-  assert string_contains(formatted, "BEGIN BITCOIN SIGNED MESSAGE")
-  assert string_contains(formatted, "Hello, Bitcoin!")
-  assert string_contains(formatted, "BEGIN SIGNATURE")
-  assert string_contains(formatted, "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2")
-  assert string_contains(formatted, "END BITCOIN SIGNED MESSAGE")
+  let assert True = string_contains(formatted, "BEGIN BITCOIN SIGNED MESSAGE")
+  let assert True = string_contains(formatted, "Hello, Bitcoin!")
+  let assert True = string_contains(formatted, "BEGIN SIGNATURE")
+  let assert True = string_contains(formatted, "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2")
+  let assert True = string_contains(formatted, "END BITCOIN SIGNED MESSAGE")
 }
 
 pub fn parse_formatted_message_test() {
@@ -244,10 +244,10 @@ pub fn parse_formatted_message_test() {
 
   case result {
     Ok(#(msg, addr, _sig)) -> {
-      assert msg == "Test"
-      assert addr == "1TestAddr"
+      let assert True = msg == "Test"
+      let assert True = addr == "1TestAddr"
     }
-    Error(_) -> assert False
+    Error(_) -> panic as "Should parse formatted message"
   }
 }
 
@@ -266,9 +266,9 @@ pub fn create_signature_valid_test() {
   case result {
     Ok(sig) -> {
       // Verify it's 65 bytes
-      assert bit_array.byte_size(sig.bytes) == 65
+      let assert True = bit_array.byte_size(sig.bytes) == 65
     }
-    Error(_) -> assert False
+    Error(_) -> panic as "Should create valid signature"
   }
 }
 
@@ -278,7 +278,7 @@ pub fn create_signature_invalid_r_length_test() {
 
   let result = message.create_signature(31, r, s)
 
-  assert result == Error(InvalidSignatureFormat)
+  let assert True = result == Error(InvalidSignatureFormat)
 }
 
 // ============================================================================

@@ -16,18 +16,18 @@ pub fn new_initiator_creates_session_test() {
   let privkey = <<1:256>>
   let session = v2_transport.new_initiator(privkey)
 
-  assert session.is_initiator == True
-  assert session.state == AwaitingEllswift
-  assert session.send_counter == 0
-  assert session.recv_counter == 0
+  let assert True = session.is_initiator == True
+  let assert True = session.state == AwaitingEllswift
+  let assert True = session.send_counter == 0
+  let assert True = session.recv_counter == 0
 }
 
 pub fn new_responder_creates_session_test() {
   let privkey = <<2:256>>
   let session = v2_transport.new_responder(privkey)
 
-  assert session.is_initiator == False
-  assert session.state == AwaitingEllswift
+  let assert True = session.is_initiator == False
+  let assert True = session.state == AwaitingEllswift
 }
 
 pub fn initiator_generates_handshake_data_test() {
@@ -37,7 +37,7 @@ pub fn initiator_generates_handshake_data_test() {
   let handshake = v2_transport.get_handshake_data(session)
 
   // Should be at least 64 bytes (ellswift pubkey)
-  assert bit_array.byte_size(handshake) >= 64
+  let assert True = bit_array.byte_size(handshake) >= 64
 }
 
 // ============================================================================
@@ -45,22 +45,22 @@ pub fn initiator_generates_handshake_data_test() {
 // ============================================================================
 
 pub fn short_id_to_int_test() {
-  assert v2_transport.short_id_to_int(ShortPing) == 18
-  assert v2_transport.short_id_to_int(ShortPong) == 19
-  assert v2_transport.short_id_to_int(ShortTx) == 21
-  assert v2_transport.short_id_to_int(ShortBlock) == 2
+  let assert True = v2_transport.short_id_to_int(ShortPing) == 18
+  let assert True = v2_transport.short_id_to_int(ShortPong) == 19
+  let assert True = v2_transport.short_id_to_int(ShortTx) == 21
+  let assert True = v2_transport.short_id_to_int(ShortBlock) == 2
 }
 
 pub fn int_to_short_id_test() {
-  assert v2_transport.int_to_short_id(18) == Ok(ShortPing)
-  assert v2_transport.int_to_short_id(19) == Ok(ShortPong)
-  assert v2_transport.int_to_short_id(21) == Ok(ShortTx)
-  assert v2_transport.int_to_short_id(2) == Ok(ShortBlock)
+  let assert True = v2_transport.int_to_short_id(18) == Ok(ShortPing)
+  let assert True = v2_transport.int_to_short_id(19) == Ok(ShortPong)
+  let assert True = v2_transport.int_to_short_id(21) == Ok(ShortTx)
+  let assert True = v2_transport.int_to_short_id(2) == Ok(ShortBlock)
 }
 
 pub fn int_to_short_id_invalid_test() {
   let result = v2_transport.int_to_short_id(255)
-  assert result == Error(v2_transport.InvalidPacketType)
+  let assert True = result == Error(v2_transport.InvalidPacketType)
 }
 
 pub fn short_id_roundtrip_test() {
@@ -69,7 +69,7 @@ pub fn short_id_roundtrip_test() {
     ShortPing, ShortPong, ShortTx, ShortBlock,
   ]
 
-  assert check_roundtrip(ids)
+  let assert True = check_roundtrip(ids)
 }
 
 fn check_roundtrip(ids: List(v2_transport.ShortMessageId)) -> Bool {
@@ -93,16 +93,16 @@ pub fn create_version_packet_test() {
   let capabilities = <<1, 0, 0, 0>>
   let packet = v2_transport.create_version_packet(capabilities)
 
-  assert packet.packet_type == 0
-  assert packet.contents == capabilities
+  let assert True = packet.packet_type == 0
+  let assert True = packet.contents == capabilities
 }
 
 pub fn create_app_packet_test() {
   let payload = <<"ping data":utf8>>
   let packet = v2_transport.create_app_packet(ShortPing, payload)
 
-  assert packet.packet_type == 18
-  assert packet.contents == payload
+  let assert True = packet.packet_type == 18
+  let assert True = packet.contents == payload
 }
 
 pub fn get_packet_message_id_test() {
@@ -110,7 +110,7 @@ pub fn get_packet_message_id_test() {
 
   let result = v2_transport.get_packet_message_id(packet)
 
-  assert result == Ok(ShortPing)
+  let assert True = result == Ok(ShortPing)
 }
 
 // ============================================================================
@@ -121,14 +121,14 @@ pub fn session_not_established_initially_test() {
   let privkey = <<1:256>>
   let session = v2_transport.new_initiator(privkey)
 
-  assert v2_transport.is_established(session) == False
+  let assert True = v2_transport.is_established(session) == False
 }
 
 pub fn session_id_none_before_handshake_test() {
   let privkey = <<1:256>>
   let session = v2_transport.new_initiator(privkey)
 
-  assert v2_transport.get_session_id(session) == None
+  let assert True = v2_transport.get_session_id(session) == None
 }
 
 pub fn is_initiator_correct_test() {
@@ -137,8 +137,8 @@ pub fn is_initiator_correct_test() {
   let initiator = v2_transport.new_initiator(privkey)
   let responder = v2_transport.new_responder(privkey)
 
-  assert v2_transport.is_initiator(initiator) == True
-  assert v2_transport.is_initiator(responder) == False
+  let assert True = v2_transport.is_initiator(initiator) == True
+  let assert True = v2_transport.is_initiator(responder) == False
 }
 
 // ============================================================================
@@ -147,13 +147,13 @@ pub fn is_initiator_correct_test() {
 
 pub fn constants_are_correct_test() {
   // Verify BIP324 constants
-  assert v2_transport.ellswift_pubkey_size == 64
-  assert v2_transport.max_garbage_size == 4095
-  assert v2_transport.garbage_terminator_size == 16
-  assert v2_transport.rekey_interval == 224
-  assert v2_transport.max_contents_size == 16_777_215
-  assert v2_transport.aead_tag_size == 16
-  assert v2_transport.version_packet_type == 0
+  let assert True = v2_transport.ellswift_pubkey_size == 64
+  let assert True = v2_transport.max_garbage_size == 4095
+  let assert True = v2_transport.garbage_terminator_size == 16
+  let assert True = v2_transport.rekey_interval == 224
+  let assert True = v2_transport.max_contents_size == 16_777_215
+  let assert True = v2_transport.aead_tag_size == 16
+  let assert True = v2_transport.version_packet_type == 0
 }
 
 // ============================================================================
@@ -172,10 +172,10 @@ pub fn process_insufficient_data_buffers_test() {
   case result {
     Ok(new_session) -> {
       // Should still be awaiting ellswift, data buffered
-      assert new_session.state == AwaitingEllswift
-      assert bit_array.byte_size(new_session.recv_buffer) == 32
+      let assert True = new_session.state == AwaitingEllswift
+      let assert True = bit_array.byte_size(new_session.recv_buffer) == 32
     }
-    Error(_) -> assert False
+    Error(_) -> panic as "Should buffer insufficient data"
   }
 }
 
@@ -191,10 +191,10 @@ pub fn process_full_ellswift_advances_state_test() {
   case result {
     Ok(new_session) -> {
       // Should advance to awaiting garbage terminator
-      assert new_session.state == AwaitingGarbageTerminator
-      assert new_session.their_pubkey != None
+      let assert True = new_session.state == AwaitingGarbageTerminator
+      let assert True = new_session.their_pubkey != None
     }
-    Error(_) -> assert False
+    Error(_) -> panic as "Should advance state on full ellswift"
   }
 }
 
@@ -210,7 +210,7 @@ pub fn encrypt_packet_requires_established_test() {
   let result = v2_transport.encrypt_packet(session, packet)
 
   // Should fail because session not established
-  assert result == Error(v2_transport.ConnectionClosed)
+  let assert True = result == Error(v2_transport.ConnectionClosed)
 }
 
 // ============================================================================
@@ -228,11 +228,11 @@ pub fn recv_during_handshake_processes_handshake_test() {
   case result {
     Ok(#(packet, new_session)) -> {
       // No packet yet
-      assert packet == None
+      let assert True = packet == None
       // Session should buffer data
-      assert bit_array.byte_size(new_session.recv_buffer) == 32
+      let assert True = bit_array.byte_size(new_session.recv_buffer) == 32
     }
-    Error(_) -> assert False
+    Error(_) -> panic as "Should buffer data during handshake"
   }
 }
 
@@ -268,9 +268,9 @@ pub fn initiator_responder_can_exchange_pubkeys_test() {
   // Both should advance
   case init_result, resp_result {
     Ok(new_init), Ok(new_resp) -> {
-      assert new_init.their_pubkey != None
-      assert new_resp.their_pubkey != None
+      let assert True = new_init.their_pubkey != None
+      let assert True = new_resp.their_pubkey != None
     }
-    _, _ -> assert False
+    _, _ -> panic as "Both should process pubkey exchange"
   }
 }
