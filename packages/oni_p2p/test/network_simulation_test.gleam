@@ -297,17 +297,17 @@ pub fn getaddr_response_test() {
 
 pub fn tx_inv_relay_test() {
   // Test transaction inventory relay
-  let relay = relay.tx_relay_new()
+  let tx_relay = relay.tx_relay_new()
 
   // Create a test txid
   let assert Ok(txid) = oni_bitcoin.txid_from_bytes(<<1:256>>)
 
   // Queue for announcement
-  let relay2 = relay.tx_relay_announce(relay, txid)
+  let tx_relay2 = relay.tx_relay_announce(tx_relay, txid)
 
   // Get inv for peer
   let peer = oni_p2p.peer_id("peer1")
-  let #(relay3, msg_opt) = relay.tx_relay_get_inv(relay2, peer, 1700000000)
+  let #(_tx_relay3, msg_opt) = relay.tx_relay_get_inv(tx_relay2, peer, 1700000000)
 
   case msg_opt {
     Some(oni_p2p.MsgInv(items)) -> {
@@ -324,17 +324,17 @@ pub fn tx_inv_relay_test() {
 
 pub fn block_inv_relay_test() {
   // Test block inventory relay
-  let relay = relay.block_relay_new()
+  let blk_relay = relay.block_relay_new()
 
   // Create a test block hash
   let assert Ok(hash) = oni_bitcoin.block_hash_from_bytes(<<2:256>>)
 
   // Queue for announcement
-  let relay2 = relay.block_relay_announce(relay, hash)
+  let blk_relay2 = relay.block_relay_announce(blk_relay, hash)
 
   // Get inv for peer
   let peer = oni_p2p.peer_id("peer1")
-  let #(_relay3, msg_opt) = relay.block_relay_get_inv(relay2, peer)
+  let #(_blk_relay3, msg_opt) = relay.block_relay_get_inv(blk_relay2, peer)
 
   case msg_opt {
     Some(oni_p2p.MsgInv(items)) -> {
@@ -351,18 +351,18 @@ pub fn block_inv_relay_test() {
 
 pub fn inv_deduplication_test() {
   // Test that inv messages are not re-sent to the same peer
-  let relay = relay.tx_relay_new()
+  let tx_relay = relay.tx_relay_new()
   let assert Ok(txid) = oni_bitcoin.txid_from_bytes(<<3:256>>)
 
-  let relay2 = relay.tx_relay_announce(relay, txid)
+  let tx_relay2 = relay.tx_relay_announce(tx_relay, txid)
 
   let peer = oni_p2p.peer_id("peer1")
 
   // First announcement
-  let #(relay3, msg1) = relay.tx_relay_get_inv(relay2, peer, 1700000000)
+  let #(tx_relay3, msg1) = relay.tx_relay_get_inv(tx_relay2, peer, 1700000000)
 
   // Second announcement should be None (already sent)
-  let #(_relay4, msg2) = relay.tx_relay_get_inv(relay3, peer, 1700001000)
+  let #(_tx_relay4, msg2) = relay.tx_relay_get_inv(tx_relay3, peer, 1700001000)
 
   case msg1 {
     Some(_) -> should.be_ok(Ok(Nil))
@@ -594,7 +594,7 @@ pub fn stale_tip_attack_defense_test() {
 
 pub fn high_message_volume_test() {
   // Test handling high message volume
-  let relay = relay.tx_relay_new()
+  let tx_relay = relay.tx_relay_new()
 
   // Generate many txids
   let txids = list.range(1, 1000)
@@ -605,7 +605,7 @@ pub fn high_message_volume_test() {
     })
 
   // Queue all for announcement
-  let relay_with_txs = list.fold(txids, relay, relay.tx_relay_announce)
+  let _relay_with_txs = list.fold(txids, tx_relay, relay.tx_relay_announce)
 
   // Should handle 1000 txs without error
   list.length(txids) |> should.equal(1000)

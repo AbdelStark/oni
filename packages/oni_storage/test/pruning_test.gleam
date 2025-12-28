@@ -206,7 +206,7 @@ pub fn get_stats_test() {
 
   should.equal(stats.enabled, True)
   should.equal(stats.highest_height, 1000)
-  should.equal(stats.lowest_height, 1)  // pruned_height + 1 = 0 + 1
+  should.equal(stats.lowest_height, 0)  // No pruning yet, genesis is available
 }
 
 // ============================================================================
