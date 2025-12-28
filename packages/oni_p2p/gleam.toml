@@ -1,6 +1,6 @@
 name = "oni_p2p"
 version = "0.1.0"
-gleam = ">= 1.0.0"
+gleam = ">= 1.5.0"
 description = "Bitcoin P2P networking, peer management, and relay for oni."
 licences = ["MIT"]
 target = "erlang"

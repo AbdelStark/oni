@@ -447,6 +447,121 @@ fn do_hex_decode(hex: String, acc: BitArray) -> Result(BitArray, String) {
   }
 }
 
+/// Encode bytes to hex string
+pub fn bytes_to_hex(bytes: BitArray) -> String {
+  do_bytes_to_hex(bytes, "")
+}
+
+fn do_bytes_to_hex(bytes: BitArray, acc: String) -> String {
+  case bytes {
+    <<byte:8, rest:bits>> -> {
+      let hi = int_to_hex_char(byte / 16)
+      let lo = int_to_hex_char(byte % 16)
+      do_bytes_to_hex(rest, acc <> hi <> lo)
+    }
+    _ -> acc
+  }
+}
+
+fn int_to_hex_char(n: Int) -> String {
+  case n {
+    0 -> "0"
+    1 -> "1"
+    2 -> "2"
+    3 -> "3"
+    4 -> "4"
+    5 -> "5"
+    6 -> "6"
+    7 -> "7"
+    8 -> "8"
+    9 -> "9"
+    10 -> "a"
+    11 -> "b"
+    12 -> "c"
+    13 -> "d"
+    14 -> "e"
+    15 -> "f"
+    _ -> "?"
+  }
+}
+
+/// Convert a Wtxid to hex string (display byte order - reversed)
+pub fn wtxid_to_hex(wtxid: Wtxid) -> String {
+  let Wtxid(Hash256(bytes)) = wtxid
+  hex_encode(reverse_bytes(bytes))
+}
+
+/// Decode a bech32/bech32m address to version and program
+pub fn decode_bech32_address(address: String) -> Result(#(Int, BitArray), String) {
+  case bech32_decode(address) {
+    Error(e) -> Error(e)
+    Ok(#(_hrp, data, _variant)) -> {
+      case data {
+        [version, ..rest] -> {
+          // Convert 5-bit groups to bytes
+          case convert_bits_5to8(rest) {
+            Error(e) -> Error(e)
+            Ok(program) -> Ok(#(version, program))
+          }
+        }
+        _ -> Error("Empty bech32 data")
+      }
+    }
+  }
+}
+
+fn convert_bits_5to8(input: List(Int)) -> Result(BitArray, String) {
+  // Convert list of 5-bit values to 8-bit bytes
+  // We accumulate bits and emit bytes when we have 8
+  let result = do_convert_bits_5to8(input, 0, 0, <<>>)
+  Ok(result)
+}
+
+fn do_convert_bits_5to8(input: List(Int), acc: Int, bits: Int, result: BitArray) -> BitArray {
+  case input {
+    [] -> {
+      // If we have remaining bits, ignore padding
+      result
+    }
+    [val, ..rest] -> {
+      // Add 5 bits to accumulator
+      let new_acc = { acc * 32 } + val
+      let new_bits = bits + 5
+
+      case new_bits >= 8 {
+        True -> {
+          // Extract a byte
+          let shift = new_bits - 8
+          let byte = new_acc / { 1 * power_of_2(shift) }
+          let remaining = new_acc % { 1 * power_of_2(shift) }
+          do_convert_bits_5to8(rest, remaining, shift, bit_array.append(result, <<byte:8>>))
+        }
+        False -> do_convert_bits_5to8(rest, new_acc, new_bits, result)
+      }
+    }
+  }
+}
+
+fn power_of_2(n: Int) -> Int {
+  case n {
+    0 -> 1
+    _ -> 2 * power_of_2(n - 1)
+  }
+}
+
+/// Decode a base58check address to version and payload
+pub fn decode_base58check(address: String) -> Result(#(Int, BitArray), String) {
+  case base58check_decode(address) {
+    Error(e) -> Error(e)
+    Ok(decoded) -> {
+      case decoded {
+        <<version:8, payload:bits>> -> Ok(#(version, payload))
+        _ -> Error("Invalid base58check payload")
+      }
+    }
+  }
+}
+
 fn hex_char_to_int(c: String) -> Result(Int, String) {
   case c {
     "0" -> Ok(0)

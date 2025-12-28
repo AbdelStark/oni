@@ -1,1 +1,0 @@
--record(compressed_pub_key, {bytes :: bitstring()}).

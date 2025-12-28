@@ -1,1 +1,0 @@
--record(amount, {sats :: integer()}).

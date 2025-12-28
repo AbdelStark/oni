@@ -8,9 +8,7 @@
 
 import gleeunit
 import gleeunit/should
-import gleam/dict
 import gleam/option.{None, Some}
-import gleam/set
 import oni_bitcoin
 import block_template
 import mempool

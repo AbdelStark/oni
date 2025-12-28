@@ -1,7 +1,6 @@
 // message_test.gleam - Tests for Bitcoin message signing
 
 import gleam/bit_array
-import gleam/result
 import message.{
   AddressMismatch, InvalidSignatureFormat, InvalidSignatureHeader,
   InvalidSignatureLength, P2PKH, P2SHP2WPKH, P2WPKH,

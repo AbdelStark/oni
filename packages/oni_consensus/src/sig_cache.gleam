@@ -15,7 +15,6 @@ import gleam/dict.{type Dict}
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
-import gleam/result
 import oni_bitcoin.{type Hash256, type Txid}
 
 // ============================================================================
@@ -316,7 +315,7 @@ fn evict_lru(cache: SigCache, _timestamp: Int) -> SigCache {
 }
 
 /// Clean up old entries (called periodically)
-fn cleanup_old_entries(cache: SigCache, timestamp: Int) -> SigCache {
+fn cleanup_old_entries(cache: SigCache, _timestamp: Int) -> SigCache {
   // For simplicity, just reset the counter
   // In a full implementation, we might remove very old entries
   // or entries that haven't been accessed in a long time

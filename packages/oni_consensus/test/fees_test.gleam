@@ -3,7 +3,6 @@
 import gleeunit
 import gleeunit/should
 import fees
-import gleam/option.{None, Some}
 
 pub fn main() {
   gleeunit.main()

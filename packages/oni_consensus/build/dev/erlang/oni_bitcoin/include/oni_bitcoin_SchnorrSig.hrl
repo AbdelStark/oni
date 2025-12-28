@@ -1,1 +1,0 @@
--record(schnorr_sig, {bytes :: bitstring()}).

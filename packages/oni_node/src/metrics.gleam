@@ -431,7 +431,7 @@ fn format_metric_line(
   labels: Dict(String, String),
   value: String,
 ) -> String {
-  case dict.is_empty(labels) {
+  case dict.size(labels) == 0 {
     True -> name <> " " <> value
     False -> {
       let label_pairs = dict.to_list(labels)

@@ -16,8 +16,6 @@
 //   - 32 bytes s value
 
 import gleam/bit_array
-import gleam/int
-import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string

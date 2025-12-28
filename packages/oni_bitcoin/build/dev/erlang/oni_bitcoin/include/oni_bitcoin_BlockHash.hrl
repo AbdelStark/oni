@@ -1,1 +1,0 @@
--record(block_hash, {hash :: oni_bitcoin:hash256()}).

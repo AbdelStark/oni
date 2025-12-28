@@ -14,7 +14,6 @@ import gleam/float
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
-import gleam/result
 import gleam/set.{type Set}
 import oni_bitcoin.{
   type Amount, type OutPoint, type Transaction, type Txid,
@@ -447,7 +446,7 @@ fn count_ancestors(
   }
 }
 
-fn update_ancestors_descendants(pool: Mempool, entry: MempoolEntry) -> Mempool {
+fn update_ancestors_descendants(pool: Mempool, _entry: MempoolEntry) -> Mempool {
   // For now, simplified implementation without full tracking
   pool
 }
@@ -695,7 +694,7 @@ pub fn orphan_pool_remove(pool: OrphanPool, txid: Txid) -> OrphanPool {
 pub fn orphan_pool_expire(pool: OrphanPool, current_time: Int) -> OrphanPool {
   let expiry_time = current_time - orphan_expiry_secs
 
-  dict.fold(pool.orphans, pool, fn(acc, key, entry) {
+  dict.fold(pool.orphans, pool, fn(acc, _key, entry) {
     case entry.time < expiry_time {
       True -> orphan_pool_remove(acc, entry.txid)
       False -> acc

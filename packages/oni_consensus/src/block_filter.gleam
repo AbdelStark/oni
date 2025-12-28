@@ -15,10 +15,9 @@ import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/order
-import gleam/result
 import oni_bitcoin.{
-  type Block, type BlockHash, type Hash256, type OutPoint, type Script,
-  type Transaction, type TxOut,
+  type Block, type BlockHash, type Hash256, type OutPoint,
+  type Transaction,
 }
 
 // ============================================================================

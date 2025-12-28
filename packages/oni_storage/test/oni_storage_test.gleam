@@ -659,6 +659,6 @@ pub fn storage_error_types_test() {
 pub fn database_error_test() {
   // Verify DatabaseError contains the message
   let err = oni_storage.DatabaseError("Connection failed")
-  let assert oni_storage.DatabaseError(msg) = err
+  let oni_storage.DatabaseError(msg) = err
   msg |> should.equal("Connection failed")
 }

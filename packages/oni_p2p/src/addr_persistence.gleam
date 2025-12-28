@@ -11,11 +11,10 @@ import gleam/bit_array
 import gleam/dict.{type Dict}
 import gleam/int
 import gleam/list
-import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
 import oni_p2p.{
-  type AddrEntry, type AddrManager, type IpAddr, type NetAddr, type ServiceFlags,
+  type AddrEntry, type AddrManager, type IpAddr, type NetAddr,
   AddrEntry, AddrManager, IPv4, IPv6, NetAddr,
 }
 
@@ -168,12 +167,14 @@ fn parse_entries(
 ) -> Result(AddrManager, PersistenceError) {
   case remaining <= 0 {
     True -> {
-      let tried = dict.keys(acc) |> list.take(100)
+      let _tried = dict.keys(acc) |> list.take(100)
       Ok(AddrManager(
         addrs: acc,
-        tried: tried,
+        tried: [],
         new_addrs: [],
-        last_cleanup: 0,
+        num_tried: dict.size(acc),
+        num_new: 0,
+        rand_seed: 0,
       ))
     }
     False -> {
@@ -204,8 +205,9 @@ fn parse_single_entry(
           ip: ip,
           port: port,
         ),
-        last_try: last_try,
+        source: ip,  // Use same IP as source for persisted entries
         last_success: last_success,
+        last_try: last_try,
         attempts: attempts,
         ref_count: ref_count,
       )
@@ -302,7 +304,9 @@ pub fn import_text(text: String) -> Result(AddrManager, PersistenceError) {
     addrs: addrs,
     tried: [],
     new_addrs: [],
-    last_cleanup: 0,
+    num_tried: dict.size(addrs),
+    num_new: 0,
+    rand_seed: 0,
   ))
 }
 
@@ -322,8 +326,9 @@ fn parse_text_line(line: String) -> Result(AddrEntry, Nil) {
           ip: addr.ip,
           port: addr.port,
         ),
-        last_try: last_try,
+        source: addr.ip,
         last_success: last_success,
+        last_try: last_try,
         attempts: attempts,
         ref_count: 1,
       ))
@@ -434,8 +439,8 @@ pub fn get_stats(manager: AddrManager, current_time: Int) -> PersistenceStats {
   let entries = dict.values(manager.addrs)
   let recent_threshold = current_time - 86_400 * 7  // 7 days
 
-  let with_success = list.count(entries, fn(e) { e.last_success > 0 })
-  let with_recent = list.count(entries, fn(e) { e.last_success > recent_threshold })
+  let with_success = list.filter(entries, fn(e) { e.last_success > 0 }) |> list.length
+  let with_recent = list.filter(entries, fn(e) { e.last_success > recent_threshold }) |> list.length
 
   let #(ipv4, ipv6) = list.fold(entries, #(0, 0), fn(acc, e) {
     let #(v4, v6) = acc

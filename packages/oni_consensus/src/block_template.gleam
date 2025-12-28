@@ -16,10 +16,9 @@ import gleam/float
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
-import gleam/result
 import oni_bitcoin.{
-  type Amount, type Block, type BlockHash, type BlockHeader, type Hash256,
-  type OutPoint, type Script, type Transaction, type TxIn, type TxOut, type Txid,
+  type Block, type BlockHash, type Hash256,
+  type Script, type Transaction, type Txid,
 }
 import gleam/set
 import oni_consensus.{compute_merkle_root}
@@ -305,7 +304,7 @@ fn create_witness_commitment_script(commitment: BitArray) -> Script {
 
 /// Calculate witness commitment for a block
 pub fn calculate_witness_commitment(
-  coinbase_wtxid: Hash256,
+  _coinbase_wtxid: Hash256,
   txs: List(TemplateTransaction),
 ) -> BitArray {
   // Build witness merkle root from wtxids
@@ -408,7 +407,7 @@ fn encode_transaction(tx: Transaction) -> BitArray {
 }
 
 /// Convert template to RPC response format
-pub fn template_to_rpc(template: BlockTemplate) -> Dict(String, a) {
+pub fn template_to_rpc(_template: BlockTemplate) -> Dict(String, a) {
   // This would be used by the RPC layer
   // Returns the getblocktemplate response structure
   dict.new()

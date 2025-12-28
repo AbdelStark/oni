@@ -10,10 +10,9 @@ import gleam/bit_array
 import gleam/int
 import gleam/list
 import gleam/order
-import gleam/result
 import oni_bitcoin.{
   type Amount, type Block, type BlockHash, type BlockHeader, type Hash256,
-  type OutPoint, type Script, type Transaction, type TxIn, type TxOut, type Txid,
+  type OutPoint, type Script, type Transaction, type TxOut, type Txid,
 }
 
 // ============================================================================

@@ -12,7 +12,6 @@ import gleam/dict.{type Dict}
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
-import gleam/result
 import oni_bitcoin.{type BlockHash}
 
 // ============================================================================
@@ -270,12 +269,12 @@ pub fn get_last_checkpoint_height(checkpoints: CheckpointSet) -> Int {
 /// Returns False if the block is before the assumed valid block
 pub fn should_validate_scripts(
   checkpoints: CheckpointSet,
-  block_hash: BlockHash,
+  _block_hash: BlockHash,
   height: Int,
 ) -> Bool {
   case checkpoints.assumed_valid_block {
     None -> True
-    Some(assumed) -> {
+    Some(_assumed) -> {
       // Always validate if we're past the assumed valid point
       // or if we haven't synced to that point yet
       case height > checkpoints.last_checkpoint_height {

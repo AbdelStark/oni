@@ -10,20 +10,18 @@
 
 import gleam/erlang/process.{type Subject}
 import gleam/list
-import gleam/option.{type Option, None, Some}
+import gleam/option.{None, Some}
 import gleam/otp/actor
 import oni_bitcoin
-import supervisor
+import oni_supervisor
 import rpc_service.{
   type BlockTemplateData, type ChainstateQuery, type MempoolQuery,
-  type SubmitBlockResult, type SubmitTxResult, type SyncQuery, type SyncState,
-  type TemplateTxData, BlockTemplateData, QueryBlockTemplate, QueryHeight,
-  QueryMempoolSize, QueryMempoolTxids, QueryNetwork, QuerySyncState, QueryTip,
-  SubmitBlock, SubmitBlockAccepted, SubmitBlockDuplicate, SubmitBlockRejected,
-  SubmitTx, SubmitTxAccepted, SubmitTxRejected, SyncState, TemplateTxData,
+  type SyncQuery, type TemplateTxData, BlockTemplateData, EstimateSmartFee,
+  QueryBlockTemplate, QueryHeight, QueryMempoolSize, QueryMempoolTxids,
+  QueryNetwork, QuerySyncState, QueryTip, SubmitBlock, SubmitBlockAccepted,
+  SubmitBlockDuplicate, SubmitBlockRejected, SubmitTx, SubmitTxAccepted,
+  SubmitTxRejected, SyncState, TemplateTxData, TestMempoolAccept,
 }
-import oni_consensus/block_template
-import oni_consensus/mempool
 
 // ============================================================================
 // Adapter Actor for Chainstate Queries
@@ -31,12 +29,12 @@ import oni_consensus/mempool
 
 /// State for chainstate adapter
 type ChainstateAdapterState {
-  ChainstateAdapterState(target: Subject(supervisor.ChainstateMsg))
+  ChainstateAdapterState(target: Subject(oni_supervisor.ChainstateMsg))
 }
 
 /// Start an adapter that translates RPC chainstate queries to supervisor messages
 pub fn start_chainstate_adapter(
-  chainstate: Subject(supervisor.ChainstateMsg),
+  chainstate: Subject(oni_supervisor.ChainstateMsg),
 ) -> Result(Subject(ChainstateQuery), actor.StartError) {
   actor.start(
     ChainstateAdapterState(target: chainstate),
@@ -51,19 +49,19 @@ fn handle_chainstate_query(
   case msg {
     QueryTip(reply) -> {
       // Forward to supervisor chainstate actor
-      let result = process.call(state.target, supervisor.GetTip, 5000)
+      let result = process.call(state.target, oni_supervisor.GetTip, 5000)
       process.send(reply, result)
       actor.continue(state)
     }
 
     QueryHeight(reply) -> {
-      let result = process.call(state.target, supervisor.GetHeight, 5000)
+      let result = process.call(state.target, oni_supervisor.GetHeight, 5000)
       process.send(reply, result)
       actor.continue(state)
     }
 
     QueryNetwork(reply) -> {
-      let result = process.call(state.target, supervisor.GetNetwork, 5000)
+      let result = process.call(state.target, oni_supervisor.GetNetwork, 5000)
       process.send(reply, result)
       actor.continue(state)
     }
@@ -71,7 +69,7 @@ fn handle_chainstate_query(
     SubmitBlock(block, reply) -> {
       // Submit block to chainstate for validation and connection
       // First check if block connects to our tip (basic validation)
-      let tip_result = process.call(state.target, supervisor.GetTip, 5000)
+      let tip_result = process.call(state.target, oni_supervisor.GetTip, 5000)
 
       case tip_result {
         None -> {
@@ -81,7 +79,7 @@ fn handle_chainstate_query(
         }
         Some(current_tip) -> {
           // Check if this block's prev_hash matches our tip
-          let block_prev = block.header.prev_block_hash
+          let block_prev = block.header.prev_block
           case block_prev == current_tip {
             False -> {
               // Could be duplicate or orphan
@@ -102,7 +100,7 @@ fn handle_chainstate_query(
               // Block connects to our tip, try to connect it
               let connect_result = process.call(
                 state.target,
-                supervisor.ConnectBlock(block, _),
+                oni_supervisor.ConnectBlock(block, _),
                 60_000,
               )
               case connect_result {
@@ -129,12 +127,12 @@ fn handle_chainstate_query(
 
 /// State for mempool adapter
 type MempoolAdapterState {
-  MempoolAdapterState(target: Subject(supervisor.MempoolMsg))
+  MempoolAdapterState(target: Subject(oni_supervisor.MempoolMsg))
 }
 
 /// Start an adapter that translates RPC mempool queries to supervisor messages
 pub fn start_mempool_adapter(
-  mempool: Subject(supervisor.MempoolMsg),
+  mempool: Subject(oni_supervisor.MempoolMsg),
 ) -> Result(Subject(MempoolQuery), actor.StartError) {
   actor.start(
     MempoolAdapterState(target: mempool),
@@ -148,13 +146,13 @@ fn handle_mempool_query(
 ) -> actor.Next(MempoolQuery, MempoolAdapterState) {
   case msg {
     QueryMempoolSize(reply) -> {
-      let result = process.call(state.target, supervisor.GetSize, 5000)
+      let result = process.call(state.target, oni_supervisor.GetSize, 5000)
       process.send(reply, result)
       actor.continue(state)
     }
 
     QueryMempoolTxids(reply) -> {
-      let result = process.call(state.target, supervisor.GetTxids, 5000)
+      let result = process.call(state.target, oni_supervisor.GetTxids, 5000)
       process.send(reply, result)
       actor.continue(state)
     }
@@ -164,7 +162,7 @@ fn handle_mempool_query(
       // Use default height=0 and bits (will be overridden by RPC handler)
       let template_data = process.call(
         state.target,
-        supervisor.GetTemplateData(0, 0x1d00ffff, _),
+        oni_supervisor.GetTemplateData(0, 0x1d00ffff, _),
         30_000,
       )
 
@@ -178,7 +176,7 @@ fn handle_mempool_query(
       // Forward to supervisor mempool's AddTx
       let add_result = process.call(
         state.target,
-        supervisor.AddTx(tx, _),
+        oni_supervisor.AddTx(tx, _),
         30_000,
       )
 
@@ -195,11 +193,35 @@ fn handle_mempool_query(
       }
       actor.continue(state)
     }
+
+    TestMempoolAccept(_tx, _max_fee_rate, reply) -> {
+      // Placeholder - return a basic acceptance result
+      let result = rpc_service.TestAcceptResult(
+        txid: "",
+        allowed: True,
+        vsize: 0,
+        fees: rpc_service.TestAcceptFees(base: 0, effective_feerate: 0.0, effective_includes: []),
+        reject_reason: None,
+      )
+      process.send(reply, result)
+      actor.continue(state)
+    }
+
+    EstimateSmartFee(_target_blocks, _mode, reply) -> {
+      // Placeholder - return a basic fee estimate
+      let result = rpc_service.FeeEstimateResult(
+        feerate: 0.00001,
+        errors: [],
+        blocks: 1,
+      )
+      process.send(reply, result)
+      actor.continue(state)
+    }
   }
 }
 
 /// Convert supervisor template data to RPC format
-fn convert_template_data(data: supervisor.MempoolTemplateData) -> BlockTemplateData {
+fn convert_template_data(data: oni_supervisor.MempoolTemplateData) -> BlockTemplateData {
   let txs = list.map(data.transactions, fn(tx) {
     TemplateTxData(
       data: tx.data_hex,
@@ -232,12 +254,12 @@ fn convert_template_data(data: supervisor.MempoolTemplateData) -> BlockTemplateD
 
 /// State for sync adapter
 type SyncAdapterState {
-  SyncAdapterState(target: Subject(supervisor.SyncMsg))
+  SyncAdapterState(target: Subject(oni_supervisor.SyncMsg))
 }
 
 /// Start an adapter that translates RPC sync queries to supervisor messages
 pub fn start_sync_adapter(
-  sync: Subject(supervisor.SyncMsg),
+  sync: Subject(oni_supervisor.SyncMsg),
 ) -> Result(Subject(SyncQuery), actor.StartError) {
   actor.start(
     SyncAdapterState(target: sync),
@@ -251,7 +273,7 @@ fn handle_sync_query(
 ) -> actor.Next(SyncQuery, SyncAdapterState) {
   case msg {
     QuerySyncState(reply) -> {
-      let status = process.call(state.target, supervisor.GetStatus, 5000)
+      let status = process.call(state.target, oni_supervisor.GetStatus, 5000)
       let is_syncing = status.state != "idle"
       let result = SyncState(
         state: status.state,
@@ -280,7 +302,7 @@ pub type RpcNodeHandles {
 
 /// Create RPC-compatible handles from supervisor handles
 pub fn create_rpc_handles(
-  handles: supervisor.NodeHandles,
+  handles: oni_supervisor.NodeHandles,
 ) -> Result(RpcNodeHandles, actor.StartError) {
   // Start adapter actors
   case start_chainstate_adapter(handles.chainstate) {
@@ -313,20 +335,20 @@ pub fn create_rpc_handles(
 pub fn start_node_with_rpc(
   network: oni_bitcoin.Network,
   mempool_max_size: Int,
-) -> Result(#(supervisor.NodeHandles, RpcNodeHandles), String) {
+) -> Result(#(oni_supervisor.NodeHandles, RpcNodeHandles), String) {
   // Start chainstate
-  case supervisor.start_chainstate(network) {
+  case oni_supervisor.start_chainstate(network) {
     Error(_) -> Error("Failed to start chainstate")
     Ok(chainstate) -> {
       // Start mempool
-      case supervisor.start_mempool(mempool_max_size) {
+      case oni_supervisor.start_mempool(mempool_max_size) {
         Error(_) -> Error("Failed to start mempool")
         Ok(mempool) -> {
           // Start sync
-          case supervisor.start_sync() {
+          case oni_supervisor.start_sync() {
             Error(_) -> Error("Failed to start sync")
             Ok(sync) -> {
-              let node_handles = supervisor.NodeHandles(
+              let node_handles = oni_supervisor.NodeHandles(
                 chainstate: chainstate,
                 mempool: mempool,
                 sync: sync,

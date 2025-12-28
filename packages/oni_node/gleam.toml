@@ -1,6 +1,6 @@
 name = "oni_node"
 version = "0.1.0"
-gleam = ">= 1.0.0"
+gleam = ">= 1.5.0"
 description = "The oni node OTP application (wiring + supervision)."
 licences = ["MIT"]
 target = "erlang"

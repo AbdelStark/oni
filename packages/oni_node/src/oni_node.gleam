@@ -15,7 +15,7 @@ import gleam/option.{None, Some}
 import gleam/result
 import oni_bitcoin
 import oni_consensus
-import supervisor.{
+import oni_supervisor.{
   type ChainstateMsg, type MempoolMsg, type SyncMsg,
   GetHeight, GetStatus, GetTip,
 }
@@ -82,7 +82,7 @@ pub fn start_with_config(config: NodeConfig) -> Result(NodeState, String) {
   io.println("Starting oni node v" <> version <> "...")
 
   // Start chainstate actor
-  let chainstate_result = supervisor.start_chainstate(config.network)
+  let chainstate_result = oni_supervisor.start_chainstate(config.network)
   use chainstate <- result.try(
     chainstate_result
     |> result.map_error(fn(_) { "Failed to start chainstate" })
@@ -90,7 +90,7 @@ pub fn start_with_config(config: NodeConfig) -> Result(NodeState, String) {
   io.println("  ✓ Chainstate started")
 
   // Start mempool actor
-  let mempool_result = supervisor.start_mempool(300_000_000)
+  let mempool_result = oni_supervisor.start_mempool(300_000_000)
   use mempool <- result.try(
     mempool_result
     |> result.map_error(fn(_) { "Failed to start mempool" })
@@ -98,7 +98,7 @@ pub fn start_with_config(config: NodeConfig) -> Result(NodeState, String) {
   io.println("  ✓ Mempool started")
 
   // Start sync coordinator
-  let sync_result = supervisor.start_sync()
+  let sync_result = oni_supervisor.start_sync()
   use sync <- result.try(
     sync_result
     |> result.map_error(fn(_) { "Failed to start sync coordinator" })
@@ -126,16 +126,16 @@ pub fn get_tip(node: NodeState) -> option.Option(oni_bitcoin.BlockHash) {
 }
 
 /// Get sync status
-pub fn get_sync_status(node: NodeState) -> supervisor.SyncStatus {
+pub fn get_sync_status(node: NodeState) -> oni_supervisor.SyncStatus {
   process.call(node.sync, GetStatus, 5000)
 }
 
 /// Stop the node gracefully
 pub fn stop(node: NodeState) -> Nil {
   io.println("Stopping oni node...")
-  process.send(node.chainstate, supervisor.ChainstateShutdown)
-  process.send(node.mempool, supervisor.MempoolShutdown)
-  process.send(node.sync, supervisor.SyncShutdown)
+  process.send(node.chainstate, oni_supervisor.ChainstateShutdown)
+  process.send(node.mempool, oni_supervisor.MempoolShutdown)
+  process.send(node.sync, oni_supervisor.SyncShutdown)
   io.println("Node stopped.")
   Nil
 }

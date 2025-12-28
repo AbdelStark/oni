@@ -13,13 +13,12 @@
 // The service registers stateful handlers that query actual node state.
 
 import gleam/bit_array
-import gleam/dict.{type Dict}
+import gleam/dict
 import gleam/erlang/process.{type Subject}
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
-import gleam/result
 import oni_bitcoin
 import oni_rpc.{
   type MethodHandler, type RpcConfig, type RpcContext, type RpcError,
@@ -834,21 +833,21 @@ fn create_decoderawtransaction_handler() -> MethodHandler {
     case params {
       ParamsArray([RpcString(hex_tx), ..]) -> {
         // Parse the transaction from hex
-        case oni_bitcoin.hex_to_bytes(hex_tx) {
+        case oni_bitcoin.hex_decode(hex_tx) {
           Error(_) -> Error(InvalidParams("Invalid hex encoding"))
           Ok(tx_bytes) -> {
             // Decode the transaction
-            case oni_bitcoin.decode_transaction(tx_bytes) {
+            case oni_bitcoin.decode_tx(tx_bytes) {
               Error(_) -> Error(InvalidParams("Invalid transaction format"))
               Ok(#(tx, _remaining)) -> {
                 // Build response object
-                let txid = oni_bitcoin.compute_txid(tx)
-                let wtxid = oni_bitcoin.compute_wtxid(tx)
+                let txid = oni_bitcoin.txid_from_tx(tx)
+                let wtxid = oni_bitcoin.wtxid_from_tx(tx)
 
                 let vin = list.index_map(tx.inputs, fn(input, idx) {
                   let input_obj = dict.new()
-                    |> dict.insert("txid", RpcString(oni_bitcoin.txid_to_hex(oni_bitcoin.Txid(input.previous_output.txid))))
-                    |> dict.insert("vout", RpcInt(input.previous_output.vout))
+                    |> dict.insert("txid", RpcString(oni_bitcoin.txid_to_hex(input.prevout.txid)))
+                    |> dict.insert("vout", RpcInt(input.prevout.vout))
                     |> dict.insert("scriptSig", RpcObject(
                       dict.new()
                         |> dict.insert("asm", RpcString(""))
@@ -861,7 +860,7 @@ fn create_decoderawtransaction_handler() -> MethodHandler {
 
                 let vout = list.index_map(tx.outputs, fn(output, idx) {
                   let output_obj = dict.new()
-                    |> dict.insert("value", RpcFloat(int.to_float(oni_bitcoin.amount_to_satoshis(output.value)) /. 100_000_000.0))
+                    |> dict.insert("value", RpcFloat(int.to_float(oni_bitcoin.amount_to_sats(output.value)) /. 100_000_000.0))
                     |> dict.insert("n", RpcInt(idx))
                     |> dict.insert("scriptPubKey", RpcObject(
                       dict.new()
@@ -940,7 +939,7 @@ type AddressValidationResult {
 fn validate_bitcoin_address(address: String) -> AddressValidationResult {
   // Try bech32/bech32m first (native SegWit)
   case oni_bitcoin.decode_bech32_address(address) {
-    Ok(#(_hrp, witness_version, program)) -> {
+    Ok(#(witness_version, program)) -> {
       let script_pubkey = case witness_version {
         0 -> oni_bitcoin.bytes_to_hex(<<0, bit_array.byte_size(program), program:bits>>)
         1 -> oni_bitcoin.bytes_to_hex(<<0x51, bit_array.byte_size(program), program:bits>>)

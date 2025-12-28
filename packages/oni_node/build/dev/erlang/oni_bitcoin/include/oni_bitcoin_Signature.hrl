@@ -1,1 +1,0 @@
--record(signature, {der :: bitstring()}).

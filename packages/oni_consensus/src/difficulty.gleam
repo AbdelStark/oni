@@ -9,9 +9,8 @@
 import gleam/bit_array
 import gleam/float
 import gleam/int
-import gleam/list
 import gleam/option.{type Option, None, Some}
-import oni_bitcoin.{type BlockHeader, type BlockHash, type Hash256}
+import oni_bitcoin.{type BlockHash}
 
 // ============================================================================
 // Constants
@@ -124,7 +123,7 @@ pub fn target_to_compact(target: Target) -> Int {
   // Find the most significant non-zero byte
   case find_first_nonzero(target.bytes, 0) {
     None -> 0
-    Some(#(first_byte, position)) -> {
+    Some(#(_first_byte, position)) -> {
       // Get 3 bytes starting from first non-zero
       let remaining = 32 - position
       let exponent = remaining

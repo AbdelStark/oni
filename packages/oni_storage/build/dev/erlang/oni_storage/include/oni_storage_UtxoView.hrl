@@ -1,1 +1,0 @@
--record(utxo_view, {coins :: gleam@dict:dict(binary(), oni_storage:coin())}).
