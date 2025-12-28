@@ -1,4 +1,4 @@
-// http_transport.gleam - HTTP transport layer for RPC server
+// rpc_http.gleam - HTTP transport layer for RPC server
 //
 // This module provides HTTP transport for the JSON-RPC server:
 // - HTTP/1.1 request parsing
@@ -14,7 +14,6 @@ import gleam/dict.{type Dict}
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
-import gleam/result
 import gleam/string
 import oni_rpc
 
@@ -320,7 +319,7 @@ pub fn parse_basic_auth(request: HttpRequest) -> AuthResult {
       case string.starts_with(auth_header, "Basic ") {
         False -> AuthFailure
         True -> {
-          let encoded = string.drop_start(auth_header, 6)
+          let encoded = string.drop_left(auth_header, 6)
           case decode_base64(encoded) {
             Error(_) -> AuthFailure
             Ok(decoded) -> {
@@ -348,7 +347,7 @@ pub fn verify_auth(
       case string.starts_with(auth_header, "Basic ") {
         False -> False
         True -> {
-          let encoded = string.drop_start(auth_header, 6)
+          let encoded = string.drop_left(auth_header, 6)
           case decode_base64(encoded) {
             Error(_) -> False
             Ok(decoded) -> {

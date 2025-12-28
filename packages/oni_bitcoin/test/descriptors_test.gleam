@@ -1,6 +1,5 @@
 // descriptors_test.gleam - Tests for output script descriptors
 
-import gleam/option.{Some}
 import gleam/string
 import descriptors
 

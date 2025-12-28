@@ -25,11 +25,9 @@
 //   - BIP-386: Taproot Output Script Descriptors
 
 import gleam/bit_array
-import gleam/dict.{type Dict}
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
-import gleam/result
 import gleam/string
 
 // ============================================================================
@@ -652,7 +650,7 @@ pub fn derive_script(
   }
 }
 
-fn derive_pubkey(key: DescriptorKey, index: Int) -> Result(BitArray, DescriptorError) {
+fn derive_pubkey(key: DescriptorKey, _index: Int) -> Result(BitArray, DescriptorError) {
   case key {
     RawPubKey(bytes, _) -> Ok(bytes)
     ExtendedPubKey(_, _, _, _) -> {

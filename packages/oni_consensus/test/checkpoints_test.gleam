@@ -2,7 +2,7 @@
 
 import gleam/option.{None, Some}
 import checkpoints.{
-  CheckpointMatch, CheckpointMismatch, Mainnet, NoCheckpointAtHeight,
+  Mainnet, NoCheckpointAtHeight,
   Regtest, Testnet,
 }
 

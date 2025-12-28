@@ -3,9 +3,7 @@
 /// This module provides parsing and execution of Bitcoin Core test vectors
 /// to ensure oni's consensus behavior matches Bitcoin Core exactly.
 
-import gleeunit/should
 import gleam/list
-import gleam/result
 import gleam/string
 import gleam/int
 import gleam/bit_array

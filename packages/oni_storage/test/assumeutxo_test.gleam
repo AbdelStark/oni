@@ -1,6 +1,5 @@
 // assumeutxo_test.gleam - Tests for AssumeUTXO snapshot support
 
-import gleam/bit_array
 import gleam/option.{None, Some}
 import assumeutxo.{
   Mainnet, Regtest, Testnet,

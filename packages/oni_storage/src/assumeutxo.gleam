@@ -12,13 +12,11 @@
 // Reference: https://github.com/bitcoin/bitcoin/blob/master/doc/design/assumeutxo.md
 
 import gleam/bit_array
-import gleam/dict.{type Dict}
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
-import gleam/result
-import oni_bitcoin.{type BlockHash, type OutPoint, type TxOut}
-import oni_storage.{type Coin, type StorageError, type UtxoView}
+import oni_bitcoin.{type BlockHash, type OutPoint}
+import oni_storage.{type Coin, type UtxoView}
 
 // ============================================================================
 // AssumeUTXO Types

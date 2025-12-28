@@ -319,7 +319,13 @@ pub fn subnet_tracker_default() -> SubnetTracker {
 fn subnet_key(ip: oni_p2p.IpAddr) -> Int {
   case ip {
     oni_p2p.IPv4(a, b, _, _) -> a * 256 + b
-    oni_p2p.IPv6(a, b, _, _, _, _, _, _) -> a * 65536 + b
+    oni_p2p.IPv6(bytes) -> {
+      // Extract first two bytes for /16 subnet
+      case bytes {
+        <<a:8, b:8, _:bits>> -> a * 256 + b
+        _ -> 0
+      }
+    }
   }
 }
 
@@ -732,7 +738,13 @@ pub fn get_stats(protection: DoSProtection) -> DoSStats {
 fn ip_to_key(ip: oni_p2p.IpAddr) -> Int {
   case ip {
     oni_p2p.IPv4(a, b, c, d) -> a * 16777216 + b * 65536 + c * 256 + d
-    oni_p2p.IPv6(a, b, c, d, _, _, _, _) -> a * 16777216 + b * 65536 + c * 256 + d
+    oni_p2p.IPv6(bytes) -> {
+      // Use first 4 bytes as key
+      case bytes {
+        <<a:8, b:8, c:8, d:8, _:bits>> -> a * 16777216 + b * 65536 + c * 256 + d
+        _ -> 0
+      }
+    }
   }
 }
 
