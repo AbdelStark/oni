@@ -747,7 +747,7 @@ pub fn broadcast(listener: Subject(ListenerMsg), message: Message) -> Nil {
 fn tcp_listen(port: Int, bind_address: String) -> Result(ListenSocket, String)
 
 @external(erlang, "p2p_network_ffi", "tcp_connect")
-fn tcp_connect(ip: oni_p2p.IpAddr, port: Int, timeout: Int) -> Result(Socket, String)
+pub fn tcp_connect(ip: oni_p2p.IpAddr, port: Int, timeout: Int) -> Result(Socket, String)
 
 @external(erlang, "p2p_network_ffi", "tcp_send")
 fn tcp_send(socket: Socket, data: BitArray) -> Result(Nil, String)
@@ -768,7 +768,7 @@ fn spawn_acceptor(listen_socket: ListenSocket, parent: Subject(ListenerMsg)) -> 
 fn spawn_connector(addr: NetAddr, timeout: Int, parent: Subject(ListenerMsg)) -> Nil
 
 @external(erlang, "p2p_network_ffi", "spawn_receiver")
-fn spawn_receiver(socket: Socket, parent: Subject(PeerMsg)) -> Nil
+pub fn spawn_receiver(socket: Socket, parent: Subject(PeerMsg)) -> Nil
 
 @external(erlang, "p2p_network_ffi", "erlang_now_ms")
 fn erlang_now_ms() -> Int
