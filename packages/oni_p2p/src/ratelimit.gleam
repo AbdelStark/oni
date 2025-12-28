@@ -14,7 +14,6 @@
 
 import gleam/dict.{type Dict}
 import gleam/list
-import gleam/option.{type Option, None, Some}
 import oni_p2p
 
 // ============================================================================

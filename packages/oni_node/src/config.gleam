@@ -6,11 +6,9 @@
 // - Default configurations for different environments
 // - Configuration file loading helpers
 
-import gleam/dict.{type Dict}
 import gleam/int
 import gleam/list
-import gleam/option.{type Option, None, Some}
-import gleam/result
+import gleam/option.{type Option, None}
 import gleam/string
 import oni_bitcoin
 

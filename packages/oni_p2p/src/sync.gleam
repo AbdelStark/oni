@@ -13,11 +13,10 @@ import gleam/dict.{type Dict}
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
-import gleam/result
-import oni_bitcoin.{type BlockHash, type BlockHeader, type Block, type Hash256}
+import oni_bitcoin.{type BlockHash, type Block}
 import oni_p2p.{
-  type BlockHeaderNet, type InvItem, type Message, type PeerId,
-  InvBlock, MsgGetBlocks, MsgGetData, MsgGetHeaders, MsgHeaders,
+  type BlockHeaderNet, type Message, type PeerId,
+  InvBlock, MsgGetData, MsgGetHeaders,
 }
 
 // ============================================================================
