@@ -1,1 +1,0 @@
--record(block_undo, {tx_undos :: list(oni_storage:tx_undo())}).

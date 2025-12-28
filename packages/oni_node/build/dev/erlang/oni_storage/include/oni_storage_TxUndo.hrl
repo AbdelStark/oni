@@ -1,1 +1,0 @@
--record(tx_undo, {prev_outs :: list(oni_storage:coin())}).

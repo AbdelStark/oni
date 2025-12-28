@@ -1,1 +1,0 @@
--record(op_element, {op :: oni_consensus:opcode()}).
