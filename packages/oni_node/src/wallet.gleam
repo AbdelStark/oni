@@ -98,6 +98,7 @@ pub type WalletNetwork {
   WalletMainnet
   WalletTestnet
   WalletRegtest
+  WalletSignet
 }
 
 /// Derivation path
@@ -285,9 +286,16 @@ pub fn new_wallet(network: WalletNetwork) -> Wallet {
 }
 
 /// Create wallet from mnemonic seed phrase
+///
+/// Parameters:
+/// - mnemonic: BIP39 mnemonic words (12 or 24 words)
+/// - passphrase: BIP39 passphrase for seed derivation (can be empty)
+/// - wallet_password: Password for encrypting the master key (required for security)
+/// - network: Bitcoin network (mainnet, testnet, regtest, signet)
 pub fn from_mnemonic(
   mnemonic: String,
   passphrase: String,
+  wallet_password: String,
   network: WalletNetwork,
 ) -> Result(Wallet, WalletError) {
   // Validate mnemonic word count
@@ -315,9 +323,12 @@ pub fn from_mnemonic(
               let account_xpub = to_extended_public_key(account_key)
               let account_xpubs = dict.insert(wallet.account_xpubs, 0, account_xpub)
 
+              // Encrypt master key with AES-256-GCM using wallet password
+              let encrypted_master = encrypt_key(master_key, wallet_password)
+
               Ok(Wallet(
                 ..wallet,
-                master_key: Some(encrypt_key(master_key, "")), // TODO: proper encryption
+                master_key: Some(encrypted_master),
                 account_xpubs: account_xpubs,
               ))
             }
@@ -439,7 +450,7 @@ fn derive_account_key(
 ) -> Result(ExtendedPrivateKey, WalletError) {
   let coin_type = case master.network {
     WalletMainnet -> 0
-    WalletTestnet | WalletRegtest -> 1
+    WalletTestnet | WalletRegtest | WalletSignet -> 1
   }
 
   let path = DerivationPath(components: [
@@ -595,7 +606,7 @@ fn generate_p2wpkh_address(
   // Bech32 address
   let hrp = case network {
     WalletMainnet -> "bc"
-    WalletTestnet -> "tb"
+    WalletTestnet | WalletSignet -> "tb"
     WalletRegtest -> "bcrt"
   }
 
@@ -618,7 +629,7 @@ fn generate_p2pkh_address(
   // Base58Check address
   let version = case network {
     WalletMainnet -> 0x00
-    WalletTestnet | WalletRegtest -> 0x6F
+    WalletTestnet | WalletRegtest | WalletSignet -> 0x6F
   }
 
   let address = encode_base58check(<<version, pubkey_hash:bits>>)
@@ -642,7 +653,7 @@ fn generate_p2sh_p2wpkh_address(
   // Base58Check address
   let version = case network {
     WalletMainnet -> 0x05
-    WalletTestnet | WalletRegtest -> 0xC4
+    WalletTestnet | WalletRegtest | WalletSignet -> 0xC4
   }
 
   let address = encode_base58check(<<version, script_hash:bits>>)
@@ -669,7 +680,7 @@ fn generate_p2tr_address(
   // Bech32m address
   let hrp = case network {
     WalletMainnet -> "bc"
-    WalletTestnet -> "tb"
+    WalletTestnet | WalletSignet -> "tb"
     WalletRegtest -> "bcrt"
   }
 
@@ -1081,7 +1092,7 @@ pub fn list_utxos(wallet: Wallet) -> List(WalletUtxo) {
 pub fn serialize_xpub(key: ExtendedPublicKey) -> String {
   let version = case key.network {
     WalletMainnet -> mainnet_xpub_version
-    WalletTestnet | WalletRegtest -> testnet_tpub_version
+    WalletTestnet | WalletRegtest | WalletSignet -> testnet_tpub_version
   }
 
   let data = bytes_builder.new()
@@ -1132,7 +1143,7 @@ fn parse_extended_public_key(xpub: String) -> Result(ExtendedPublicKey, Nil) {
 fn network_coin_type(network: WalletNetwork) -> Int {
   case network {
     WalletMainnet -> 0
-    WalletTestnet | WalletRegtest -> 1
+    WalletTestnet | WalletRegtest | WalletSignet -> 1
   }
 }
 
@@ -1253,27 +1264,128 @@ fn build_p2pkh_scriptsig(
   oni_bitcoin.script_from_bytes(<<sig_len:8, signature:bits, pk_len:8, pubkey:bits>>)
 }
 
-fn encrypt_key(key: ExtendedPrivateKey, _password: String) -> EncryptedKey {
-  // Placeholder - would use AES-256-GCM
+/// Encrypt an extended private key using AES-256-GCM with PBKDF2 key derivation
+fn encrypt_key(key: ExtendedPrivateKey, password: String) -> EncryptedKey {
+  // Generate random salt (16 bytes) and IV (12 bytes for GCM)
+  let salt = crypto_strong_rand_bytes(16)
+  let iv = crypto_strong_rand_bytes(12)
+
+  // Derive encryption key from password using PBKDF2-HMAC-SHA256
+  // 100,000 iterations for key derivation security
+  let derived_key = derive_key_pbkdf2(password, salt, 100_000, 32)
+
+  // Serialize key data to encrypt (key + chain_code + metadata)
+  let key_data = serialize_extended_private_key(key)
+
+  // Encrypt using AES-256-GCM
+  let #(ciphertext, auth_tag) = aes_gcm_encrypt(derived_key, iv, key_data, <<>>)
+
   EncryptedKey(
-    ciphertext: key.key,
-    iv: <<0:96>>,
-    salt: <<0:128>>,
-    auth_tag: <<0:128>>,
+    ciphertext: ciphertext,
+    iv: iv,
+    salt: salt,
+    auth_tag: auth_tag,
   )
 }
 
-fn decrypt_key(encrypted: EncryptedKey, _password: String) -> Result(ExtendedPrivateKey, Nil) {
-  // Placeholder - would decrypt with AES-256-GCM
-  Ok(ExtendedPrivateKey(
-    key: encrypted.ciphertext,
-    chain_code: <<0:256>>,
-    depth: 0,
-    parent_fingerprint: <<0, 0, 0, 0>>,
-    child_index: 0,
-    network: WalletMainnet,
-  ))
+/// Decrypt an encrypted key using AES-256-GCM
+fn decrypt_key(encrypted: EncryptedKey, password: String) -> Result(ExtendedPrivateKey, Nil) {
+  // Derive key from password using same PBKDF2 parameters
+  let derived_key = derive_key_pbkdf2(password, encrypted.salt, 100_000, 32)
+
+  // Decrypt using AES-256-GCM
+  case aes_gcm_decrypt(derived_key, encrypted.iv, encrypted.ciphertext, encrypted.auth_tag, <<>>) {
+    Ok(plaintext) -> deserialize_extended_private_key(plaintext)
+    Error(_) -> Error(Nil)
+  }
 }
+
+/// Serialize an extended private key for encryption
+fn serialize_extended_private_key(key: ExtendedPrivateKey) -> BitArray {
+  let network_byte = case key.network {
+    WalletMainnet -> 0
+    WalletTestnet -> 1
+    WalletRegtest -> 2
+    WalletSignet -> 3
+  }
+  <<
+    network_byte:8,
+    key.depth:8,
+    key.parent_fingerprint:bits,
+    key.child_index:32,
+    key.chain_code:bits,
+    key.key:bits
+  >>
+}
+
+/// Deserialize an extended private key after decryption
+fn deserialize_extended_private_key(data: BitArray) -> Result(ExtendedPrivateKey, Nil) {
+  case data {
+    <<network_byte:8, depth:8, parent_fingerprint:32-bits, child_index:32,
+      chain_code:256-bits, key:bits>> -> {
+      let network = case network_byte {
+        0 -> WalletMainnet
+        1 -> WalletTestnet
+        2 -> WalletRegtest
+        _ -> WalletSignet
+      }
+      Ok(ExtendedPrivateKey(
+        key: key,
+        chain_code: chain_code,
+        depth: depth,
+        parent_fingerprint: parent_fingerprint,
+        child_index: child_index,
+        network: network,
+      ))
+    }
+    _ -> Error(Nil)
+  }
+}
+
+// External crypto functions (FFI to Erlang crypto module)
+@external(erlang, "crypto", "strong_rand_bytes")
+fn crypto_strong_rand_bytes(n: Int) -> BitArray
+
+/// PBKDF2 key derivation
+fn derive_key_pbkdf2(password: String, salt: BitArray, iterations: Int, key_length: Int) -> BitArray {
+  // Use Erlang crypto:pbkdf2_hmac - convert password string to binary
+  let password_bytes = string_to_binary(password)
+  pbkdf2_hmac_sha256(password_bytes, salt, iterations, key_length)
+}
+
+@external(erlang, "erlang", "list_to_binary")
+fn list_to_binary_external(list: List(Int)) -> BitArray
+
+fn string_to_binary(s: String) -> BitArray {
+  <<s:utf8>>
+}
+
+@external(erlang, "crypto", "pbkdf2_hmac")
+fn pbkdf2_hmac_external(hash: BitArray, password: BitArray, salt: BitArray, iterations: Int, key_length: Int) -> BitArray
+
+fn pbkdf2_hmac_sha256(password: BitArray, salt: BitArray, iterations: Int, key_length: Int) -> BitArray {
+  pbkdf2_hmac_external(<<"sha256">>, password, salt, iterations, key_length)
+}
+
+/// AES-256-GCM encryption (returns ciphertext and auth tag)
+fn aes_gcm_encrypt(key: BitArray, iv: BitArray, plaintext: BitArray, aad: BitArray) -> #(BitArray, BitArray) {
+  crypto_block_encrypt(<<"aes_256_gcm">>, key, iv, #(aad, plaintext, 16))
+}
+
+/// AES-256-GCM decryption
+fn aes_gcm_decrypt(key: BitArray, iv: BitArray, ciphertext: BitArray, tag: BitArray, aad: BitArray) -> Result(BitArray, Nil) {
+  let plaintext = crypto_block_decrypt(<<"aes_256_gcm">>, key, iv, #(aad, ciphertext, tag))
+  case bit_array.byte_size(plaintext) > 0 {
+    True -> Ok(plaintext)
+    False -> Error(Nil)
+  }
+}
+
+@external(erlang, "crypto", "crypto_one_time_aead")
+fn crypto_block_encrypt(cipher: BitArray, key: BitArray, iv: BitArray, data: #(BitArray, BitArray, Int)) -> #(BitArray, BitArray)
+
+@external(erlang, "crypto", "crypto_one_time_aead")
+fn crypto_block_decrypt(cipher: BitArray, key: BitArray, iv: BitArray, data: #(BitArray, BitArray, BitArray)) -> BitArray
 
 fn encode_base58check(data: BitArray) -> String {
   // Placeholder - would use actual Base58Check encoding
