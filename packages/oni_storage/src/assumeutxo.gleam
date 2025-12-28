@@ -599,19 +599,60 @@ fn bit_array_eq(a: BitArray, b: BitArray) -> Bool {
 }
 
 fn sha256(data: BitArray) -> BitArray {
-  crypto_hash(<<"sha256">>, data)
+  oni_bitcoin.sha256(data)
 }
-
-@external(erlang, "crypto", "hash")
-fn crypto_hash(algorithm: BitArray, data: BitArray) -> BitArray
 
 fn xor_bytes(a: BitArray, b: BitArray) -> BitArray {
-  // XOR two byte arrays (pad shorter one)
-  crypto_exor(a, b)
+  // XOR two byte arrays - pad shorter one with zeros
+  let a_size = bit_array.byte_size(a)
+  let b_size = bit_array.byte_size(b)
+
+  case a_size, b_size {
+    0, _ -> b
+    _, 0 -> a
+    _, _ -> {
+      // Pad shorter array to match longer
+      let #(a_padded, b_padded) = case a_size < b_size {
+        True -> #(pad_to_length(a, b_size), b)
+        False -> #(a, pad_to_length(b, a_size))
+      }
+      xor_bytes_same_length(a_padded, b_padded, <<>>)
+    }
+  }
 }
 
-@external(erlang, "crypto", "exor")
-fn crypto_exor(a: BitArray, b: BitArray) -> BitArray
+fn pad_to_length(data: BitArray, target_len: Int) -> BitArray {
+  let current_len = bit_array.byte_size(data)
+  let padding_len = target_len - current_len
+  case padding_len > 0 {
+    True -> {
+      let padding = create_zero_bytes(padding_len)
+      bit_array.append(data, padding)
+    }
+    False -> data
+  }
+}
+
+fn create_zero_bytes(n: Int) -> BitArray {
+  create_zero_bytes_acc(n, <<>>)
+}
+
+fn create_zero_bytes_acc(n: Int, acc: BitArray) -> BitArray {
+  case n {
+    0 -> acc
+    _ -> create_zero_bytes_acc(n - 1, <<acc:bits, 0:8>>)
+  }
+}
+
+fn xor_bytes_same_length(a: BitArray, b: BitArray, acc: BitArray) -> BitArray {
+  case a, b {
+    <<a_byte:8, a_rest:bits>>, <<b_byte:8, b_rest:bits>> -> {
+      let xored = int.bitwise_exclusive_or(a_byte, b_byte)
+      xor_bytes_same_length(a_rest, b_rest, <<acc:bits, xored:8>>)
+    }
+    _, _ -> acc
+  }
+}
 
 fn create_block_hash(hex: String) -> BlockHash {
   case oni_bitcoin.block_hash_from_hex(hex) {

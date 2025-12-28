@@ -29,6 +29,7 @@ import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/string
+import oni_bitcoin
 
 // ============================================================================
 // Descriptor Types
@@ -825,20 +826,12 @@ fn hex_encode(bytes: BitArray) -> String {
 }
 
 fn sha256(data: BitArray) -> BitArray {
-  crypto_hash(<<"sha256">>, data)
+  oni_bitcoin.sha256(data)
 }
 
 fn hash160(data: BitArray) -> BitArray {
-  let sha = sha256(data)
-  ripemd160(sha)
+  oni_bitcoin.hash160(data)
 }
-
-fn ripemd160(data: BitArray) -> BitArray {
-  crypto_hash(<<"ripemd160">>, data)
-}
-
-@external(erlang, "crypto", "hash")
-fn crypto_hash(algorithm: BitArray, data: BitArray) -> BitArray
 
 fn base58check_encode(_data: BitArray) -> String {
   // Placeholder - use oni_bitcoin base58check
