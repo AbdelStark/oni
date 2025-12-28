@@ -595,20 +595,20 @@ pub fn sig_context_new_test() {
   let outpoint = oni_bitcoin.OutPoint(txid: oni_bitcoin.Txid(hash), vout: 0)
   let assert Ok(value) = oni_bitcoin.amount_from_sats(1000)
   let input = oni_bitcoin.TxIn(
-    prevout: outpoint,
-    script_sig: oni_bitcoin.script_from_bytes(<<>>),
-    sequence: 0xffffffff,
+    outpoint,
+    oni_bitcoin.script_from_bytes(<<>>),
+    0xffffffff,
+    [],
   )
   let output = oni_bitcoin.TxOut(
-    value: value,
-    script_pubkey: oni_bitcoin.script_from_bytes(<<>>),
+    value,
+    oni_bitcoin.script_from_bytes(<<>>),
   )
   let tx = oni_bitcoin.Transaction(
     version: 1,
     inputs: [input],
     outputs: [output],
     lock_time: 0,
-    witnesses: [],
   )
 
   let script_code = oni_bitcoin.script_from_bytes(<<0x76, 0xa9>>)  // OP_DUP OP_HASH160
@@ -634,20 +634,20 @@ pub fn script_context_with_sig_test() {
   let outpoint = oni_bitcoin.OutPoint(txid: oni_bitcoin.Txid(hash), vout: 0)
   let assert Ok(value) = oni_bitcoin.amount_from_sats(1000)
   let input = oni_bitcoin.TxIn(
-    prevout: outpoint,
-    script_sig: oni_bitcoin.script_from_bytes(<<>>),
-    sequence: 0xffffffff,
+    outpoint,
+    oni_bitcoin.script_from_bytes(<<>>),
+    0xffffffff,
+    [],
   )
   let output = oni_bitcoin.TxOut(
-    value: value,
-    script_pubkey: oni_bitcoin.script_from_bytes(<<>>),
+    value,
+    oni_bitcoin.script_from_bytes(<<>>),
   )
   let tx = oni_bitcoin.Transaction(
     version: 1,
     inputs: [input],
     outputs: [output],
     lock_time: 0,
-    witnesses: [],
   )
 
   let script_code = oni_bitcoin.script_from_bytes(<<0x76, 0xa9>>)

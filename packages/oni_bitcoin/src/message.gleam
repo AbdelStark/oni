@@ -478,12 +478,13 @@ fn hash256(data: BitArray) -> BitArray {
 
 /// SHA256 hash (uses Erlang crypto module)
 @external(erlang, "crypto", "hash")
-fn crypto_hash(algorithm: atom, data: BitArray) -> BitArray
+fn crypto_hash(algorithm: Atom, data: BitArray) -> BitArray
 
-type atom
+/// Erlang atom type for FFI
+pub type Atom
 
 @external(erlang, "erlang", "binary_to_atom")
-fn binary_to_atom(binary: BitArray) -> atom
+fn binary_to_atom(binary: BitArray) -> Atom
 
 fn sha256(data: BitArray) -> BitArray {
   crypto_hash(binary_to_atom(<<"sha256">>), data)

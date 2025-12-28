@@ -8,6 +8,7 @@ import gleam/bit_array
 import gleam/crypto
 import gleam/int
 import gleam/list
+import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
 
@@ -1227,7 +1228,7 @@ fn bigint_to_base58(num: Int, acc: String) -> String {
 }
 
 fn string_char_at(s: String, idx: Int) -> String {
-  case string.drop_start(s, idx) {
+  case string.drop_left(s, idx) {
     "" -> ""
     rest -> {
       case string.pop_grapheme(rest) {
@@ -1420,7 +1421,7 @@ pub fn bech32_decode(input: String) -> Result(#(String, List(Int), Bech32Variant
             True -> Error("Invalid separator position")
             False -> {
               let hrp = string.slice(normalized, 0, sep_pos)
-              let data_part = string.drop_start(normalized, sep_pos + 1)
+              let data_part = string.drop_left(normalized, sep_pos + 1)
 
               // Decode data characters
               case decode_bech32_data(data_part, []) {
@@ -1518,7 +1519,7 @@ fn bech32_polymod_loop(values: List(Int), chk: Int) -> Int {
     [] -> chk
     [v, ..rest] -> {
       let b = int.bitwise_shift_right(chk, 25)
-      let new_chk = int.bitwise_xor(
+      let new_chk = int.bitwise_exclusive_or(
         int.bitwise_and(int.bitwise_shift_left(chk, 5), 0x3FFFFFF),
         v
       )
@@ -1533,7 +1534,7 @@ fn xor_generators(chk: Int, b: Int, gen: List(Int), i: Int) -> Int {
     [] -> chk
     [g, ..rest] -> {
       let new_chk = case int.bitwise_and(int.bitwise_shift_right(b, i), 1) {
-        1 -> int.bitwise_xor(chk, g)
+        1 -> int.bitwise_exclusive_or(chk, g)
         _ -> chk
       }
       xor_generators(new_chk, b, rest, i + 1)
@@ -1547,7 +1548,7 @@ fn bech32_create_checksum(values: List(Int), variant: Bech32Variant) -> List(Int
     Bech32m -> 0x2bc830a3
   }
   let poly = bech32_polymod(list.append(values, [0, 0, 0, 0, 0, 0]))
-  let final_poly = int.bitwise_xor(poly, const_value)
+  let final_poly = int.bitwise_exclusive_or(poly, const_value)
   [
     int.bitwise_and(int.bitwise_shift_right(final_poly, 25), 31),
     int.bitwise_and(int.bitwise_shift_right(final_poly, 20), 31),

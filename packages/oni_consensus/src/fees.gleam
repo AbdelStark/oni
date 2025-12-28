@@ -11,6 +11,7 @@ import gleam/float
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
+import gleam/order
 
 // ============================================================================
 // Constants
@@ -353,14 +354,14 @@ fn find_estimate_in_buckets(
   confidence: Float,
   target: Int,
 ) -> Option(FeeEstimate) {
-  // Start from highest fee bucket and work down
+  // Start from highest fee bucket and work down (descending order)
   let sorted = list.sort(buckets, fn(a, b) {
     case a.start_range >. b.start_range {
-      True -> -1
+      True -> order.Lt  // a comes first (descending)
       False -> {
         case a.start_range <. b.start_range {
-          True -> 1
-          False -> 0
+          True -> order.Gt  // b comes first (descending)
+          False -> order.Eq
         }
       }
     }

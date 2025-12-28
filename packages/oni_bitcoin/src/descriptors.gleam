@@ -459,13 +459,23 @@ fn parse_origin_fingerprint(origin: String) -> Option(BitArray) {
     Error(_) -> {
       // Just fingerprint
       case hex_decode(origin) {
-        Ok(bytes) if bit_array.byte_size(bytes) == 4 -> Some(bytes)
+        Ok(bytes) -> {
+          case bit_array.byte_size(bytes) == 4 {
+            True -> Some(bytes)
+            False -> None
+          }
+        }
         _ -> None
       }
     }
     Ok(#(fp_hex, _path)) -> {
       case hex_decode(fp_hex) {
-        Ok(bytes) if bit_array.byte_size(bytes) == 4 -> Some(bytes)
+        Ok(bytes) -> {
+          case bit_array.byte_size(bytes) == 4 {
+            True -> Some(bytes)
+            False -> None
+          }
+        }
         _ -> None
       }
     }

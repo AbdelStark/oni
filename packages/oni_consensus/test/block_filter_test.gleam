@@ -1,12 +1,11 @@
 // block_filter_test.gleam - Tests for Compact Block Filters (BIP157/158)
 
 import gleam/bit_array
-import gleam/int
-import gleam/list
+import gleam/option
 import gleeunit
 import gleeunit/should
 import oni_bitcoin
-import oni_consensus/block_filter
+import block_filter
 
 pub fn main() {
   gleeunit.main()

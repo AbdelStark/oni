@@ -367,8 +367,7 @@ pub fn script_cache_new(max_size: Int) -> ScriptCache {
 /// Build script cache key
 fn script_cache_key(txid: oni_bitcoin.Txid, input_index: Int, flags: Int) -> BitArray {
   let oni_bitcoin.Txid(hash) = txid
-  let hash_bytes = oni_bitcoin.hash256_to_bytes(hash)
-  <<hash_bytes:bits, input_index:32, flags:32>>
+  <<hash.bytes:bits, input_index:32, flags:32>>
 }
 
 /// Check if a script verification is cached
@@ -580,7 +579,7 @@ pub fn block_index_add(
 
 fn block_hash_to_bytes(hash: oni_bitcoin.BlockHash) -> BitArray {
   let oni_bitcoin.BlockHash(h) = hash
-  oni_bitcoin.hash256_to_bytes(h)
+  h.bytes
 }
 
 /// Convert integer to float using Erlang's built-in conversion

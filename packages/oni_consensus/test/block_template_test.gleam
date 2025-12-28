@@ -12,8 +12,8 @@ import gleam/dict
 import gleam/option.{None, Some}
 import gleam/set
 import oni_bitcoin
-import oni_consensus/block_template
-import oni_consensus/mempool
+import block_template
+import mempool
 
 pub fn main() {
   gleeunit.main()

@@ -14,6 +14,7 @@ import gleam/bit_array
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
+import gleam/order
 import gleam/result
 import oni_bitcoin.{
   type Block, type BlockHash, type Hash256, type OutPoint, type Script,
@@ -266,12 +267,17 @@ fn siphash_process_blocks(
   v3: Int,
 ) -> #(Int, Int, Int, Int) {
   case data {
-    <<block:64-little, rest:bits>> when bit_array.byte_size(rest) >= 8 -> {
-      let v3_new = int.bitwise_exclusive_or(v3, block)
-      let #(v0_new, v1_new, v2_new, v3_new) =
-        siphash_round(siphash_round(#(v0, v1, v2, v3_new)))
-      let v0_new = int.bitwise_exclusive_or(v0_new, block)
-      siphash_process_blocks(rest, v0_new, v1_new, v2_new, v3_new)
+    <<block:64-little, rest:bits>> -> {
+      case bit_array.byte_size(rest) >= 8 {
+        True -> {
+          let v3_new = int.bitwise_exclusive_or(v3, block)
+          let #(v0_new, v1_new, v2_new, v3_new) =
+            siphash_round(siphash_round(#(v0, v1, v2, v3_new)))
+          let v0_new = int.bitwise_exclusive_or(v0_new, block)
+          siphash_process_blocks(rest, v0_new, v1_new, v2_new, v3_new)
+        }
+        False -> #(v0, v1, v2, v3)
+      }
     }
     _ -> #(v0, v1, v2, v3)
   }
@@ -330,10 +336,15 @@ fn siphash_last_block(data: BitArray, length: Int) -> Int {
 
 fn siphash_pad_block(data: BitArray, remaining: Int, acc: Int) -> Int {
   case data, remaining {
-    <<b:8, rest:bits>>, n if n > 0 -> {
-      let shift = 8 * #(remaining - n)
-      let new_acc = int.bitwise_or(acc, int.bitwise_shift_left(b, shift))
-      siphash_pad_block(rest, n - 1, new_acc)
+    <<b:8, rest:bits>>, n -> {
+      case n > 0 {
+        True -> {
+          let shift = 8 * { remaining - n }
+          let new_acc = int.bitwise_or(acc, int.bitwise_shift_left(b, shift))
+          siphash_pad_block(rest, n - 1, new_acc)
+        }
+        False -> acc
+      }
     }
     _, _ -> acc
   }
@@ -359,7 +370,7 @@ fn compute_deltas_acc(sorted: List(Int), prev: Int, acc: List(Int)) -> List(Int)
 }
 
 /// Encode deltas using Golomb-Rice coding
-fn golomb_rice_encode(deltas: List(Int), p: Int) -> BitArray {
+pub fn golomb_rice_encode(deltas: List(Int), p: Int) -> BitArray {
   let bits = list.flat_map(deltas, fn(delta) {
     encode_single_gr(delta, p)
   })
@@ -463,6 +474,8 @@ fn bytes_to_bits_acc(data: BitArray, acc: List(Int)) -> List(Int) {
       ]
       bytes_to_bits_acc(rest, list.append(list.reverse(bits), acc))
     }
+    // Handle partial bytes at end (less than 8 bits)
+    _ -> list.reverse(acc)
   }
 }
 

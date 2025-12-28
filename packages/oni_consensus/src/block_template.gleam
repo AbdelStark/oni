@@ -23,7 +23,7 @@ import oni_bitcoin.{
 }
 import gleam/set
 import oni_consensus.{compute_merkle_root}
-import oni_consensus/mempool.{type Mempool, type MempoolEntry}
+import mempool.{type Mempool, type MempoolEntry}
 
 // ============================================================================
 // Constants
@@ -238,17 +238,17 @@ pub fn create_coinbase(
   witness_commitment: Option(BitArray),
 ) -> Transaction {
   // Coinbase input (null prevout)
-  let coinbase_input = TxIn(
-    prevout: oni_bitcoin.outpoint_null(),
-    script_sig: create_coinbase_script(height),
-    sequence: 0xFFFFFFFF,
-    witness: [],
+  let coinbase_input = oni_bitcoin.TxIn(
+    oni_bitcoin.outpoint_null(),
+    create_coinbase_script(height),
+    0xFFFFFFFF,
+    [],
   )
 
   // Main output to miner
-  let main_output = TxOut(
-    value: oni_bitcoin.sats(value),
-    script_pubkey: output_script,
+  let main_output = oni_bitcoin.TxOut(
+    oni_bitcoin.sats(value),
+    output_script,
   )
 
   // Outputs list
@@ -256,9 +256,9 @@ pub fn create_coinbase(
     None -> [main_output]
     Some(commitment) -> {
       // Add witness commitment output (OP_RETURN)
-      let witness_output = TxOut(
-        value: oni_bitcoin.sats(0),
-        script_pubkey: create_witness_commitment_script(commitment),
+      let witness_output = oni_bitcoin.TxOut(
+        oni_bitcoin.sats(0),
+        create_witness_commitment_script(commitment),
       )
       [main_output, witness_output]
     }
@@ -700,7 +700,7 @@ pub fn assemble_block(
 
 fn decode_template_tx(data: BitArray) -> Transaction {
   case oni_bitcoin.decode_tx(data) {
-    Ok(tx) -> tx
+    Ok(#(tx, _rest)) -> tx
     Error(_) -> panic as "Invalid template transaction data"
   }
 }
@@ -967,5 +967,7 @@ fn reverse_bytes_acc(data: BitArray, acc: BitArray) -> BitArray {
   case data {
     <<>> -> acc
     <<byte:8, rest:bits>> -> reverse_bytes_acc(rest, <<byte:8, acc:bits>>)
+    // Handle partial bytes at end
+    _ -> acc
   }
 }

@@ -48,7 +48,7 @@ fn make_simple_tx(inputs: List(Int), outputs: Int) -> oni_bitcoin.Transaction {
     version: 2,
     inputs: tx_inputs,
     outputs: tx_outputs,
-    locktime: 0,
+    lock_time: 0,
   )
 }
 

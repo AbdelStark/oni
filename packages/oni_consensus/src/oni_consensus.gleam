@@ -9,6 +9,7 @@
 import gleam/bit_array
 import gleam/int
 import gleam/list
+import gleam/order
 import gleam/result
 import oni_bitcoin.{
   type Amount, type Block, type BlockHash, type BlockHeader, type Hash256,
@@ -764,6 +765,26 @@ pub fn sighash_type_from_byte(b: Int) -> SighashType {
   }
 }
 
+/// Compute sighash for a transaction input
+/// Returns the hash to be signed/verified
+pub fn compute_sighash(sig_ctx: SigContext, sighash_type: SighashType) -> BitArray {
+  let type_byte = sighash_type_to_byte(sighash_type)
+  let hash = compute_sighash_for_verify(sig_ctx, type_byte)
+  hash.bytes
+}
+
+/// Convert SighashType to byte value
+fn sighash_type_to_byte(sighash_type: SighashType) -> Int {
+  case sighash_type {
+    SighashAll -> 0x01
+    SighashNone -> 0x02
+    SighashSingle -> 0x03
+    SighashAnyoneCanPay(base) -> {
+      sighash_type_to_byte(base) + 0x80
+    }
+  }
+}
+
 // ============================================================================
 // Validation Entry Points
 // ============================================================================
@@ -966,6 +987,29 @@ pub fn execute_script(ctx: ScriptContext) -> Result(ScriptContext, ConsensusErro
   case parse_script(ctx.script) {
     Error(e) -> Error(e)
     Ok(elements) -> execute_elements(ctx, elements)
+  }
+}
+
+/// Check if script execution result is "true" (non-zero top stack value)
+pub fn script_result_is_true(ctx: ScriptContext) -> Bool {
+  case ctx.stack {
+    [] -> False
+    [top, ..] -> is_true_value(top)
+  }
+}
+
+/// Check if a stack value represents "true" (non-zero)
+fn is_true_value(data: BitArray) -> Bool {
+  is_true_value_loop(data)
+}
+
+fn is_true_value_loop(data: BitArray) -> Bool {
+  case data {
+    <<>> -> False
+    <<0:8, rest:bits>> -> is_true_value_loop(rest)
+    <<_:8, _:bits>> -> True
+    // Handle partial bits at end
+    _ -> True
   }
 }
 
@@ -2044,6 +2088,7 @@ fn verify_signature(ctx: ScriptContext, sig: BitArray, pubkey: BitArray) -> Bool
                 }
               }
             }
+            Ok(_) -> False
           }
         }
       }
@@ -2129,7 +2174,6 @@ fn compute_legacy_sighash(
     inputs: inputs,
     outputs: outputs,
     lock_time: tx.lock_time,
-    witnesses: [],
   )
 
   // Serialize and hash
@@ -2410,11 +2454,27 @@ pub fn compute_tapleaf_hash(leaf_version: Int, script: BitArray) -> BitArray {
 /// Compute the tapbranch hash (merkle node)
 pub fn compute_tapbranch_hash(left: BitArray, right: BitArray) -> BitArray {
   // Sort lexicographically
-  let #(first, second) = case left < right {
-    True -> #(left, right)
-    False -> #(right, left)
+  let #(first, second) = case bit_array_compare(left, right) {
+    order.Lt -> #(left, right)
+    _ -> #(right, left)
   }
   oni_bitcoin.tagged_hash("TapBranch", bit_array.append(first, second))
+}
+
+/// Compare two BitArrays lexicographically
+fn bit_array_compare(a: BitArray, b: BitArray) -> order.Order {
+  case a, b {
+    <<ah:8, arest:bits>>, <<bh:8, brest:bits>> -> {
+      case int.compare(ah, bh) {
+        order.Eq -> bit_array_compare(arest, brest)
+        other -> other
+      }
+    }
+    <<_:8, _:bits>>, <<>> -> order.Gt
+    <<>>, <<_:8, _:bits>> -> order.Lt
+    <<>>, <<>> -> order.Eq
+    _, _ -> order.Eq
+  }
 }
 
 /// Compute the taptweak hash
@@ -2522,7 +2582,7 @@ pub fn validate_tapscript(script: BitArray, flags: ScriptFlags) -> Result(Nil, C
   }
 }
 
-fn validate_tapscript_opcodes(script: BitArray, pos: Int, _flags: ScriptFlags) -> Result(Nil, ConsensusError) {
+fn validate_tapscript_opcodes(script: BitArray, pos: Int, flags: ScriptFlags) -> Result(Nil, ConsensusError) {
   let size = bit_array.byte_size(script)
   case pos >= size {
     True -> Ok(Nil)
@@ -2537,30 +2597,32 @@ fn validate_tapscript_opcodes(script: BitArray, pos: Int, _flags: ScriptFlags) -
             // OP_CODESEPARATOR behavior changed but not disabled
             // Data push opcodes
             _ if opcode >= 0x01 && opcode <= 0x4B -> {
-              validate_tapscript_opcodes(script, pos + 1 + opcode, _flags)
+              validate_tapscript_opcodes(script, pos + 1 + opcode, flags)
             }
             0x4C -> {  // OP_PUSHDATA1
               case bit_array.slice(script, pos + 1, 1) {
-                Ok(<<len:8>>) -> validate_tapscript_opcodes(script, pos + 2 + len, _flags)
+                Ok(<<len:8>>) -> validate_tapscript_opcodes(script, pos + 2 + len, flags)
                 _ -> Error(ScriptInvalid)
               }
             }
             0x4D -> {  // OP_PUSHDATA2
               case bit_array.slice(script, pos + 1, 2) {
-                Ok(<<len:16-little>>) -> validate_tapscript_opcodes(script, pos + 3 + len, _flags)
+                Ok(<<len:16-little>>) -> validate_tapscript_opcodes(script, pos + 3 + len, flags)
                 _ -> Error(ScriptInvalid)
               }
             }
             0x4E -> {  // OP_PUSHDATA4
               case bit_array.slice(script, pos + 1, 4) {
-                Ok(<<len:32-little>>) -> validate_tapscript_opcodes(script, pos + 5 + len, _flags)
+                Ok(<<len:32-little>>) -> validate_tapscript_opcodes(script, pos + 5 + len, flags)
                 _ -> Error(ScriptInvalid)
               }
             }
             // All other opcodes
-            _ -> validate_tapscript_opcodes(script, pos + 1, _flags)
+            _ -> validate_tapscript_opcodes(script, pos + 1, flags)
           }
         }
+        // Handle unexpected slice result
+        Ok(_) -> Error(ScriptInvalid)
       }
     }
   }

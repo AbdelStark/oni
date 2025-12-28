@@ -18,10 +18,10 @@ import oni_bitcoin.{type BlockHeader, type BlockHash, type Hash256}
 // ============================================================================
 
 /// Target timespan for difficulty adjustment (2 weeks = 14 days)
-pub const target_timespan = 14 * 24 * 60 * 60  // 1,209,600 seconds
+pub const target_timespan = 1_209_600  // 14 * 24 * 60 * 60 seconds
 
 /// Target block time (10 minutes)
-pub const target_spacing = 10 * 60  // 600 seconds
+pub const target_spacing = 600  // 10 * 60 seconds
 
 /// Number of blocks per difficulty adjustment
 pub const difficulty_adjustment_interval = 2016
