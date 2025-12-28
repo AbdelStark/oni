@@ -1,0 +1,121 @@
+# Prometheus alerting rules for oni Bitcoin node
+#
+# These rules define alerts for common issues:
+# - Node health
+# - Sync status
+# - Resource usage
+# - Peer connectivity
+
+groups:
+  - name: oni_alerts
+    interval: 30s
+    rules:
+      # Node is down
+      - alert: OniNodeDown
+        expr: up{job="oni"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "oni node is down"
+          description: "oni Bitcoin node has been unreachable for more than 2 minutes."
+
+      # Node not syncing
+      - alert: OniSyncStalled
+        expr: |
+          increase(oni_blocks_height[10m]) == 0
+          and oni_sync_state != "synced"
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "oni node sync stalled"
+          description: "oni node has not received new blocks in 15 minutes while syncing."
+
+      # Low peer count
+      - alert: OniLowPeerCount
+        expr: oni_peers_connected < 3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low peer count"
+          description: "oni node has fewer than 3 peers connected for 5 minutes."
+
+      # No peers
+      - alert: OniNoPeers
+        expr: oni_peers_connected == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No peers connected"
+          description: "oni node has no peers connected for 2 minutes."
+
+      # High memory usage
+      - alert: OniHighMemory
+        expr: oni_memory_usage_bytes > 7e+09
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "oni node is using more than 7GB of memory."
+
+      # Mempool size warning
+      - alert: OniMempoolFull
+        expr: oni_mempool_size > 50000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Mempool getting full"
+          description: "oni mempool has more than 50,000 transactions."
+
+      # Block validation errors
+      - alert: OniValidationErrors
+        expr: increase(oni_block_validation_errors_total[1h]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Block validation errors"
+          description: "oni node has encountered more than 10 block validation errors in the past hour."
+
+      # RPC errors
+      - alert: OniRpcErrors
+        expr: rate(oni_rpc_errors_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High RPC error rate"
+          description: "oni RPC interface is experiencing elevated error rates."
+
+      # Disk space low
+      - alert: OniDiskSpaceLow
+        expr: |
+          (node_filesystem_avail_bytes{mountpoint="/data"} /
+           node_filesystem_size_bytes{mountpoint="/data"}) < 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Low disk space"
+          description: "Less than 10% disk space remaining on data volume."
+
+  - name: oni_ibd_alerts
+    interval: 1m
+    rules:
+      # IBD taking too long
+      - alert: OniIbdSlow
+        expr: |
+          oni_sync_state == "syncing"
+          and (oni_headers_height - oni_blocks_height) > 10000
+          and rate(oni_blocks_height[1h]) < 100
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "IBD progress slow"
+          description: "Initial Block Download is progressing slowly (less than 100 blocks/hour)."

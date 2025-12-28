@@ -1,0 +1,177 @@
+# docker-compose.prod.yml - Production overrides for oni Bitcoin node
+#
+# Usage:
+#   docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# This file contains production-specific configurations:
+# - Stricter resource limits
+# - Enhanced security
+# - Production logging
+# - TLS termination (if using reverse proxy)
+
+version: "3.8"
+
+services:
+  oni:
+    # Use pre-built image in production
+    image: ghcr.io/your-org/oni:latest
+    build: null
+
+    # Production restart policy
+    restart: always
+
+    # Don't expose RPC to host in production
+    # Use a reverse proxy with TLS instead
+    ports:
+      - "8333:8333"  # P2P only
+      # RPC and metrics through internal network only
+      # - "127.0.0.1:8332:8332"
+      # - "127.0.0.1:9100:9100"
+
+    # Production resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: "8"
+          memory: 16G
+        reservations:
+          cpus: "2"
+          memory: 4G
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 120s
+
+    # Production environment
+    environment:
+      - ONI_NETWORK=mainnet
+      - ONI_DATA_DIR=/data
+      - ONI_LOG_LEVEL=info
+      - ONI_RPC_USER=${ONI_RPC_USER:?RPC_USER must be set}
+      - ONI_RPC_PASSWORD=${ONI_RPC_PASSWORD:?RPC_PASSWORD must be set}
+      # Performance tuning
+      - ONI_MAX_CONNECTIONS=125
+      - ONI_DB_CACHE_MB=4096
+      - ONI_SCRIPT_THREADS=8
+
+    # Enhanced security
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=100M,mode=1777
+
+    # Production logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "500m"
+        max-file: "10"
+        labels: "service,network"
+        env: "ONI_NETWORK"
+
+    # Health check with tighter intervals
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9100/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+
+    labels:
+      - "com.oni.service=node"
+      - "com.oni.network=${ONI_NETWORK:-mainnet}"
+
+  # Nginx reverse proxy for RPC
+  nginx:
+    image: nginx:alpine
+    container_name: oni-nginx
+    restart: always
+    profiles: ["proxy"]
+
+    ports:
+      - "443:443"
+      - "8332:8332"
+
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+
+    depends_on:
+      - oni
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # Enhanced Prometheus for production
+  prometheus:
+    image: prom/prometheus:v2.47.0
+    restart: always
+    profiles: ["monitoring"]
+
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 2G
+
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=90d"
+      - "--storage.tsdb.retention.size=10GB"
+      - "--web.enable-lifecycle"
+      - "--web.enable-admin-api"
+
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alerts.yml:/etc/prometheus/rules/alerts.yml:ro
+      - prometheus-data:/prometheus
+
+  # Production Grafana with anonymous access disabled
+  grafana:
+    image: grafana/grafana:10.1.0
+    restart: always
+    profiles: ["monitoring"]
+
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:?GRAFANA_PASSWORD must be set}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_SECURITY_DISABLE_GRAVATAR=true
+      - GF_SECURITY_COOKIE_SECURE=true
+      - GF_SERVER_ROOT_URL=${GRAFANA_ROOT_URL:-http://localhost:3000}
+
+# Production volumes with explicit driver options
+volumes:
+  oni-data:
+    name: oni-data-prod
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /data/oni
+
+  prometheus-data:
+    name: oni-prometheus-prod
+
+  grafana-data:
+    name: oni-grafana-prod
+
+networks:
+  default:
+    name: oni-production
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16

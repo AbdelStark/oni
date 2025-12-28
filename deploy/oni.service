@@ -1,0 +1,92 @@
+# oni.service - systemd service unit for oni Bitcoin node
+#
+# Installation:
+#   sudo cp oni.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable oni
+#   sudo systemctl start oni
+#
+# Logs:
+#   sudo journalctl -u oni -f
+#
+# Status:
+#   sudo systemctl status oni
+
+[Unit]
+Description=oni Bitcoin Full Node
+Documentation=https://github.com/your-org/oni
+After=network-online.target
+Wants=network-online.target
+
+# Hardening: Don't start if critical services fail
+Requires=local-fs.target
+
+[Service]
+Type=simple
+User=oni
+Group=oni
+
+# Working directory and executable
+WorkingDirectory=/opt/oni
+ExecStart=/opt/oni/bin/oni --network mainnet --data-dir /var/lib/oni
+ExecStop=/bin/kill -SIGTERM $MAINPID
+
+# Restart policy
+Restart=on-failure
+RestartSec=10
+RestartPreventExitStatus=0
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+LimitCORE=infinity
+
+# Memory limits (adjust based on your system)
+MemoryMax=8G
+MemoryHigh=6G
+
+# Timeouts
+TimeoutStartSec=300
+TimeoutStopSec=120
+
+# Environment
+Environment=ONI_NETWORK=mainnet
+Environment=ONI_DATA_DIR=/var/lib/oni
+Environment=ONI_LOG_LEVEL=info
+Environment=ONI_RPC_PORT=8332
+Environment=ONI_P2P_PORT=8333
+Environment=ONI_METRICS_PORT=9100
+
+# Environment file for secrets (RPC credentials)
+EnvironmentFile=-/etc/oni/oni.conf
+
+# Security hardening
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+
+# Allow write access to data directory
+ReadWritePaths=/var/lib/oni
+ReadWritePaths=/var/log/oni
+
+# Network access
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+# Capabilities
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+# System call filter
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+
+[Install]
+WantedBy=multi-user.target
