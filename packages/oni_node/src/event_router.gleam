@@ -237,8 +237,9 @@ fn handle_p2p_event(event: PeerEvent, state: RouterState) -> RouterState {
     }
 
     PeerError(peer_id, _error) -> {
-      if state.config.debug {
-        io.println("[EventRouter] Peer " <> int.to_string(peer_id) <> " error")
+      case state.config.debug {
+        True -> io.println("[EventRouter] Peer " <> int.to_string(peer_id) <> " error")
+        False -> Nil
       }
       state
     }
@@ -293,8 +294,9 @@ fn handle_message_received(
 
     // Address messages (for now, just log)
     MsgAddr(_addrs) -> {
-      if state.config.debug {
-        io.println("[EventRouter] Received addr from peer " <> int.to_string(peer_id))
+      case state.config.debug {
+        True -> io.println("[EventRouter] Received addr from peer " <> int.to_string(peer_id))
+        False -> Nil
       }
       state
     }
@@ -306,8 +308,9 @@ fn handle_message_received(
 
     // Other messages
     _ -> {
-      if state.config.debug {
-        io.println("[EventRouter] Unhandled message from peer " <> int.to_string(peer_id))
+      case state.config.debug {
+        True -> io.println("[EventRouter] Unhandled message from peer " <> int.to_string(peer_id))
+        False -> Nil
       }
       state
     }
@@ -322,9 +325,10 @@ fn handle_headers(
 ) -> RouterState {
   let header_count = list.length(headers)
 
-  if state.config.debug {
-    io.println("[EventRouter] Received " <> int.to_string(header_count) <>
+  case state.config.debug {
+    True -> io.println("[EventRouter] Received " <> int.to_string(header_count) <>
       " headers from peer " <> int.to_string(peer_id))
+    False -> Nil
   }
 
   // Notify sync coordinator
@@ -347,10 +351,11 @@ fn handle_block(
 ) -> RouterState {
   let block_hash = oni_bitcoin.block_hash_from_header(block.header)
 
-  if state.config.debug {
-    io.println("[EventRouter] Received block " <>
+  case state.config.debug {
+    True -> io.println("[EventRouter] Received block " <>
       oni_bitcoin.block_hash_to_hex(block_hash) <>
       " from peer " <> int.to_string(peer_id))
+    False -> Nil
   }
 
   // Send to chainstate for validation and connection
@@ -384,10 +389,11 @@ fn handle_tx(
 ) -> RouterState {
   let txid = oni_bitcoin.txid_from_tx(tx)
 
-  if state.config.debug {
-    io.println("[EventRouter] Received tx " <>
+  case state.config.debug {
+    True -> io.println("[EventRouter] Received tx " <>
       oni_bitcoin.txid_to_hex(txid) <>
       " from peer " <> int.to_string(peer_id))
+    False -> Nil
   }
 
   // Send to mempool for validation
@@ -418,11 +424,12 @@ fn handle_inv(
   // Separate block and transaction inventory
   let #(block_items, tx_items) = partition_inv_items(items)
 
-  if state.config.debug && list.length(items) > 0 {
-    io.println("[EventRouter] Received inv with " <>
+  case state.config.debug && list.length(items) > 0 {
+    True -> io.println("[EventRouter] Received inv with " <>
       int.to_string(list.length(block_items)) <> " blocks, " <>
       int.to_string(list.length(tx_items)) <> " txs from peer " <>
       int.to_string(peer_id))
+    False -> Nil
   }
 
   // Request blocks we don't have
@@ -455,10 +462,11 @@ fn handle_getdata(
   items: List(InvItem),
   state: RouterState,
 ) -> RouterState {
-  if state.config.debug {
-    io.println("[EventRouter] Received getdata for " <>
+  case state.config.debug {
+    True -> io.println("[EventRouter] Received getdata for " <>
       int.to_string(list.length(items)) <>
       " items from peer " <> int.to_string(peer_id))
+    False -> Nil
   }
 
   // In a full implementation, we would look up blocks/txs and send them
@@ -472,9 +480,10 @@ fn handle_notfound(
   items: List(InvItem),
   state: RouterState,
 ) -> RouterState {
-  if state.config.debug {
-    io.println("[EventRouter] Peer " <> int.to_string(peer_id) <>
+  case state.config.debug {
+    True -> io.println("[EventRouter] Peer " <> int.to_string(peer_id) <>
       " notfound for " <> int.to_string(list.length(items)) <> " items")
+    False -> Nil
   }
   state
 }
@@ -506,9 +515,10 @@ fn handle_mempool_request(
   peer_id: Int,
   state: RouterState,
 ) -> RouterState {
-  if state.config.debug {
-    io.println("[EventRouter] Peer " <> int.to_string(peer_id) <>
+  case state.config.debug {
+    True -> io.println("[EventRouter] Peer " <> int.to_string(peer_id) <>
       " requested mempool")
+    False -> Nil
   }
 
   // Get mempool txids and send inv

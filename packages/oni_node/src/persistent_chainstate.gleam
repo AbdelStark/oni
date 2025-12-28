@@ -555,16 +555,17 @@ fn apply_undo(
 }
 
 fn restore_spent_coins(
-  _storage: PersistentStorageHandle,
+  storage: PersistentStorageHandle,
   tx_undos: List(TxUndo),
 ) -> Result(Nil, String) {
   // In a full implementation, we would:
   // 1. For each tx_undo, restore the spent coins
   // 2. Remove the outputs created by the disconnected transaction
   // For now, this is a placeholder
+  let _ = storage  // Mark as intentionally unused
   case tx_undos {
     [] -> Ok(Nil)
-    [_, ..rest] -> restore_spent_coins(_storage, rest)
+    [_, ..rest] -> restore_spent_coins(storage, rest)
   }
 }
 

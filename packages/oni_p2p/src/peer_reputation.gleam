@@ -548,8 +548,8 @@ pub fn record_quality(
   ReputationManager(..mgr, peers: new_peers)
 }
 
-/// Record connection event
-pub fn record_connection(
+/// Record connection event for a peer in the manager
+pub fn manager_record_connection(
   manager: ReputationManager,
   peer_id: String,
   success: Bool,

@@ -305,8 +305,9 @@ fn handle_peer_connected(
   height: Int,
   state: IbdCoordinatorState,
 ) -> IbdCoordinatorState {
-  if state.config.debug {
-    io.println("[IBD] Peer " <> peer_id <> " connected at height " <> int.to_string(height))
+  case state.config.debug {
+    True -> io.println("[IBD] Peer " <> peer_id <> " connected at height " <> int.to_string(height))
+    False -> Nil
   }
 
   let peer_state = PeerSyncState(
@@ -344,8 +345,9 @@ fn handle_peer_disconnected(
   peer_id: String,
   state: IbdCoordinatorState,
 ) -> IbdCoordinatorState {
-  if state.config.debug {
-    io.println("[IBD] Peer " <> peer_id <> " disconnected")
+  case state.config.debug {
+    True -> io.println("[IBD] Peer " <> peer_id <> " disconnected")
+    False -> Nil
   }
 
   let new_peers = dict.delete(state.peers, peer_id)
@@ -386,9 +388,10 @@ fn handle_headers_received(
 ) -> IbdCoordinatorState {
   let header_count = list.length(headers)
 
-  if state.config.debug {
-    io.println("[IBD] Received " <> int.to_string(header_count) <>
+  case state.config.debug {
+    True -> io.println("[IBD] Received " <> int.to_string(header_count) <>
       " headers from " <> peer_id)
+    False -> Nil
   }
 
   case header_count {
@@ -442,9 +445,10 @@ fn handle_block_received(
     False -> state.blocks_height
   }
 
-  if state.config.debug && new_blocks_height != state.blocks_height {
-    io.println("[IBD] Block " <> int.to_string(new_blocks_height) <>
+  case state.config.debug && new_blocks_height != state.blocks_height {
+    True -> io.println("[IBD] Block " <> int.to_string(new_blocks_height) <>
       " of " <> int.to_string(state.target_height))
+    False -> Nil
   }
 
   let new_state = IbdCoordinatorState(
@@ -643,8 +647,8 @@ fn get_available_peers(
   |> list.filter_map(fn(entry) {
     let #(peer_id, peer_state) = entry
     case peer_state.inflight_blocks < max_per_peer {
-      True -> Some(peer_id)
-      False -> None
+      True -> Ok(peer_id)
+      False -> Error(Nil)
     }
   })
 }
@@ -658,7 +662,7 @@ fn build_locators(state: IbdCoordinatorState) -> List(BlockHash) {
 
 /// Validate received headers
 fn validate_headers(
-  _headers: List(BlockHeaderNet),
+  headers: List(BlockHeaderNet),
   state: IbdCoordinatorState,
 ) -> Result(Int, String) {
   // In a full implementation:
@@ -667,7 +671,7 @@ fn validate_headers(
   // 3. Verify difficulty transitions
   // 4. Check against checkpoints
   // For now, just accept and increment height
-  Ok(state.headers_height + list.length(_headers))
+  Ok(state.headers_height + list.length(headers))
 }
 
 /// Build download queue from header chain
@@ -810,28 +814,28 @@ fn get_network_params(network: Network) -> oni_bitcoin.NetworkParams {
 
 /// Get current time in milliseconds
 @external(erlang, "erlang", "system_time")
-fn erlang_system_time(unit: atom) -> Int
+fn erlang_system_time(unit: Atom) -> Int
 
 fn now_ms() -> Int {
   erlang_system_time(millisecond_atom())
 }
 
 @external(erlang, "erlang", "binary_to_atom")
-fn binary_to_atom(binary: BitArray, encoding: atom) -> atom
+fn binary_to_atom(binary: BitArray, encoding: Atom) -> Atom
 
-type atom
+type Atom
 
-fn millisecond_atom() -> atom {
+fn millisecond_atom() -> Atom {
   binary_to_atom(<<"millisecond">>, utf8_atom())
 }
 
-fn utf8_atom() -> atom {
+fn utf8_atom() -> Atom {
   binary_to_atom(<<"utf8">>, latin1_atom())
 }
 
 @external(erlang, "erlang", "list_to_atom")
-fn list_to_atom(list: List(Int)) -> atom
+fn list_to_atom(list: List(Int)) -> Atom
 
-fn latin1_atom() -> atom {
+fn latin1_atom() -> Atom {
   list_to_atom([108, 97, 116, 105, 110, 49])  // "latin1"
 }

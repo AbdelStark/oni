@@ -259,10 +259,11 @@ fn execute_reorg(
   new_tip: BlockHash,
   state: ReorgState,
 ) -> Result(#(ReorgEvent, ReorgState), String) {
-  if state.config.debug {
-    io.println("[Reorg] Executing reorg from " <>
+  case state.config.debug {
+    True -> io.println("[Reorg] Executing reorg from " <>
       oni_bitcoin.block_hash_to_hex(old_tip) <> " to " <>
       oni_bitcoin.block_hash_to_hex(new_tip))
+    False -> Nil
   }
 
   // Get fork blocks from index
@@ -322,15 +323,15 @@ fn do_reorg(
 
           // 4. Build event and update stats
           let fork_point = case list.last(to_disconnect) {
-            Some(block) -> block.prev_hash
-            None -> old_tip_fallback()
+            Ok(block) -> block.prev_hash
+            Error(_) -> old_tip_fallback()
           }
 
           let event = ReorgEvent(
             fork_point: fork_point,
             fork_height: case list.last(to_disconnect) {
-              Some(block) -> block.height - 1
-              None -> 0
+              Ok(block) -> block.height - 1
+              Error(_) -> 0
             },
             blocks_disconnected: list.length(to_disconnect),
             blocks_connected: list.length(to_connect),
@@ -348,13 +349,13 @@ fn do_reorg(
 
           // Update current tip
           let new_tip = case list.first(to_connect) {
-            Some(block) -> Some(block.hash)
-            None -> state.current_tip
+            Ok(block) -> Some(block.hash)
+            Error(_) -> state.current_tip
           }
 
           let new_height = case list.first(to_connect) {
-            Some(block) -> block.height
-            None -> state.current_height
+            Ok(block) -> block.height
+            Error(_) -> state.current_height
           }
 
           io.println("[Reorg] Completed: disconnected " <>
@@ -393,9 +394,10 @@ fn disconnect_blocks_loop(
       // In a full implementation, we would call the chainstate actor
       // and collect the transactions from the disconnected block
 
-      if state.config.debug {
-        io.println("[Reorg] Disconnecting block at height " <>
+      case state.config.debug {
+        True -> io.println("[Reorg] Disconnecting block at height " <>
           int.to_string(block.height))
+        False -> Nil
       }
 
       // For now, simulate success
@@ -426,9 +428,10 @@ fn connect_blocks_loop(
       // 2. Validate and connect it
       // 3. Collect confirmed txids
 
-      if state.config.debug {
-        io.println("[Reorg] Connecting block at height " <>
+      case state.config.debug {
+        True -> io.println("[Reorg] Connecting block at height " <>
           int.to_string(block.height))
+        False -> Nil
       }
 
       // For now, simulate success

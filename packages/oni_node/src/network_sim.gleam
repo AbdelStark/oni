@@ -9,6 +9,7 @@
 //
 // Purpose: Validate network resilience and security properties
 
+import gleam/bit_array
 import gleam/dict.{type Dict}
 import gleam/erlang/process.{type Subject}
 import gleam/float
@@ -225,7 +226,7 @@ pub type SimEvent {
   TxBroadcast(tick: Int, node: Int, txid: String)
   TxConfirmed(tick: Int, txid: String, block: String)
   Reorg(tick: Int, node: Int, old_tip: String, new_tip: String, depth: Int)
-  Eclipse(tick: Int, target: Int, isolated: Bool)
+  EclipseEvent(tick: Int, target: Int, isolated: Bool)
   DoubleSpendAttempt(tick: Int, original: String, double: String)
   Partition(tick: Int, groups: List(List(Int)))
 }
@@ -735,7 +736,7 @@ fn apply_eclipse(state: SimState, targets: List(Int)) -> SimState {
   })
 
   let events = list.map(targets, fn(target) {
-    Eclipse(state.current_tick, target, True)
+    EclipseEvent(state.current_tick, target, True)
   })
 
   SimState(..state, nodes: nodes, events: list.append(state.events, events))
@@ -873,7 +874,7 @@ pub fn analyze(state: SimState) -> SimResults {
   })
 
   let eclipse_events = list.filter(state.events, fn(e) {
-    case e { Eclipse(_, _, _) -> True _ -> False }
+    case e { EclipseEvent(_, _, _) -> True _ -> False }
   })
 
   let node_metrics = dict.values(state.nodes) |> list.map(fn(n) { n.metrics })

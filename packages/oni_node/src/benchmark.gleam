@@ -510,7 +510,7 @@ pub fn compare(
   let baseline_result = run_bench(name <> "_baseline", config, baseline)
   let candidate_result = run_bench(name <> "_candidate", config, candidate)
 
-  let speedup = case candidate_result.mean_us > 0.0 {
+  let speedup = case candidate_result.mean_us >. 0.0 {
     True -> baseline_result.mean_us /. candidate_result.mean_us
     False -> 0.0
   }
