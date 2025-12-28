@@ -8,7 +8,7 @@
 import gleeunit
 import gleeunit/should
 import gleam/erlang/process
-import gleam/option.{None, Some}
+import gleam/option.{None}
 import oni_bitcoin
 import oni_supervisor
 

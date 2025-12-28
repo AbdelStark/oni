@@ -5,7 +5,6 @@ import gleeunit/should
 import gleam/dict
 import gleam/bit_array
 import rpc_http
-import oni_rpc
 
 pub fn main() {
   gleeunit.main()

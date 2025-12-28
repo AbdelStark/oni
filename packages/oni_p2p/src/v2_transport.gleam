@@ -17,7 +17,6 @@
 
 import gleam/bit_array
 import gleam/int
-import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
 
@@ -702,9 +701,9 @@ fn aead_encrypt(key: BitArray, counter: Int, aad: BitArray, plaintext: BitArray)
 
 /// Perform AEAD decryption
 fn aead_decrypt(
-  key: BitArray,
-  counter: Int,
-  aad: BitArray,
+  _key: BitArray,
+  _counter: Int,
+  _aad: BitArray,
   ciphertext: BitArray,
 ) -> Result(BitArray, V2Error) {
   // Placeholder - needs crypto implementation

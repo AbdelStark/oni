@@ -415,7 +415,7 @@ fn validate_tx_basic(tx: oni_bitcoin.Transaction) -> Result(Nil, String) {
 }
 
 /// Build template data from mempool state
-fn build_template_data(state: MempoolState, height: Int, bits: Int) -> MempoolTemplateData {
+fn build_template_data(state: MempoolState, height: Int, _bits: Int) -> MempoolTemplateData {
   // Get transactions sorted by some fee metric (simplified)
   let txs = dict.values(state.txs)
 
@@ -423,7 +423,7 @@ fn build_template_data(state: MempoolState, height: Int, bits: Int) -> MempoolTe
   let halving_interval = 210_000
   let initial_subsidy = 5_000_000_000  // 50 BTC
   let halvings = height / halving_interval
-  let subsidy = case halvings >= 64 {
+  let _subsidy = case halvings >= 64 {
     True -> 0
     False -> int.bitwise_shift_right(initial_subsidy, halvings)
   }

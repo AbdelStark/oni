@@ -11,7 +11,7 @@
 import gleam/erlang/process
 import gleam/int
 import gleam/io
-import gleam/option.{None, Some}
+import gleam/option
 import gleam/result
 import oni_bitcoin
 import oni_consensus

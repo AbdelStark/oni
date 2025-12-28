@@ -26,7 +26,8 @@ fn make_block_hash(n: Int) -> oni_bitcoin.BlockHash {
   hash
 }
 
-fn make_header(prev: oni_bitcoin.BlockHash, nonce: Int) -> oni_p2p.BlockHeaderNet {
+// Helper function for creating test headers (used in future tests)
+pub fn make_test_header(prev: oni_bitcoin.BlockHash, nonce: Int) -> oni_p2p.BlockHeaderNet {
   oni_p2p.BlockHeaderNet(
     version: 1,
     prev_block: prev,

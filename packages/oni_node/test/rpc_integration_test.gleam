@@ -9,7 +9,6 @@ import gleeunit
 import gleeunit/should
 import gleam/erlang/process
 import gleam/option.{None, Some}
-import gleam/string
 import oni_bitcoin
 import oni_supervisor
 import node_rpc
@@ -183,7 +182,7 @@ pub fn start_node_with_rpc_test() {
       let rpc_height = process.call(rpc_handles.chainstate, QueryHeight, 5000)
       should.equal(rpc_height, 0)
     }
-    Error(msg) -> {
+    Error(_msg) -> {
       // Fail with message
       should.fail()
     }

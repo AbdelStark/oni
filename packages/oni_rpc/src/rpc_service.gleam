@@ -1058,8 +1058,7 @@ fn create_getnetworkinfo_handler(
           False -> ""
         }
       ))
-
-    let _ = network_name
+      |> dict.insert("chain", RpcString(network_name))
 
     Ok(RpcObject(result))
   }

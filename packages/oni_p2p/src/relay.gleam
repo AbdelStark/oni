@@ -9,14 +9,13 @@
 // Phase 8 Implementation
 
 import gleam/dict.{type Dict}
-import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/set.{type Set}
 import oni_bitcoin.{type BlockHash, type Hash256, type Txid}
 import oni_p2p.{
   type InvItem, type InvType, type Message, type PeerId,
-  InvBlock, InvTx, InvWitnessTx, MsgGetData, MsgInv, MsgNotFound,
+  InvBlock, InvTx, InvWitnessTx, MsgGetData, MsgInv,
 }
 
 // ============================================================================

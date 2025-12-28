@@ -7,9 +7,7 @@
 
 import gleeunit
 import gleeunit/should
-import gleam/dict
-import gleam/erlang/process
-import gleam/option.{None, Some}
+import gleam/option.{None}
 import oni_rpc
 import rpc_service
 

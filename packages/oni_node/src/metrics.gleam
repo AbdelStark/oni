@@ -18,9 +18,7 @@ import gleam/dict.{type Dict}
 import gleam/float
 import gleam/int
 import gleam/list
-import gleam/option.{type Option, None, Some}
 import gleam/string
-import gleam/string_builder.{type StringBuilder}
 
 // ============================================================================
 // Metric Types
