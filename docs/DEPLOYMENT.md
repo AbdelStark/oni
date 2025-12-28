@@ -155,43 +155,45 @@ gleam export erlang-shipment
 
 ### Running as a Service
 
-Create systemd service file `/etc/systemd/system/oni.service`:
-
-```ini
-[Unit]
-Description=oni Bitcoin Node
-After=network.target
-
-[Service]
-Type=simple
-User=oni
-Group=oni
-WorkingDirectory=/opt/oni
-ExecStart=/opt/oni/entrypoint.sh run
-Restart=always
-RestartSec=10
-
-# Security hardening
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=true
-ReadWritePaths=/var/lib/oni
-
-# Resource limits
-LimitNOFILE=65535
-LimitNPROC=4096
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Enable and start:
+Pre-configured systemd service files are provided in the `deploy/` directory:
 
 ```bash
+# Install using the provided script
+cd deploy
+sudo ./install.sh mainnet  # or testnet, regtest
+
+# Or manually install the service file
+sudo cp deploy/oni.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable oni
 sudo systemctl start oni
+```
+
+The provided service files include:
+- `oni.service` - Mainnet configuration
+- `oni-testnet.service` - Testnet configuration
+
+These service files include comprehensive security hardening:
+- Strict filesystem protection
+- Capability restrictions
+- System call filtering
+- Memory limits
+- Automatic restart on failure
+
+Key service management commands:
+
+```bash
+# View service status
+sudo systemctl status oni
+
+# View logs
+sudo journalctl -u oni -f
+
+# Restart service
+sudo systemctl restart oni
+
+# Stop service
+sudo systemctl stop oni
 ```
 
 ## Configuration
@@ -296,6 +298,22 @@ server {
 
 ## Monitoring
 
+A complete monitoring stack is provided in the `monitoring/` directory.
+
+### Quick Start with Monitoring
+
+```bash
+# Start oni with Prometheus and Grafana
+docker-compose --profile monitoring up -d
+
+# Access Grafana
+open http://localhost:3000
+# Default credentials: admin / (password from .env)
+
+# Access Prometheus
+open http://localhost:9090
+```
+
 ### Health Endpoints
 
 | Endpoint | Description |
@@ -307,12 +325,14 @@ server {
 
 ### Prometheus Integration
 
+Pre-configured Prometheus configuration is provided in `monitoring/prometheus.yml`:
+
 ```yaml
 # prometheus.yml
 scrape_configs:
   - job_name: 'oni'
     static_configs:
-      - targets: ['localhost:9100']
+      - targets: ['oni:9100']
     scrape_interval: 15s
 ```
 
