@@ -1,102 +1,83 @@
 # CLAUDE.md
 
-This project uses AI-assisted development guidelines located at:
+This project uses AI-assisted development guidelines.
 
-- `ai/CLAUDE.md` (primary)
-- `ai/AGENTS.md`
-- `ai/skills/`
+## Quick Reference
 
-For convenience, `ai/CLAUDE.md` is duplicated below.
+| Resource | Location |
+|----------|----------|
+| Primary AI instructions | `ai/CLAUDE.md` |
+| Agent roles | `ai/AGENTS.md` |
+| Skill playbooks | `ai/skills/` |
+| Implementation status | `STATUS.md` |
+| Task backlog | `ai/backlog/backlog.yml` |
+
+## Current Status
+
+**Stage**: Core infrastructure implemented (Milestones 0-4 complete). Working toward end-to-end regtest sync.
+
+See `STATUS.md` for detailed implementation matrix.
 
 ---
 
-# CLAUDE.md — oni AI development instructions
+For the full AI development instructions, see `ai/CLAUDE.md`.
 
-This file is intended for AI coding assistants (Claude, ChatGPT, etc.) contributing to **oni**.
+The key instructions from that file are included below for convenience.
 
-## 0. Prime directive
+---
 
-**Consensus correctness is sacred.**  
-Bitcoin Core is the reference implementation. Do not “guess” consensus behavior.
+## Prime Directive
+
+**Consensus correctness is sacred.**
+
+Bitcoin Core is the reference implementation. Do not "guess" consensus behavior.
 
 If you are unsure:
-- stop,
-- locate the upstream rule/test vector,
-- implement with tests and differential validation.
+1. Stop
+2. Locate the upstream rule/test vector
+3. Implement with tests and differential validation
 
-## 1. How to work in this repo
-
-### 1.1 Read these first
-- `PRD.md`
-- `docs/ARCHITECTURE.md`
-- `docs/CONSENSUS.md`
-- `plan/IMPLEMENTATION_PLAN.md`
-
-### 1.2 Local commands
-From repo root:
+## Local Commands
 
 ```sh
-make fmt
-make check
-make test
+make fmt        # Format all code
+make check      # Type check all packages
+make test       # Run all tests
+make ci         # Full CI pipeline
 ```
 
-### 1.3 Where code lives
-- `packages/oni_bitcoin` — primitives + codecs
-- `packages/oni_consensus` — script + validation
-- `packages/oni_storage` — DB and chainstate
-- `packages/oni_p2p` — networking
-- `packages/oni_rpc` — RPC server
-- `packages/oni_node` — OTP application
+## Package Layout
 
-## 2. Coding rules
+```
+packages/
+├── oni_bitcoin    # Primitives + serialization (COMPLETE)
+├── oni_consensus  # Script + validation (CORE COMPLETE)
+├── oni_storage    # DB + chainstate (IN PROGRESS)
+├── oni_p2p        # Networking (COMPLETE)
+├── oni_rpc        # RPC server (COMPLETE)
+└── oni_node       # OTP application (COMPLETE)
+```
 
-### 2.1 Error handling
-- Parsing and network boundaries must never crash on malformed bytes.
-- Use `Result` for failure paths.
-- Do not throw exceptions for expected failures.
+## Coding Rules
 
-### 2.2 Bounded resources
-- All decoding must enforce size limits before allocation.
-- All queues must be bounded.
-- Never accept unbounded lists from the network without caps.
+1. **Error Handling**: Use `Result` for failure paths. Never crash on malformed input.
+2. **Bounded Resources**: Enforce size limits before allocation. Cap all queues.
+3. **Determinism**: Consensus code must be deterministic across runs.
+4. **Separation**: `oni_consensus` must not import policy or P2P modules.
 
-### 2.3 Determinism
-- Consensus code must be deterministic across runs.
-- Avoid relying on map/dict iteration order for consensus-relevant behavior.
+## Definition of Done
 
-### 2.4 Consensus vs policy separation
-- `oni_consensus` must not import policy or P2P modules.
-- Policy lives in mempool and relay code, not in block validation.
+- [ ] Unit tests exist and pass
+- [ ] Docs updated
+- [ ] Telemetry added where relevant
+- [ ] Code formatted (`make fmt`)
+- [ ] Type check passes (`make check`)
+- [ ] Consensus changes include test vectors
 
-## 3. Definition of Done (for AI contributions)
+## Key Invariants
 
-Your change is not done until:
-- unit tests exist and pass
-- docs updated (module purpose/invariants)
-- telemetry added where relevant
-- no new dependencies without justification
-- consensus-critical changes include vectors or differential tests
-
-## 4. How to propose a change
-
-For medium/large changes:
-1. Write a short design note in `docs/adr/` (Architecture Decision Record).
-2. Add a task entry in `ai/backlog/backlog.yml`.
-3. Implement behind feature flags if risky.
-4. Add tests and benchmarks.
-
-## 5. Common pitfalls
-
-- Endianness errors (Bitcoin uses little-endian in many encodings).
-- CompactSize/varint boundary handling.
-- Script numeric encoding rules and minimal encoding flags.
-- Incorrect sighash serialization preimages.
-- Unbounded allocations when parsing P2P messages.
-
-## 6. If you need native code (NIF)
-
-- Prefer existing audited libraries where possible.
-- Keep NIF surface minimal and well-tested.
-- Add fuzzing to the boundary.
-- Document build steps under `docs/native/`.
+1. **Parsing is total** — Never crash on malformed input
+2. **Consensus is deterministic** — Same inputs = same outputs
+3. **Resources are bounded** — No unbounded allocations
+4. **Policy stays out of consensus** — Clean separation
+5. **Tests prove correctness** — No consensus change without tests
