@@ -11,7 +11,7 @@ import gleam/erlang/process
 import gleam/option.{None, Some}
 import gleam/string
 import oni_bitcoin
-import supervisor
+import oni_supervisor
 import node_rpc
 import rpc_service.{QueryHeight, QueryMempoolSize, QueryMempoolTxids, QueryNetwork, QuerySyncState, QueryTip}
 
@@ -25,7 +25,7 @@ pub fn main() {
 
 pub fn chainstate_adapter_query_height_test() {
   // Start a chainstate actor
-  let assert Ok(chainstate) = supervisor.start_chainstate(oni_bitcoin.Regtest)
+  let assert Ok(chainstate) = oni_supervisor.start_chainstate(oni_bitcoin.Regtest)
 
   // Start the adapter
   let assert Ok(adapter) = node_rpc.start_chainstate_adapter(chainstate)
@@ -39,7 +39,7 @@ pub fn chainstate_adapter_query_height_test() {
 
 pub fn chainstate_adapter_query_tip_test() {
   // Start a chainstate actor
-  let assert Ok(chainstate) = supervisor.start_chainstate(oni_bitcoin.Regtest)
+  let assert Ok(chainstate) = oni_supervisor.start_chainstate(oni_bitcoin.Regtest)
 
   // Start the adapter
   let assert Ok(adapter) = node_rpc.start_chainstate_adapter(chainstate)
@@ -53,7 +53,7 @@ pub fn chainstate_adapter_query_tip_test() {
 
 pub fn chainstate_adapter_query_network_test() {
   // Start a chainstate actor for testnet
-  let assert Ok(chainstate) = supervisor.start_chainstate(oni_bitcoin.Testnet)
+  let assert Ok(chainstate) = oni_supervisor.start_chainstate(oni_bitcoin.Testnet)
 
   // Start the adapter
   let assert Ok(adapter) = node_rpc.start_chainstate_adapter(chainstate)
@@ -67,7 +67,7 @@ pub fn chainstate_adapter_query_network_test() {
 
 pub fn chainstate_adapter_regtest_network_test() {
   // Start a chainstate actor for regtest
-  let assert Ok(chainstate) = supervisor.start_chainstate(oni_bitcoin.Regtest)
+  let assert Ok(chainstate) = oni_supervisor.start_chainstate(oni_bitcoin.Regtest)
 
   // Start the adapter
   let assert Ok(adapter) = node_rpc.start_chainstate_adapter(chainstate)
@@ -85,7 +85,7 @@ pub fn chainstate_adapter_regtest_network_test() {
 
 pub fn mempool_adapter_query_size_test() {
   // Start a mempool actor
-  let assert Ok(mempool) = supervisor.start_mempool(1000)
+  let assert Ok(mempool) = oni_supervisor.start_mempool(1000)
 
   // Start the adapter
   let assert Ok(adapter) = node_rpc.start_mempool_adapter(mempool)
@@ -99,7 +99,7 @@ pub fn mempool_adapter_query_size_test() {
 
 pub fn mempool_adapter_query_txids_test() {
   // Start a mempool actor
-  let assert Ok(mempool) = supervisor.start_mempool(1000)
+  let assert Ok(mempool) = oni_supervisor.start_mempool(1000)
 
   // Start the adapter
   let assert Ok(adapter) = node_rpc.start_mempool_adapter(mempool)
@@ -117,7 +117,7 @@ pub fn mempool_adapter_query_txids_test() {
 
 pub fn sync_adapter_query_state_test() {
   // Start a sync actor
-  let assert Ok(sync) = supervisor.start_sync()
+  let assert Ok(sync) = oni_supervisor.start_sync()
 
   // Start the adapter
   let assert Ok(adapter) = node_rpc.start_sync_adapter(sync)
@@ -132,10 +132,10 @@ pub fn sync_adapter_query_state_test() {
 
 pub fn sync_adapter_shows_syncing_test() {
   // Start a sync actor
-  let assert Ok(sync) = supervisor.start_sync()
+  let assert Ok(sync) = oni_supervisor.start_sync()
 
   // Start syncing
-  process.send(sync, supervisor.StartSync("peer1"))
+  process.send(sync, oni_supervisor.StartSync("peer1"))
 
   // Start the adapter
   let assert Ok(adapter) = node_rpc.start_sync_adapter(sync)
@@ -154,11 +154,11 @@ pub fn sync_adapter_shows_syncing_test() {
 
 pub fn create_rpc_handles_test() {
   // Start all actors
-  let assert Ok(chainstate) = supervisor.start_chainstate(oni_bitcoin.Regtest)
-  let assert Ok(mempool) = supervisor.start_mempool(1000)
-  let assert Ok(sync) = supervisor.start_sync()
+  let assert Ok(chainstate) = oni_supervisor.start_chainstate(oni_bitcoin.Regtest)
+  let assert Ok(mempool) = oni_supervisor.start_mempool(1000)
+  let assert Ok(sync) = oni_supervisor.start_sync()
 
-  let node_handles = supervisor.NodeHandles(
+  let node_handles = oni_supervisor.NodeHandles(
     chainstate: chainstate,
     mempool: mempool,
     sync: sync,
@@ -176,7 +176,7 @@ pub fn start_node_with_rpc_test() {
   case result {
     Ok(#(node_handles, rpc_handles)) -> {
       // Verify node handles work
-      let height = process.call(node_handles.chainstate, supervisor.GetHeight, 5000)
+      let height = process.call(node_handles.chainstate, oni_supervisor.GetHeight, 5000)
       should.equal(height, 0)
 
       // Verify RPC handles work
@@ -195,7 +195,7 @@ pub fn start_node_with_rpc_test() {
 // ============================================================================
 
 pub fn mainnet_genesis_tip_test() {
-  let assert Ok(chainstate) = supervisor.start_chainstate(oni_bitcoin.Mainnet)
+  let assert Ok(chainstate) = oni_supervisor.start_chainstate(oni_bitcoin.Mainnet)
   let assert Ok(adapter) = node_rpc.start_chainstate_adapter(chainstate)
 
   let tip = process.call(adapter, QueryTip, 5000)
@@ -211,7 +211,7 @@ pub fn mainnet_genesis_tip_test() {
 }
 
 pub fn testnet_genesis_tip_test() {
-  let assert Ok(chainstate) = supervisor.start_chainstate(oni_bitcoin.Testnet)
+  let assert Ok(chainstate) = oni_supervisor.start_chainstate(oni_bitcoin.Testnet)
   let assert Ok(adapter) = node_rpc.start_chainstate_adapter(chainstate)
 
   let tip = process.call(adapter, QueryTip, 5000)
@@ -231,7 +231,7 @@ pub fn testnet_genesis_tip_test() {
 // ============================================================================
 
 pub fn adapters_handle_multiple_queries_test() {
-  let assert Ok(chainstate) = supervisor.start_chainstate(oni_bitcoin.Regtest)
+  let assert Ok(chainstate) = oni_supervisor.start_chainstate(oni_bitcoin.Regtest)
   let assert Ok(adapter) = node_rpc.start_chainstate_adapter(chainstate)
 
   // Multiple queries should all work
@@ -245,7 +245,7 @@ pub fn adapters_handle_multiple_queries_test() {
 }
 
 pub fn multiple_adapters_same_actor_test() {
-  let assert Ok(chainstate) = supervisor.start_chainstate(oni_bitcoin.Regtest)
+  let assert Ok(chainstate) = oni_supervisor.start_chainstate(oni_bitcoin.Regtest)
 
   // Create multiple adapters for the same chainstate
   let assert Ok(adapter1) = node_rpc.start_chainstate_adapter(chainstate)

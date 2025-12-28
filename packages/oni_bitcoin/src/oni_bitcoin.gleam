@@ -485,9 +485,10 @@ fn int_to_hex_char(n: Int) -> String {
   }
 }
 
-/// Alias for txid_to_hex (wtxids have same format)
-pub fn wtxid_to_hex(txid: Txid) -> String {
-  txid_to_hex(txid)
+/// Convert a Wtxid to hex string (display byte order - reversed)
+pub fn wtxid_to_hex(wtxid: Wtxid) -> String {
+  let Wtxid(Hash256(bytes)) = wtxid
+  hex_encode(reverse_bytes(bytes))
 }
 
 /// Decode a bech32/bech32m address to version and program
