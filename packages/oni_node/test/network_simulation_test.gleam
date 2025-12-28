@@ -17,9 +17,9 @@ import gleam/option.{type Option, None, Some}
 import gleeunit/should
 import oni_bitcoin
 import oni_p2p
-import oni_p2p/sync
-import oni_p2p/relay
-import oni_p2p/ban_manager
+import sync
+import relay
+import ban_manager
 
 // ============================================================================
 // Test Utilities
@@ -318,6 +318,7 @@ pub fn tx_inv_relay_test() {
       }
     }
     None -> should.fail()  // Should have an inv message
+    _ -> should.fail()  // Catch-all for other message types
   }
 }
 
@@ -344,6 +345,7 @@ pub fn block_inv_relay_test() {
       }
     }
     None -> should.fail()
+    _ -> should.fail()  // Catch-all for other message types
   }
 }
 
@@ -470,7 +472,7 @@ pub fn locator_building_test() {
   let locator = sync.build_locator(chain, 0)
 
   // Should have at least genesis
-  list.length(locator.hashes) |> should.be_true
+  { list.length(locator.hashes) > 0 } |> should.be_true
 }
 
 pub fn download_manager_test() {
@@ -600,7 +602,6 @@ pub fn high_message_volume_test() {
       // Create unique txid from index
       let bytes = <<i:256>>
       oni_bitcoin.txid_from_bytes(bytes)
-      |> fn(r) { case r { Ok(t) -> Some(t) Error(_) -> None } }
     })
 
   // Queue all for announcement

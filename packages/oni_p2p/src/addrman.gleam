@@ -35,14 +35,14 @@ pub const tried_bucket_count = 256
 /// Maximum addresses per bucket
 pub const bucket_size = 64
 
-/// Maximum addresses in "new" table
-pub const max_new_addresses = new_bucket_count * bucket_size
+/// Maximum addresses in "new" table (1024 * 64)
+pub const max_new_addresses = 65_536
 
-/// Maximum addresses in "tried" table
-pub const max_tried_addresses = tried_bucket_count * bucket_size
+/// Maximum addresses in "tried" table (256 * 64)
+pub const max_tried_addresses = 16_384
 
-/// Default lifetime of addresses (30 days in seconds)
-pub const address_lifetime_sec = 30 * 24 * 60 * 60
+/// Default lifetime of addresses (30 days in seconds = 30 * 24 * 60 * 60)
+pub const address_lifetime_sec = 2_592_000
 
 /// Time between retries after failed connection (seconds)
 pub const retry_interval_sec = 600

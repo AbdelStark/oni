@@ -389,8 +389,8 @@ pub fn calculate_prune_targets(
   |> list.filter_map(fn(pair) {
     let #(_key, entry) = pair
     case entry.height < prune_below {
-      True -> Some(entry.hash)
-      False -> None
+      True -> Ok(entry.hash)
+      False -> Error(Nil)
     }
   })
 }
@@ -548,8 +548,8 @@ fn verify_utxo_integrity(utxo: UtxoView) -> #(Bool, List(IntegrityIssue)) {
     let #(key, coin) = pair
     // Verify each coin is valid
     case coin.height >= 0 && oni_storage.coin_value(coin) >= 0 {
-      True -> None
-      False -> Some(IssueInvalidCoin(key, "Invalid height or value"))
+      True -> Error(Nil)
+      False -> Ok(IssueInvalidCoin(key, "Invalid height or value"))
     }
   })
 
@@ -566,8 +566,8 @@ fn verify_index_integrity(
   // Check for basic validity
   let issues = list.filter_map(entries, fn(entry) {
     case verify_index_entry(entry) {
-      True -> None
-      False -> Some(IssueCorruptData("block:" <> int.to_string(entry.height)))
+      True -> Error(Nil)
+      False -> Ok(IssueCorruptData("block:" <> int.to_string(entry.height)))
     }
   })
 

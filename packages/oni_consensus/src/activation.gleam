@@ -15,6 +15,7 @@
 // - BIP 147: NULLDUMMY
 // - BIP 341: Taproot
 
+import gleam/option.{type Option, None, Some}
 import oni_bitcoin.{type Network, Mainnet, Testnet, Regtest, Signet}
 
 // ============================================================================
@@ -316,11 +317,11 @@ fn shift_right(value: Int, n: Int) -> Int {
 // Difficulty Adjustment
 // ============================================================================
 
-/// Target timespan for difficulty adjustment (2 weeks in seconds)
-pub const target_timespan: Int = 14 * 24 * 60 * 60
+/// Target timespan for difficulty adjustment (2 weeks in seconds = 14 * 24 * 60 * 60)
+pub const target_timespan: Int = 1_209_600
 
-/// Target spacing between blocks (10 minutes in seconds)
-pub const target_spacing: Int = 10 * 60
+/// Target spacing between blocks (10 minutes in seconds = 10 * 60)
+pub const target_spacing: Int = 600
 
 /// Difficulty adjustment interval (2016 blocks)
 pub const difficulty_adjustment_interval: Int = 2016
@@ -411,7 +412,7 @@ pub fn verify_checkpoint(
   }
 }
 
-fn find_checkpoint(height: Int, checkpoints: List(Checkpoint)) -> option.Option(Checkpoint) {
+fn find_checkpoint(height: Int, checkpoints: List(Checkpoint)) -> Option(Checkpoint) {
   case checkpoints {
     [] -> None
     [cp, ..rest] -> {

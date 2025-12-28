@@ -807,8 +807,11 @@ pub fn verify_taproot_batch(batch: BatchVerifier) -> Result(Nil, List(String)) {
       let entries = list.reverse(batch.entries)
       let messages = list.filter_map(indices, fn(i) {
         case list_at(entries, i) {
-          None -> None
-          Some(entry) -> entry.context
+          None -> Error(Nil)
+          Some(entry) -> case entry.context {
+            Some(ctx) -> Ok(ctx)
+            None -> Error(Nil)
+          }
         }
       })
       Error(messages)

@@ -512,10 +512,7 @@ pub fn handle_txdiff_request(
 ) -> #(ErlayPeerState, ErlayMessage) {
   // Find transactions matching the requested short IDs
   let txs = list.filter_map(short_ids, fn(short_id) {
-    case dict.get(mempool, short_id) {
-      Ok(tx) -> Some(tx)
-      Error(_) -> None
-    }
+    dict.get(mempool, short_id)
   })
 
   // Mark these as known to peer

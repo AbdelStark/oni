@@ -340,7 +340,7 @@ fn handle_submit_block(
         True -> state  // Pipeline full, drop block (will be re-requested)
         False -> {
           // Create pipeline entry
-          let tx_count = list.length(block.txs)
+          let tx_count = list.length(block.transactions)
           let entry = PipelineBlock(
             hash: hash,
             block: Some(block),
@@ -440,11 +440,11 @@ fn start_parallel_tx_validation(
 /// Start sequential transaction validation
 fn start_sequential_tx_validation(
   hash: BlockHash,
-  _block: Block,
+  block: Block,
   state: PipelineState,
 ) -> PipelineState {
   // Same as parallel but single-threaded
-  start_parallel_tx_validation(hash, _block, state)
+  start_parallel_tx_validation(hash, block, state)
 }
 
 /// Handle worker completion
@@ -678,29 +678,29 @@ fn add_to_connect_queue(hash: BlockHash, queue: List(BlockHash)) -> List(BlockHa
 
 /// Get current time in milliseconds
 @external(erlang, "erlang", "system_time")
-fn erlang_system_time(unit: atom) -> Int
+fn erlang_system_time(unit: Atom) -> Int
 
 fn now_ms() -> Int {
   erlang_system_time(millisecond_atom())
 }
 
 @external(erlang, "erlang", "binary_to_atom")
-fn binary_to_atom(binary: BitArray, encoding: atom) -> atom
+fn binary_to_atom(binary: BitArray, encoding: Atom) -> Atom
 
-type atom
+type Atom
 
-fn millisecond_atom() -> atom {
+fn millisecond_atom() -> Atom {
   binary_to_atom(<<"millisecond">>, utf8_atom())
 }
 
-fn utf8_atom() -> atom {
+fn utf8_atom() -> Atom {
   binary_to_atom(<<"utf8">>, latin1_atom())
 }
 
 @external(erlang, "erlang", "list_to_atom")
-fn list_to_atom(list: List(Int)) -> atom
+fn list_to_atom(list: List(Int)) -> Atom
 
-fn latin1_atom() -> atom {
+fn latin1_atom() -> Atom {
   list_to_atom([108, 97, 116, 105, 110, 49])
 }
 
@@ -747,20 +747,21 @@ pub type OutPoint {
 /// Create a UTXO batch from a block
 pub fn create_utxo_batch(block: Block, height: Int) -> UtxoBatch {
   let #(adds, spends) = list.fold(
-    list.index_map(block.txs, fn(tx, idx) { #(tx, idx) }),
+    list.index_map(block.transactions, fn(tx: oni_bitcoin.Transaction, idx) { #(tx, idx) }),
     #([], []),
-    fn(acc, indexed_tx) {
+    fn(acc, indexed_tx: #(oni_bitcoin.Transaction, Int)) {
       let #(tx, tx_idx) = indexed_tx
       let #(all_adds, all_spends) = acc
       let is_coinbase = tx_idx == 0
+      let tx_txid = oni_bitcoin.txid_from_tx(tx)
 
       // Add outputs
-      let new_adds = list.index_map(tx.outputs, fn(output, vout) {
+      let new_adds = list.index_map(tx.outputs, fn(output: oni_bitcoin.TxOut, vout) {
         UtxoAdd(
-          outpoint: OutPoint(txid: tx.txid.hash.bytes, vout: vout),
+          outpoint: OutPoint(txid: tx_txid.hash.bytes, vout: vout),
           output: TxOut(
             script_pubkey: output.script_pubkey.bytes,
-            amount: output.value,
+            amount: output.value.sats,
           ),
           is_coinbase: is_coinbase,
         )
@@ -769,11 +770,11 @@ pub fn create_utxo_batch(block: Block, height: Int) -> UtxoBatch {
       // Spend inputs (skip coinbase)
       let new_spends = case is_coinbase {
         True -> []
-        False -> list.map(tx.inputs, fn(input) {
+        False -> list.map(tx.inputs, fn(input: oni_bitcoin.TxIn) {
           UtxoSpend(
             outpoint: OutPoint(
-              txid: input.prev_out.txid.hash.bytes,
-              vout: input.prev_out.vout,
+              txid: input.prevout.txid.hash.bytes,
+              vout: input.prevout.vout,
             ),
           )
         })

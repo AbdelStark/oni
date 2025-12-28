@@ -13,6 +13,7 @@
 import gleam/bit_array
 import gleam/bytes_builder
 import gleam/dict.{type Dict}
+import gleam/float
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
