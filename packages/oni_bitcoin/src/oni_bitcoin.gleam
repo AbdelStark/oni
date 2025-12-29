@@ -6,6 +6,7 @@
 
 import gleam/bit_array
 import gleam/crypto
+import gleam/dynamic.{type Dynamic}
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
@@ -840,8 +841,8 @@ pub fn ecdsa_verify(
 }
 
 /// Verify a BIP-340 Schnorr signature
-/// Note: Erlang's crypto doesn't support BIP-340 Schnorr directly.
-/// This is a placeholder that will need NIF integration for production use.
+/// Uses the secp256k1 NIF for verification. If the NIF is not loaded,
+/// returns UnsupportedOperation error.
 pub fn schnorr_verify(
   sig: SchnorrSig,
   msg_hash: BitArray,
@@ -849,16 +850,68 @@ pub fn schnorr_verify(
 ) -> Result(Bool, CryptoError) {
   case bit_array.byte_size(msg_hash) {
     32 -> {
-      // BIP-340 Schnorr verification requires special handling.
-      // For now, we validate inputs but return an error indicating
-      // that a NIF implementation is needed for actual verification.
-      let _ = sig
-      let _ = pubkey
-      Error(UnsupportedOperation)
+      case bit_array.byte_size(sig.bytes), bit_array.byte_size(pubkey.bytes) {
+        64, 32 -> {
+          // Call the Erlang NIF module for BIP-340 Schnorr verification
+          decode_schnorr_result(erlang_schnorr_verify_raw(
+            msg_hash,
+            sig.bytes,
+            pubkey.bytes,
+          ))
+        }
+        _, _ -> Error(InvalidSignature)
+      }
     }
     _ -> Error(InvalidMessage)
   }
 }
+
+/// Decode the Erlang result from oni_secp256k1:schnorr_verify
+/// Returns {ok, true|false} or {error, Reason}
+fn decode_schnorr_result(result: Dynamic) -> Result(Bool, CryptoError) {
+  // Try to decode as {ok, Bool}
+  case dynamic.tuple2(dynamic.dynamic, dynamic.dynamic)(result) {
+    Ok(#(tag, value)) -> {
+      case is_ok_atom(tag), is_true_atom(value), is_false_atom(value) {
+        True, True, False -> Ok(True)
+        True, False, True -> Ok(False)
+        False, _, _ -> {
+          // It's an error tuple, check if it's nif_not_loaded
+          case is_nif_not_loaded(value) {
+            True -> Error(UnsupportedOperation)
+            False -> Error(VerificationFailed)
+          }
+        }
+        _, _, _ -> Error(VerificationFailed)
+      }
+    }
+    Error(_) -> Error(VerificationFailed)
+  }
+}
+
+/// Check if dynamic value is the atom 'ok'
+@external(erlang, "oni_bitcoin_ffi", "is_ok_atom")
+fn is_ok_atom(value: Dynamic) -> Bool
+
+/// Check if dynamic value is the atom 'true'
+@external(erlang, "oni_bitcoin_ffi", "is_true_atom")
+fn is_true_atom(value: Dynamic) -> Bool
+
+/// Check if dynamic value is the atom 'false'
+@external(erlang, "oni_bitcoin_ffi", "is_false_atom")
+fn is_false_atom(value: Dynamic) -> Bool
+
+/// Check if dynamic value is the atom 'nif_not_loaded'
+@external(erlang, "oni_bitcoin_ffi", "is_nif_not_loaded")
+fn is_nif_not_loaded(value: Dynamic) -> Bool
+
+/// Raw FFI call to oni_secp256k1:schnorr_verify
+@external(erlang, "oni_secp256k1", "schnorr_verify")
+fn erlang_schnorr_verify_raw(
+  msg_hash: BitArray,
+  signature: BitArray,
+  pubkey: BitArray,
+) -> Dynamic
 
 /// Erlang FFI for ECDSA verification on secp256k1
 fn erlang_ecdsa_verify(
@@ -2113,64 +2166,64 @@ pub fn chain_code_from_bytes(bytes: BitArray) -> Result(ChainCode, String) {
 }
 
 // ============================================================================
-// Schnorr Signature Verification (BIP-340)
+// Taproot Key Operations (BIP-341)
 // ============================================================================
 
-/// Verify a BIP-340 Schnorr signature
-/// Uses the secp256k1 NIF for actual verification
-pub fn schnorr_verify_nif(
-  sig: SchnorrSig,
-  msg_hash: BitArray,
-  pubkey: XOnlyPubKey,
-) -> Result(Bool, CryptoError) {
-  case bit_array.byte_size(msg_hash) {
-    32 -> {
-      // Call the Erlang NIF module
-      case erlang_schnorr_verify(msg_hash, sig.bytes, pubkey.bytes) {
-        #(True, True) -> Ok(True)
-        #(True, False) -> Ok(False)
-        _ -> Error(VerificationFailed)
-      }
-    }
-    _ -> Error(InvalidMessage)
-  }
-}
-
-/// Erlang FFI for Schnorr verification
-@external(erlang, "oni_secp256k1", "schnorr_verify")
-fn erlang_schnorr_verify(
-  msg_hash: BitArray,
-  signature: BitArray,
-  pubkey: BitArray,
-) -> #(Bool, Bool)
-
 /// Tweak a public key for Taproot (BIP-341)
+/// Uses the secp256k1 NIF for key tweaking. If the NIF is not loaded,
+/// returns UnsupportedOperation error.
 pub fn tweak_pubkey_for_taproot(
   internal_key: XOnlyPubKey,
   tweak_hash: BitArray,
 ) -> Result(#(XOnlyPubKey, Int), CryptoError) {
   case bit_array.byte_size(tweak_hash) {
     32 -> {
-      case erlang_tweak_pubkey(internal_key.bytes, tweak_hash) {
-        #(True, #(output_key, parity)) -> {
-          case xonly_pubkey_from_bytes(output_key) {
-            Ok(pk) -> Ok(#(pk, parity))
-            Error(_) -> Error(InvalidPublicKey)
-          }
-        }
-        _ -> Error(UnsupportedOperation)
-      }
+      decode_tweak_result(
+        erlang_tweak_pubkey_raw(internal_key.bytes, tweak_hash),
+      )
     }
     _ -> Error(InvalidMessage)
   }
 }
 
-/// Erlang FFI for Taproot pubkey tweaking
+/// Decode the Erlang result from oni_secp256k1:tweak_pubkey
+/// Returns {ok, {OutputKey, Parity}} or {error, Reason}
+fn decode_tweak_result(result: Dynamic) -> Result(#(XOnlyPubKey, Int), CryptoError) {
+  // Try to decode as {ok, {Binary, Int}}
+  case dynamic.tuple2(dynamic.dynamic, dynamic.dynamic)(result) {
+    Ok(#(tag, value)) -> {
+      case is_ok_atom(tag) {
+        True -> {
+          // Decode the inner tuple {binary, int}
+          case dynamic.tuple2(dynamic.bit_array, dynamic.int)(value) {
+            Ok(#(output_key, parity)) -> {
+              case xonly_pubkey_from_bytes(output_key) {
+                Ok(pk) -> Ok(#(pk, parity))
+                Error(_) -> Error(InvalidPublicKey)
+              }
+            }
+            Error(_) -> Error(VerificationFailed)
+          }
+        }
+        False -> {
+          // It's an error tuple
+          case is_nif_not_loaded(value) {
+            True -> Error(UnsupportedOperation)
+            False -> Error(VerificationFailed)
+          }
+        }
+      }
+    }
+    Error(_) -> Error(VerificationFailed)
+  }
+}
+
+/// Raw FFI call to oni_secp256k1:tweak_pubkey
 @external(erlang, "oni_secp256k1", "tweak_pubkey")
-fn erlang_tweak_pubkey(
+fn erlang_tweak_pubkey_raw(
   internal_key: BitArray,
   tweak_hash: BitArray,
-) -> #(Bool, #(BitArray, Int))
+) -> Dynamic
 
 // ============================================================================
 // Script Helper Functions

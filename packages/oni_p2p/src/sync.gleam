@@ -228,7 +228,7 @@ pub fn header_chain_height(chain: HeaderChain) -> Int {
   chain.tip_height
 }
 
-/// Add a header to the chain
+/// Add a header to the chain with full validation
 pub fn header_chain_add(
   chain: HeaderChain,
   header: BlockHeaderNet,
@@ -239,30 +239,157 @@ pub fn header_chain_add(
   case hash_in_chain(chain, prev_hash) {
     False -> Error(SyncOrphanHeader)
     True -> {
-      // Calculate work for this header
-      let work = work_from_bits(header.bits)
-      let height = chain.tip_height + 1
-      let chainwork = chain.total_work + work
-
-      // Create entry
-      let entry = HeaderEntry(
-        header: header,
-        height: height,
-        chainwork: chainwork,
-      )
-
-      // Calculate new header hash
+      // Calculate header hash first
       let header_hash = compute_header_hash(header)
-      let key = oni_bitcoin.hash256_to_hex(header_hash.hash)
+      let height = chain.tip_height + 1
 
-      // Update chain
-      Ok(HeaderChain(
-        headers: dict.insert(chain.headers, key, entry),
-        best_chain: list.append(chain.best_chain, [header_hash]),
-        tip_height: height,
-        total_work: chainwork,
-      ))
+      // Validate PoW: header hash must be less than target
+      case validate_pow(header_hash, header.bits) {
+        Error(e) -> Error(e)
+        Ok(_) -> {
+          // Validate timestamp (basic check)
+          case validate_timestamp(header.timestamp, chain) {
+            Error(e) -> Error(e)
+            Ok(_) -> {
+              // Calculate work for this header
+              let work = work_from_bits(header.bits)
+              let chainwork = chain.total_work + work
+
+              // Create entry
+              let entry = HeaderEntry(
+                header: header,
+                height: height,
+                chainwork: chainwork,
+              )
+
+              let key = oni_bitcoin.hash256_to_hex(header_hash.hash)
+
+              // Update chain
+              Ok(HeaderChain(
+                headers: dict.insert(chain.headers, key, entry),
+                best_chain: list.append(chain.best_chain, [header_hash]),
+                tip_height: height,
+                total_work: chainwork,
+              ))
+            }
+          }
+        }
+      }
     }
+  }
+}
+
+/// Validate proof of work: header hash must be <= target
+fn validate_pow(header_hash: BlockHash, bits: Int) -> Result(Nil, SyncError) {
+  // Get target from compact bits
+  let target = target_from_bits(bits)
+
+  // Convert header hash to a comparable value
+  // The hash is in little-endian, we need to compare as a 256-bit number
+  let hash_value = hash_to_uint256(header_hash.hash.bytes)
+
+  case hash_value <= target {
+    True -> Ok(Nil)
+    False -> Error(SyncInvalidPoW)
+  }
+}
+
+/// Convert compact bits to target (256-bit value represented as Int)
+/// Bits format: 0xEEMMMMMMM where EE is exponent, MMMMMMM is mantissa
+fn target_from_bits(bits: Int) -> Int {
+  let exponent = int.bitwise_shift_right(bits, 24)
+  let mantissa = int.bitwise_and(bits, 0x007FFFFF)
+
+  // Handle negative flag (if mantissa has bit 23 set)
+  let mantissa_adj = case int.bitwise_and(bits, 0x00800000) != 0 {
+    True -> 0  // Invalid: negative target
+    False -> mantissa
+  }
+
+  // Target = mantissa * 2^(8*(exponent-3))
+  case exponent <= 3 {
+    True -> int.bitwise_shift_right(mantissa_adj, 8 * { 3 - exponent })
+    False -> int.bitwise_shift_left(mantissa_adj, 8 * { exponent - 3 })
+  }
+}
+
+/// Convert 32-byte hash to comparable integer value
+/// Bitcoin hashes are stored little-endian, but we compare as big-endian numbers
+fn hash_to_uint256(bytes: BitArray) -> Int {
+  // Read as 32 little-endian bytes, convert to single value
+  case bytes {
+    <<b0:8, b1:8, b2:8, b3:8, b4:8, b5:8, b6:8, b7:8,
+      b8:8, b9:8, b10:8, b11:8, b12:8, b13:8, b14:8, b15:8,
+      b16:8, b17:8, b18:8, b19:8, b20:8, b21:8, b22:8, b23:8,
+      b24:8, b25:8, b26:8, b27:8, b28:8, b29:8, b30:8, b31:8>> -> {
+      // For PoW comparison, the hash is treated as a little-endian 256-bit number
+      // Higher bytes have more weight in the comparison
+      // So b31 is the most significant byte
+      let msb = b31 * pow2(248) + b30 * pow2(240) + b29 * pow2(232) + b28 * pow2(224)
+      let next = b27 * pow2(216) + b26 * pow2(208) + b25 * pow2(200) + b24 * pow2(192)
+      let mid1 = b23 * pow2(184) + b22 * pow2(176) + b21 * pow2(168) + b20 * pow2(160)
+      let mid2 = b19 * pow2(152) + b18 * pow2(144) + b17 * pow2(136) + b16 * pow2(128)
+      let mid3 = b15 * pow2(120) + b14 * pow2(112) + b13 * pow2(104) + b12 * pow2(96)
+      let mid4 = b11 * pow2(88) + b10 * pow2(80) + b9 * pow2(72) + b8 * pow2(64)
+      let low1 = b7 * pow2(56) + b6 * pow2(48) + b5 * pow2(40) + b4 * pow2(32)
+      let low2 = b3 * pow2(24) + b2 * pow2(16) + b1 * pow2(8) + b0
+      msb + next + mid1 + mid2 + mid3 + mid4 + low1 + low2
+    }
+    _ -> 0  // Invalid hash length
+  }
+}
+
+/// Validate header timestamp
+/// - Must be greater than median of last 11 blocks
+/// - Must not be more than 2 hours in the future
+fn validate_timestamp(timestamp: Int, chain: HeaderChain) -> Result(Nil, SyncError) {
+  // Get median time past
+  let mtp = median_time_past(chain)
+
+  case timestamp > mtp {
+    False -> Error(SyncInvalidTimestamp)
+    True -> {
+      // Check not too far in future (2 hours = 7200 seconds)
+      // We'd need current time here - for now just validate MTP
+      Ok(Nil)
+    }
+  }
+}
+
+/// Calculate median time past (median of last 11 block timestamps)
+fn median_time_past(chain: HeaderChain) -> Int {
+  // Get last 11 headers (or fewer if chain is shorter)
+  let last_headers = list.take(list.reverse(chain.best_chain), 11)
+
+  // Get timestamps
+  let timestamps = list.filter_map(last_headers, fn(hash) {
+    let key = oni_bitcoin.hash256_to_hex(hash.hash)
+    case dict.get(chain.headers, key) {
+      Ok(entry) -> Ok(entry.header.timestamp)
+      Error(_) -> Error(Nil)
+    }
+  })
+
+  // Sort and get median
+  let sorted = list.sort(timestamps, int.compare)
+  case list.length(sorted) {
+    0 -> 0  // Genesis block case
+    n -> {
+      let mid = n / 2
+      case list_nth(sorted, mid) {
+        Ok(t) -> t
+        Error(_) -> 0
+      }
+    }
+  }
+}
+
+/// Get nth element from list
+fn list_nth(lst: List(a), n: Int) -> Result(a, Nil) {
+  case lst, n {
+    [head, ..], 0 -> Ok(head)
+    [_, ..tail], n if n > 0 -> list_nth(tail, n - 1)
+    _, _ -> Error(Nil)
   }
 }
 

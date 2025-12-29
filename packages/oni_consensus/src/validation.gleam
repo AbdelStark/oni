@@ -793,16 +793,19 @@ pub fn sighash_taproot(
     }
   }
 
-  // Add outputs if not NONE or SINGLE
+  // Add outputs hash based on sighash type (BIP-341)
   let with_outputs = case base_type {
-    0x02 | 0x03 -> with_prevouts
-    _ -> list.append(with_prevouts, [hash_outputs(list.map(prevouts, fn(_) {
-      // Use actual outputs, not prevouts
-      oni_bitcoin.TxOut(
-        value: oni_bitcoin.Amount(sats: 0),
-        script_pubkey: oni_bitcoin.script_from_bytes(<<>>),
-      )
-    })).bytes])
+    0x02 -> with_prevouts  // SIGHASH_NONE: no outputs
+    0x03 -> {
+      // SIGHASH_SINGLE: only the output at input_index
+      case list_nth(tx.outputs, input_index) {
+        Ok(out) -> list.append(with_prevouts, [
+          oni_bitcoin.hash256_digest(serialize_output(out)).bytes,
+        ])
+        Error(_) -> with_prevouts
+      }
+    }
+    _ -> list.append(with_prevouts, [hash_outputs(tx.outputs).bytes])  // SIGHASH_ALL/DEFAULT
   }
 
   // Add spend type
