@@ -59,9 +59,9 @@ This document tracks the implementation status of oni across all packages and fe
 | OP_CHECKSEQUENCEVERIFY (BIP112) | ✅ Done | Tested |
 | Control flow (IF/ELSE/ENDIF) | ✅ Done | |
 | Sighash types | ✅ Done | ALL, NONE, SINGLE, ANYONECANPAY |
-| Sighash computation (legacy) | ⚠️ Partial | Structure defined |
-| Sighash computation (BIP143 SegWit) | ⚠️ Partial | Structure defined |
-| Sighash computation (BIP341 Taproot) | ⚠️ Partial | Structure defined |
+| Sighash computation (legacy) | ✅ Done | In `validation.gleam` |
+| Sighash computation (BIP143 SegWit) | ✅ Done | In `validation.gleam` |
+| Sighash computation (BIP341 Taproot) | ✅ Done | In `validation.gleam` |
 | Merkle root computation | ✅ Done | |
 | Witness commitment | ✅ Done | |
 | Transaction validation (stateless) | ✅ Done | In `validation.gleam` |
@@ -98,7 +98,7 @@ This document tracks the implementation status of oni across all packages and fe
 | Connect block | ✅ Done | With UTXO updates |
 | Disconnect block | ✅ Done | With undo data |
 | DB backend interface | ✅ Done | In `db_backend.gleam` |
-| Persistent storage | ⚠️ Partial | Interface defined |
+| Persistent storage | ✅ Done | DETS + unified_storage bridge |
 | AssumeUTXO | ✅ Done | In `assumeutxo.gleam` |
 | Pruning | ✅ Done | In `pruning.gleam` |
 | Transaction index | ✅ Done | In `txindex.gleam` |
@@ -190,10 +190,8 @@ This document tracks the implementation status of oni across all packages and fe
 ## Known Gaps / Remaining Work
 
 ### Critical for Production
-1. **Signature verification**: secp256k1 NIF needs full implementation
-2. **Persistent storage**: Need concrete DB backend (LevelDB/RocksDB)
-3. **IBD testing**: End-to-end sync with real network
-4. **Sighash implementation**: Complete BIP143/BIP341 preimage computation
+1. **Signature verification**: secp256k1 NIF C code complete; requires libsecp256k1 build
+2. **IBD testing**: End-to-end sync with real network (G3 headers-first, H1 regtest)
 
 ### Important Improvements
 1. **Differential testing**: Run against Bitcoin Core test vectors
@@ -204,7 +202,12 @@ This document tracks the implementation status of oni across all packages and fe
 ### Nice to Have
 1. **Wallet features**: HD derivation, PSBT support
 2. **Indexers**: Address and transaction indexes
-3. **AssumeUTXO**: Snapshot sync capability
+3. **Schnorr batch verification**: Full implementation (currently stubbed)
+
+### Recently Completed
+1. **Sighash implementation**: Complete for legacy, BIP143, BIP341
+2. **Persistent storage**: DETS backend with unified_storage bridge
+3. **secp256k1 Gleam wiring**: Schnorr/ECDSA verify, Taproot tweak functions
 
 ## Legend
 

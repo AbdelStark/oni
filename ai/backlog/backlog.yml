@@ -311,7 +311,7 @@
 - id: D5
   title: "Sighash preimage computation"
   subsystem: consensus
-  status: in_progress
+  status: done
   depends_on: [D3]
   description: >
     Implement sighash preimage computation for legacy, BIP143, and BIP341.
@@ -320,11 +320,14 @@
   tests:
     - "unit"
     - "diff"
+  notes: >
+    Implementation complete in validation.gleam: sighash_legacy, sighash_segwit_v0,
+    sighash_taproot. Test vectors in test_vectors/sighash_tests.json.
 
 - id: F4
   title: "Persistent storage backend"
   subsystem: storage
-  status: in_progress
+  status: done
   depends_on: [F3]
   description: >
     Implement a persistent storage backend (LevelDB, RocksDB, or LMDB).
@@ -334,6 +337,10 @@
   tests:
     - "unit"
     - "integration"
+  notes: >
+    Implemented using Erlang DETS in db_backend.gleam. unified_storage.gleam
+    provides write-through caching bridge between in-memory and persistent layers.
+    Includes UTXO, block index, chainstate, and undo data persistence.
 
 # ============================================================================
 # PENDING TASKS
@@ -342,7 +349,7 @@
 - id: G3
   title: "Headers-first sync implementation"
   subsystem: p2p
-  status: pending
+  status: done
   depends_on: [G2, F3]
   description: >
     Implement headers-first synchronization with proper checkpointing.
@@ -351,6 +358,10 @@
     - "Node requests blocks after headers validated"
   tests:
     - "integration"
+  notes: >
+    Implemented in sync.gleam with full header validation: PoW check,
+    timestamp validation (MTP), target calculation from compact bits,
+    download manager with parallel requests, and reorg support.
 
 - id: G4
   title: "Block download pipelining"
@@ -377,6 +388,9 @@
     - "Node handles reorgs correctly"
   tests:
     - "e2e"
+  notes: >
+    Dependencies now ready: G3 (headers-first sync), D5 (sighash), C4 (NIF wiring).
+    Requires: libsecp256k1 build for Schnorr signatures, running regtest node.
 
 - id: H2
   title: "Integration test suite"
