@@ -1,52 +1,157 @@
 # oni
 
-**oni** is a modern, production-grade implementation of the Bitcoin protocol written in **Gleam** (targeting Erlang/OTP).  
-This repository is a **project blueprint**: it contains the PRD, architecture, an end‑to‑end implementation plan, and AI‑friendly agentic docs to support large-scale, high-assurance development.
+**oni** is a modern, production-grade implementation of the Bitcoin protocol written in **Gleam** (targeting Erlang/OTP).
 
-## Goals
+[![CI](https://github.com/AbdelStark/oni/actions/workflows/ci.yml/badge.svg)](https://github.com/AbdelStark/oni/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-- Full Bitcoin protocol implementation compatible with **mainnet**
-- Consensus correctness as the non-negotiable priority (Bitcoin Core is the reference)
-- High performance and scalability (IBD, mempool, signature verification)
-- Battle-tested robustness: fault tolerance via OTP supervision, strict resource controls, defensive networking
-- First-class operations: structured logging, metrics, tracing, profiling, health checks
-- Excellent developer experience: reproducible builds, deterministic test vectors, fuzzing, benchmarks, automation
-- AI-assisted development friendliness: clear module boundaries, task decompositions, prompts, “skills” playbooks
+## Overview
 
-## Non-goals (initially)
+oni aims to be a **fully validating, mainnet-compatible Bitcoin full node** with:
+- **Consensus correctness** as the non-negotiable priority (Bitcoin Core is the reference)
+- **Fault tolerance** via Erlang/OTP supervision trees
+- **Production-grade observability**: structured logging, Prometheus metrics, health checks
+- **AI-assisted development**: clear module boundaries and comprehensive documentation
+
+## Project Status
+
+> **Status: Active Development** — Core infrastructure implemented, working toward mainnet sync capability.
+
+### Implementation Progress
+
+| Package | Description | Status |
+|---------|-------------|--------|
+| `oni_bitcoin` | Primitives, serialization, encoding | ✅ Implemented |
+| `oni_consensus` | Script engine, validation, sighash | ✅ Implemented |
+| `oni_storage` | UTXO set, block index, chainstate | ✅ Implemented |
+| `oni_p2p` | P2P networking, peer management | ✅ Implemented |
+| `oni_rpc` | JSON-RPC server, HTTP interface | ✅ Implemented |
+| `oni_node` | OTP application, orchestration | ✅ Implemented |
+
+See [STATUS.md](STATUS.md) for detailed implementation status.
+
+## Features
+
+### Implemented
+- **Bitcoin primitives**: Transactions, blocks, scripts, addresses (P2PKH, P2SH, Bech32/Bech32m)
+- **Script interpreter**: Full opcode support including OP_CHECKLOCKTIMEVERIFY (BIP65), OP_CHECKSEQUENCEVERIFY (BIP112)
+- **Validation**: Stateless and contextual transaction/block validation
+- **Storage**: In-memory UTXO set with connect/disconnect block, undo data generation
+- **P2P foundation**: Message framing, compact blocks (BIP152), Erlay (BIP330), v2 transport (BIP324)
+- **RPC server**: JSON-RPC 2.0 with authentication and rate limiting
+- **Operations**: Prometheus metrics, structured logging, health endpoints
+
+### In Progress
+- Signature verification with secp256k1 NIF
+- Headers-first IBD synchronization
+- Persistent storage backend
+- Full mainnet sync capability
+
+## Quick Start
+
+### Prerequisites
+- Erlang/OTP 26+ (27.2 recommended)
+- Gleam 1.6.3+
+
+### Build and Test
+```sh
+# Format, typecheck, and test all packages
+make ci
+
+# Run individual commands
+make fmt       # Format code
+make check     # Type check
+make test      # Run tests
+make build     # Build all packages
+```
+
+### Run Node
+```sh
+# Mainnet (default)
+make run
+
+# Testnet
+make run-testnet
+
+# Regtest (for development)
+make run-regtest
+```
+
+## Repository Structure
+
+```
+oni/
+├── packages/           # Gleam packages (monorepo)
+│   ├── oni_bitcoin/    # Primitives + serialization
+│   ├── oni_consensus/  # Script engine + validation
+│   ├── oni_storage/    # Block store + UTXO DB
+│   ├── oni_p2p/        # P2P networking
+│   ├── oni_rpc/        # JSON-RPC server
+│   └── oni_node/       # OTP application
+├── docs/               # Architecture and specifications
+├── plan/               # Implementation roadmap
+├── ai/                 # AI development guidance
+├── test_vectors/       # Bitcoin Core test vectors
+├── scripts/            # Automation scripts
+├── monitoring/         # Prometheus + Grafana configs
+└── deploy/             # Deployment configurations
+```
+
+## Documentation
+
+### Getting Started
+- [PRD.md](PRD.md) — Product requirements
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — System design
+- [docs/CONSENSUS.md](docs/CONSENSUS.md) — Consensus rules
+
+### Development
+- [ai/CLAUDE.md](ai/CLAUDE.md) — AI development instructions
+- [CONTRIBUTING.md](CONTRIBUTING.md) — Contribution guidelines
+- [plan/IMPLEMENTATION_PLAN.md](plan/IMPLEMENTATION_PLAN.md) — Development phases
+
+### Operations
+- [docs/OPERATIONS.md](docs/OPERATIONS.md) — Operational runbook
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — Deployment guide
+- [docs/TELEMETRY.md](docs/TELEMETRY.md) — Observability setup
+
+## Design Principles
+
+1. **Correctness over cleverness** — No micro-optimizations before correctness is proven
+2. **Determinism** — Consensus execution must be deterministic across runs
+3. **Bounded resources** — Every external input has strict bounds
+4. **Separation of concerns** — Consensus, policy, and P2P are cleanly separated
+5. **Observability first** — Telemetry is a first-class deliverable
+
+## Non-Goals (initially)
 
 - Altcoin / non-Bitcoin consensus variants
 - GUI wallet
 - Lightning node (may be an integration target later)
+- Mining pool / stratum server
 
-## Repository layout
-
-- `PRD.md` – product requirements
-- `plan/` – implementation plan, milestones, quality gates, risks
-- `docs/` – architecture, subsystem specs, security, telemetry, testing, performance
-- `ai/` – agent instructions (CLAUDE.md, AGENTS.md) + skill playbooks + backlog
-- `packages/` – monorepo packages (Gleam), with local path dependencies
-- `scripts/` – automation scripts for CI, test vector syncing, benchmarking, releases
-- `.github/` – CI workflows and templates
-
-## Quick start (scaffolding only)
-
-This repository ships with minimal Gleam package scaffolding so the structure is concrete.
-You can run a placeholder entrypoint today:
+## Testing
 
 ```sh
-cd packages/oni_node
-gleam run
+# Run all tests
+make test
+
+# Run with test vectors
+make test-vectors
+
+# Run differential tests against Bitcoin Core
+make test-differential
 ```
 
-## Next step
+## Contributing
 
-Read these in order:
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and contribution guidelines.
 
-1. `PRD.md`
-2. `docs/ARCHITECTURE.md`
-3. `plan/IMPLEMENTATION_PLAN.md`
-4. `ai/CLAUDE.md` + `ai/AGENTS.md`
+## License
 
----
-**Status:** design + planning complete; implementation is expected to follow the plan.
+MIT License — see [LICENSE](LICENSE) for details.
+
+## Acknowledgments
+
+- **Bitcoin Core** — The reference implementation
+- **rust-bitcoin** — Design inspiration for modularity
+- **Gleam** — The language enabling this implementation

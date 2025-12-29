@@ -1,11 +1,14 @@
 # oni backlog
 #
-# Each task is intended to be small enough for a focused PR.
+# Task tracking for ongoing development.
+# Completed tasks are marked with status: done.
+# New tasks should be added at the bottom of the relevant section.
 #
 # Fields:
 # - id: stable identifier
 # - title: short summary
 # - subsystem: one of [foundations, bitcoin, consensus, storage, p2p, rpc, node, ops, security]
+# - status: one of [done, in_progress, pending]
 # - depends_on: list of ids
 # - description: what to do
 # - acceptance: explicit acceptance criteria
@@ -13,9 +16,14 @@
 #
 # Note: Avoid time estimates.
 
+# ============================================================================
+# COMPLETED TASKS
+# ============================================================================
+
 - id: A1
   title: "Repo automation Makefile + package runner"
   subsystem: foundations
+  status: done
   depends_on: []
   description: >
     Provide make targets to run format, check, and tests across all packages.
@@ -27,6 +35,7 @@
 - id: A2
   title: "CI workflow for format + check + test"
   subsystem: foundations
+  status: done
   depends_on: [A1]
   description: >
     Add a GitHub Actions workflow to run make ci on push/PR.
@@ -38,6 +47,7 @@
 - id: B1
   title: "Implement CompactSize/varint codec"
   subsystem: bitcoin
+  status: done
   depends_on: []
   description: >
     Add encode/decode for Bitcoin CompactSize integers with strict bounds.
@@ -50,6 +60,7 @@
 - id: B2
   title: "Implement base58check encode/decode"
   subsystem: bitcoin
+  status: done
   depends_on: []
   description: >
     Implement Base58Check with checksum rules for addresses/WIF.
@@ -62,6 +73,7 @@
 - id: B3
   title: "Implement bech32 + bech32m encode/decode"
   subsystem: bitcoin
+  status: done
   depends_on: []
   description: >
     Implement Bech32 and Bech32m for segwit addresses.
@@ -74,6 +86,7 @@
 - id: B4
   title: "Consensus serialization for Tx (legacy)"
   subsystem: bitcoin
+  status: done
   depends_on: [B1]
   description: >
     Implement transaction encode/decode without witness.
@@ -85,6 +98,7 @@
 - id: B5
   title: "Consensus serialization for Tx (witness)"
   subsystem: bitcoin
+  status: done
   depends_on: [B4]
   description: >
     Extend tx serialization for segwit (marker/flag and witness stack).
@@ -96,6 +110,7 @@
 - id: C1
   title: "SHA256d hashing utilities"
   subsystem: bitcoin
+  status: done
   depends_on: []
   description: >
     Implement sha256 and double-sha256 helpers with tests.
@@ -107,6 +122,7 @@
 - id: C2
   title: "RIPEMD160 + HASH160"
   subsystem: bitcoin
+  status: done
   depends_on: [C1]
   description: >
     Implement ripemd160 and hash160 (sha256 then ripemd160).
@@ -118,6 +134,7 @@
 - id: C3
   title: "secp256k1 verify interface"
   subsystem: consensus
+  status: done
   depends_on: []
   description: >
     Define a crypto interface for signature verification (ECDSA + Schnorr).
@@ -129,6 +146,7 @@
 - id: D1
   title: "Script opcode table and parser"
   subsystem: consensus
+  status: done
   depends_on: []
   description: >
     Parse script bytes to opcodes and pushdata with strict bounds.
@@ -140,6 +158,7 @@
 - id: D2
   title: "Legacy script evaluation core (stack machine)"
   subsystem: consensus
+  status: done
   depends_on: [D1, C3]
   description: >
     Implement baseline script interpreter for legacy spends.
@@ -151,6 +170,7 @@
 - id: D3
   title: "SegWit v0 script evaluation"
   subsystem: consensus
+  status: done
   depends_on: [D2]
   description: >
     Implement witness program rules and BIP143 digest integration.
@@ -162,6 +182,7 @@
 - id: D4
   title: "Taproot schnorr verification + tagged hash helpers"
   subsystem: consensus
+  status: done
   depends_on: [C3, C1]
   description: >
     Add tagged hash and schnorr verify support for taproot.
@@ -173,6 +194,7 @@
 - id: E1
   title: "Transaction stateless validation"
   subsystem: consensus
+  status: done
   depends_on: [B4, B5]
   description: >
     Implement non-context checks: sizes, counts, value ranges.
@@ -184,6 +206,7 @@
 - id: F1
   title: "Storage engine abstraction (KV interface)"
   subsystem: storage
+  status: done
   depends_on: []
   description: >
     Define a storage interface for UTXO/index DB with a concrete backend.
@@ -195,6 +218,7 @@
 - id: F2
   title: "UTXO encoding and lookup"
   subsystem: storage
+  status: done
   depends_on: [F1, B4]
   description: >
     Implement coin record encoding and outpoint lookup.
@@ -206,6 +230,7 @@
 - id: F3
   title: "ConnectBlock: apply UTXO transitions"
   subsystem: storage
+  status: done
   depends_on: [F2, E1]
   description: >
     Apply tx spends/creates to UTXO set with undo data.
@@ -217,6 +242,7 @@
 - id: G1
   title: "P2P message envelope parser"
   subsystem: p2p
+  status: done
   depends_on: [C1]
   description: >
     Implement Bitcoin message header parsing with checksum verification.
@@ -229,6 +255,7 @@
 - id: G2
   title: "version/verack handshake"
   subsystem: p2p
+  status: done
   depends_on: [G1]
   description: >
     Implement version and verack message codec and handshake state machine.
@@ -241,6 +268,7 @@
 - id: J1
   title: "JSON-RPC server skeleton with auth"
   subsystem: rpc
+  status: done
   depends_on: []
   description: >
     Provide an HTTP JSON-RPC server skeleton with authentication hooks.
@@ -252,6 +280,7 @@
 - id: K1
   title: "Metrics endpoint and basic gauges"
   subsystem: ops
+  status: done
   depends_on: []
   description: >
     Expose /metrics endpoint and basic node health metrics.
@@ -259,3 +288,158 @@
     - "Prometheus scrape returns metrics"
   tests:
     - "integration (smoke)"
+
+# ============================================================================
+# IN PROGRESS TASKS
+# ============================================================================
+
+- id: C4
+  title: "secp256k1 NIF implementation"
+  subsystem: consensus
+  status: in_progress
+  depends_on: [C3]
+  description: >
+    Implement the secp256k1 NIF for ECDSA and Schnorr signature verification.
+  acceptance:
+    - "ECDSA verify works with known vectors"
+    - "Schnorr verify works with BIP340 vectors"
+    - "NIF does not block BEAM schedulers"
+  tests:
+    - "unit"
+    - "bench"
+
+- id: D5
+  title: "Sighash preimage computation"
+  subsystem: consensus
+  status: in_progress
+  depends_on: [D3]
+  description: >
+    Implement sighash preimage computation for legacy, BIP143, and BIP341.
+  acceptance:
+    - "Sighash vectors match Bitcoin Core output"
+  tests:
+    - "unit"
+    - "diff"
+
+- id: F4
+  title: "Persistent storage backend"
+  subsystem: storage
+  status: in_progress
+  depends_on: [F3]
+  description: >
+    Implement a persistent storage backend (LevelDB, RocksDB, or LMDB).
+  acceptance:
+    - "Data survives node restart"
+    - "Crash recovery works"
+  tests:
+    - "unit"
+    - "integration"
+
+# ============================================================================
+# PENDING TASKS
+# ============================================================================
+
+- id: G3
+  title: "Headers-first sync implementation"
+  subsystem: p2p
+  status: pending
+  depends_on: [G2, F3]
+  description: >
+    Implement headers-first synchronization with proper checkpointing.
+  acceptance:
+    - "Node syncs headers from regtest peer"
+    - "Node requests blocks after headers validated"
+  tests:
+    - "integration"
+
+- id: G4
+  title: "Block download pipelining"
+  subsystem: p2p
+  status: pending
+  depends_on: [G3]
+  description: >
+    Implement pipelined block download with multiple peers.
+  acceptance:
+    - "Parallel downloads from multiple peers"
+    - "Bounded in-flight requests"
+  tests:
+    - "integration"
+
+- id: H1
+  title: "End-to-end regtest sync"
+  subsystem: node
+  status: pending
+  depends_on: [G3, C4, D5]
+  description: >
+    Complete end-to-end sync test on regtest network.
+  acceptance:
+    - "Node syncs to regtest tip"
+    - "Node handles reorgs correctly"
+  tests:
+    - "e2e"
+
+- id: H2
+  title: "Integration test suite"
+  subsystem: node
+  status: pending
+  depends_on: [H1]
+  description: >
+    Build comprehensive integration test suite.
+  acceptance:
+    - "Tests cover major node operations"
+    - "Tests are deterministic"
+  tests:
+    - "integration"
+
+- id: I1
+  title: "Differential test harness"
+  subsystem: consensus
+  status: pending
+  depends_on: [D5, E1]
+  description: >
+    Build differential testing harness against Bitcoin Core.
+  acceptance:
+    - "Script tests match Bitcoin Core behavior"
+    - "Transaction validation matches Bitcoin Core"
+  tests:
+    - "diff"
+
+- id: L1
+  title: "Fuzz testing expansion"
+  subsystem: security
+  status: pending
+  depends_on: [G1, D1]
+  description: >
+    Expand fuzz testing to cover all parsing code.
+  acceptance:
+    - "All message types have fuzz targets"
+    - "Script parsing has fuzz target"
+  tests:
+    - "fuzz"
+
+- id: M1
+  title: "Mainnet IBD"
+  subsystem: node
+  status: pending
+  depends_on: [H1, F4]
+  description: >
+    Complete initial block download on mainnet.
+  acceptance:
+    - "Node syncs to mainnet tip in controlled environment"
+    - "Memory usage remains bounded"
+  tests:
+    - "e2e"
+    - "soak"
+
+- id: N1
+  title: "Performance benchmarks"
+  subsystem: ops
+  status: pending
+  depends_on: [M1]
+  description: >
+    Establish performance benchmarks and regression gates.
+  acceptance:
+    - "IBD speed benchmark established"
+    - "Signature verification throughput measured"
+  tests:
+    - "bench"
