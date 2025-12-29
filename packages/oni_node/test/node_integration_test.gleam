@@ -12,16 +12,19 @@ import gleam/erlang/process
 import gleam/int
 import gleam/io
 import gleam/list
-import gleam/option.{None, Some}
+import gleam/option.{type Option, None, Some}
+import gleam/otp/actor
 import gleeunit/should
 import oni_bitcoin
 import oni_storage
+import oni_p2p
 import activation
 import persistent_chainstate
 import event_router
 import ibd_coordinator
 import reorg_handler
 import oni_supervisor
+import p2p_network
 
 // ============================================================================
 // Test Helpers
@@ -884,5 +887,389 @@ pub fn utxo_lifecycle_test() {
       process.send(chainstate, oni_supervisor.ChainstateShutdown)
     }
     Error(_) -> should.fail()
+  }
+}
+
+// ============================================================================
+// Simulated P2P Sync Tests
+// ============================================================================
+
+/// Start a mock P2P listener for testing (receives broadcast messages)
+fn start_mock_p2p() -> Result(process.Subject(p2p_network.ListenerMsg), actor.StartError) {
+  actor.start(0, fn(msg: p2p_network.ListenerMsg, count: Int) {
+    case msg {
+      p2p_network.BroadcastMessage(_) -> {
+        actor.continue(count + 1)
+      }
+      _ -> actor.continue(count)
+    }
+  })
+}
+
+/// Test event router with direct block message routing
+pub fn event_router_block_routing_test() {
+  // Start all core subsystems
+  let chainstate_result = oni_supervisor.start_chainstate(oni_bitcoin.Regtest)
+  let mempool_result = oni_supervisor.start_mempool(100_000_000)
+  let sync_result = oni_supervisor.start_sync()
+  let mock_p2p_result = start_mock_p2p()
+
+  case chainstate_result, mempool_result, sync_result, mock_p2p_result {
+    Ok(chainstate), Ok(mempool), Ok(sync), Ok(mock_p2p) -> {
+      // Create router handles
+      let router_handles = event_router.RouterHandles(
+        chainstate: chainstate,
+        mempool: mempool,
+        sync: sync,
+        p2p: mock_p2p,
+      )
+
+      // Start event router
+      let router_config = event_router.RouterConfig(
+        max_pending_blocks: 16,
+        max_pending_txs: 100,
+        debug: False,
+      )
+
+      case event_router.start(router_config, router_handles) {
+        Ok(router) -> {
+          // Verify initial height
+          let initial_height = process.call(chainstate, oni_supervisor.GetHeight, 5000)
+          should.equal(initial_height, 0)
+
+          // Create a test block
+          let params = oni_bitcoin.regtest_params()
+          let block1 = create_test_block(params.genesis_hash, 1, 1)
+
+          // Simulate receiving a block message via the event router
+          let block_event = p2p_network.MessageReceived(1, oni_p2p.MsgBlock(block1))
+          process.send(router, event_router.ProcessEvent(block_event))
+
+          // Give the router time to process and forward to chainstate
+          process.sleep(100)
+
+          // Verify height increased (block was connected)
+          let new_height = process.call(chainstate, oni_supervisor.GetHeight, 5000)
+          should.equal(new_height, 1)
+
+          // Get router stats to verify tracking
+          let stats = process.call(router, event_router.GetStats, 5000)
+          should.equal(stats.blocks_received, 1)
+
+          // Shutdown
+          process.send(router, event_router.Shutdown)
+          process.send(sync, oni_supervisor.SyncShutdown)
+          process.send(mempool, oni_supervisor.MempoolShutdown)
+          process.send(chainstate, oni_supervisor.ChainstateShutdown)
+        }
+        Error(_) -> should.fail()
+      }
+    }
+    _, _, _, _ -> should.fail()
+  }
+}
+
+/// Test event router handles peer connection and notifies sync
+pub fn event_router_peer_connection_test() {
+  // Start subsystems
+  let chainstate_result = oni_supervisor.start_chainstate(oni_bitcoin.Regtest)
+  let mempool_result = oni_supervisor.start_mempool(100_000_000)
+  let sync_result = oni_supervisor.start_sync()
+  let mock_p2p_result = start_mock_p2p()
+
+  case chainstate_result, mempool_result, sync_result, mock_p2p_result {
+    Ok(chainstate), Ok(mempool), Ok(sync), Ok(mock_p2p) -> {
+      let router_handles = event_router.RouterHandles(
+        chainstate: chainstate,
+        mempool: mempool,
+        sync: sync,
+        p2p: mock_p2p,
+      )
+
+      let router_config = event_router.RouterConfig(
+        max_pending_blocks: 16,
+        max_pending_txs: 100,
+        debug: False,
+      )
+
+      case event_router.start(router_config, router_handles) {
+        Ok(router) -> {
+          // Create a mock version payload
+          let version = oni_p2p.VersionPayload(
+            version: 70015,
+            services: oni_p2p.ServiceFlags(
+              node_network: True,
+              node_witness: True,
+              node_bloom: False,
+              node_compact_filters: False,
+              node_network_limited: False,
+              node_p2p_v2: False,
+            ),
+            timestamp: 1234567890,
+            addr_recv: oni_p2p.NetAddr(
+              services: oni_p2p.default_services(),
+              ip: <<0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 127, 0, 0, 1>>,
+              port: 8333,
+            ),
+            addr_from: oni_p2p.NetAddr(
+              services: oni_p2p.default_services(),
+              ip: <<0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 127, 0, 0, 1>>,
+              port: 8334,
+            ),
+            nonce: 12345,
+            user_agent: "/oni:0.1.0/",
+            start_height: 100,
+            relay: True,
+          )
+
+          // Simulate peer handshake complete
+          let handshake_event = p2p_network.PeerHandshakeComplete(1, version)
+          process.send(router, event_router.ProcessEvent(handshake_event))
+
+          // Give time to process
+          process.sleep(50)
+
+          // Verify router stats show peer connected
+          let stats = process.call(router, event_router.GetStats, 5000)
+          should.equal(stats.peers_connected, 1)
+
+          // Verify sync coordinator was notified (state should change from idle)
+          let sync_status = process.call(sync, oni_supervisor.GetStatus, 5000)
+          should.equal(sync_status.state, "syncing_headers")
+
+          // Shutdown
+          process.send(router, event_router.Shutdown)
+          process.send(sync, oni_supervisor.SyncShutdown)
+          process.send(mempool, oni_supervisor.MempoolShutdown)
+          process.send(chainstate, oni_supervisor.ChainstateShutdown)
+        }
+        Error(_) -> should.fail()
+      }
+    }
+    _, _, _, _ -> should.fail()
+  }
+}
+
+/// Test event router handles chain of blocks
+pub fn event_router_chain_sync_test() {
+  // Start subsystems
+  let chainstate_result = oni_supervisor.start_chainstate(oni_bitcoin.Regtest)
+  let mempool_result = oni_supervisor.start_mempool(100_000_000)
+  let sync_result = oni_supervisor.start_sync()
+  let mock_p2p_result = start_mock_p2p()
+
+  case chainstate_result, mempool_result, sync_result, mock_p2p_result {
+    Ok(chainstate), Ok(mempool), Ok(sync), Ok(mock_p2p) -> {
+      let router_handles = event_router.RouterHandles(
+        chainstate: chainstate,
+        mempool: mempool,
+        sync: sync,
+        p2p: mock_p2p,
+      )
+
+      let router_config = event_router.RouterConfig(
+        max_pending_blocks: 16,
+        max_pending_txs: 100,
+        debug: False,
+      )
+
+      case event_router.start(router_config, router_handles) {
+        Ok(router) -> {
+          // Build a chain of 5 blocks
+          let params = oni_bitcoin.regtest_params()
+          let hash0 = params.genesis_hash
+
+          let block1 = create_test_block(hash0, 1, 1)
+          let hash1 = oni_bitcoin.block_hash_from_header(block1.header)
+
+          let block2 = create_test_block(hash1, 2, 2)
+          let hash2 = oni_bitcoin.block_hash_from_header(block2.header)
+
+          let block3 = create_test_block(hash2, 3, 3)
+          let hash3 = oni_bitcoin.block_hash_from_header(block3.header)
+
+          let block4 = create_test_block(hash3, 4, 4)
+          let hash4 = oni_bitcoin.block_hash_from_header(block4.header)
+
+          let block5 = create_test_block(hash4, 5, 5)
+
+          // Simulate receiving blocks through event router
+          process.send(router, event_router.ProcessEvent(
+            p2p_network.MessageReceived(1, oni_p2p.MsgBlock(block1))))
+          process.sleep(50)
+
+          process.send(router, event_router.ProcessEvent(
+            p2p_network.MessageReceived(1, oni_p2p.MsgBlock(block2))))
+          process.sleep(50)
+
+          process.send(router, event_router.ProcessEvent(
+            p2p_network.MessageReceived(1, oni_p2p.MsgBlock(block3))))
+          process.sleep(50)
+
+          process.send(router, event_router.ProcessEvent(
+            p2p_network.MessageReceived(1, oni_p2p.MsgBlock(block4))))
+          process.sleep(50)
+
+          process.send(router, event_router.ProcessEvent(
+            p2p_network.MessageReceived(1, oni_p2p.MsgBlock(block5))))
+          process.sleep(50)
+
+          // Verify final height
+          let height = process.call(chainstate, oni_supervisor.GetHeight, 5000)
+          should.equal(height, 5)
+
+          // Verify router stats
+          let stats = process.call(router, event_router.GetStats, 5000)
+          should.equal(stats.blocks_received, 5)
+
+          // Shutdown
+          process.send(router, event_router.Shutdown)
+          process.send(sync, oni_supervisor.SyncShutdown)
+          process.send(mempool, oni_supervisor.MempoolShutdown)
+          process.send(chainstate, oni_supervisor.ChainstateShutdown)
+        }
+        Error(_) -> should.fail()
+      }
+    }
+    _, _, _, _ -> should.fail()
+  }
+}
+
+/// Test event router handles headers message
+pub fn event_router_headers_test() {
+  // Start subsystems
+  let chainstate_result = oni_supervisor.start_chainstate(oni_bitcoin.Regtest)
+  let mempool_result = oni_supervisor.start_mempool(100_000_000)
+  let sync_result = oni_supervisor.start_sync()
+  let mock_p2p_result = start_mock_p2p()
+
+  case chainstate_result, mempool_result, sync_result, mock_p2p_result {
+    Ok(chainstate), Ok(mempool), Ok(sync), Ok(mock_p2p) -> {
+      let router_handles = event_router.RouterHandles(
+        chainstate: chainstate,
+        mempool: mempool,
+        sync: sync,
+        p2p: mock_p2p,
+      )
+
+      let router_config = event_router.RouterConfig(
+        max_pending_blocks: 16,
+        max_pending_txs: 100,
+        debug: False,
+      )
+
+      case event_router.start(router_config, router_handles) {
+        Ok(router) -> {
+          // Create test headers
+          let params = oni_bitcoin.regtest_params()
+          let header1 = oni_p2p.BlockHeaderNet(
+            version: 1,
+            prev_block: params.genesis_hash,
+            merkle_root: oni_bitcoin.Hash256(bytes: <<0:256>>),
+            timestamp: 1231006505 + 600,
+            bits: 0x207fffff,
+            nonce: 0,
+            tx_count: 0,
+          )
+
+          // Simulate receiving headers
+          let headers_event = p2p_network.MessageReceived(
+            1,
+            oni_p2p.MsgHeaders([header1]),
+          )
+          process.send(router, event_router.ProcessEvent(headers_event))
+          process.sleep(50)
+
+          // Verify router stats
+          let stats = process.call(router, event_router.GetStats, 5000)
+          should.equal(stats.headers_received, 1)
+
+          // Verify sync coordinator received headers notification
+          let sync_status = process.call(sync, oni_supervisor.GetStatus, 5000)
+          should.equal(sync_status.headers_height, 1)
+
+          // Shutdown
+          process.send(router, event_router.Shutdown)
+          process.send(sync, oni_supervisor.SyncShutdown)
+          process.send(mempool, oni_supervisor.MempoolShutdown)
+          process.send(chainstate, oni_supervisor.ChainstateShutdown)
+        }
+        Error(_) -> should.fail()
+      }
+    }
+    _, _, _, _ -> should.fail()
+  }
+}
+
+/// Test event router handles peer disconnect
+pub fn event_router_peer_disconnect_test() {
+  // Start subsystems
+  let chainstate_result = oni_supervisor.start_chainstate(oni_bitcoin.Regtest)
+  let mempool_result = oni_supervisor.start_mempool(100_000_000)
+  let sync_result = oni_supervisor.start_sync()
+  let mock_p2p_result = start_mock_p2p()
+
+  case chainstate_result, mempool_result, sync_result, mock_p2p_result {
+    Ok(chainstate), Ok(mempool), Ok(sync), Ok(mock_p2p) -> {
+      let router_handles = event_router.RouterHandles(
+        chainstate: chainstate,
+        mempool: mempool,
+        sync: sync,
+        p2p: mock_p2p,
+      )
+
+      let router_config = event_router.RouterConfig(
+        max_pending_blocks: 16,
+        max_pending_txs: 100,
+        debug: False,
+      )
+
+      case event_router.start(router_config, router_handles) {
+        Ok(router) -> {
+          // Simulate peer connect then disconnect
+          let version = oni_p2p.VersionPayload(
+            version: 70015,
+            services: oni_p2p.default_services(),
+            timestamp: 1234567890,
+            addr_recv: oni_p2p.NetAddr(
+              services: oni_p2p.default_services(),
+              ip: <<0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 127, 0, 0, 1>>,
+              port: 8333,
+            ),
+            addr_from: oni_p2p.NetAddr(
+              services: oni_p2p.default_services(),
+              ip: <<0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 127, 0, 0, 1>>,
+              port: 8334,
+            ),
+            nonce: 12345,
+            user_agent: "/test/",
+            start_height: 50,
+            relay: True,
+          )
+
+          process.send(router, event_router.ProcessEvent(
+            p2p_network.PeerHandshakeComplete(1, version)))
+          process.sleep(50)
+
+          // Disconnect the peer
+          process.send(router, event_router.ProcessEvent(
+            p2p_network.PeerDisconnectedEvent(1, "test disconnect")))
+          process.sleep(50)
+
+          // Verify stats
+          let stats = process.call(router, event_router.GetStats, 5000)
+          should.equal(stats.peers_connected, 1)
+          should.equal(stats.peers_disconnected, 1)
+
+          // Shutdown
+          process.send(router, event_router.Shutdown)
+          process.send(sync, oni_supervisor.SyncShutdown)
+          process.send(mempool, oni_supervisor.MempoolShutdown)
+          process.send(chainstate, oni_supervisor.ChainstateShutdown)
+        }
+        Error(_) -> should.fail()
+      }
+    }
+    _, _, _, _ -> should.fail()
   }
 }
