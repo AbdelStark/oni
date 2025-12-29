@@ -296,7 +296,7 @@
 - id: C4
   title: "secp256k1 NIF implementation"
   subsystem: consensus
-  status: in_progress
+  status: done
   depends_on: [C3]
   description: >
     Implement the secp256k1 NIF for ECDSA and Schnorr signature verification.
@@ -307,6 +307,9 @@
   tests:
     - "unit"
     - "bench"
+  notes: >
+    C code complete in c_src/secp256k1_nif.c. CI workflow builds libsecp256k1
+    and NIF. Dockerfile includes NIF build. BIP-340 test vectors added.
 
 - id: D5
   title: "Sighash preimage computation"

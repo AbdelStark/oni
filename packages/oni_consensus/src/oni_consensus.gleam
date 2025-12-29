@@ -2543,7 +2543,7 @@ fn verify_schnorr(sighash: BitArray, signature: BitArray, pubkey: BitArray) -> B
       case oni_bitcoin.xonly_pubkey_from_bytes(pubkey) {
         Error(_) -> False
         Ok(pk) -> {
-          case oni_bitcoin.schnorr_verify_nif(sig, sighash, pk) {
+          case oni_bitcoin.schnorr_verify(sig, sighash, pk) {
             Error(_) -> False
             Ok(result) -> result
           }

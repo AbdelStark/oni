@@ -15,17 +15,30 @@
 # =============================================================================
 FROM erlang:26-alpine AS builder
 
-# Install build dependencies
+# Install build dependencies including libsecp256k1 requirements
 RUN apk add --no-cache \
     git \
     curl \
     build-base \
-    openssl-dev
+    openssl-dev \
+    automake \
+    autoconf \
+    libtool
 
 # Install Gleam
 ARG GLEAM_VERSION=1.4.1
 RUN curl -L https://github.com/gleam-lang/gleam/releases/download/v${GLEAM_VERSION}/gleam-v${GLEAM_VERSION}-x86_64-unknown-linux-musl.tar.gz \
     | tar xzf - -C /usr/local/bin
+
+# Build libsecp256k1 with schnorrsig and extrakeys modules
+ARG SECP256K1_VERSION=v0.5.0
+RUN git clone --depth 1 --branch ${SECP256K1_VERSION} https://github.com/bitcoin-core/secp256k1.git /tmp/secp256k1 && \
+    cd /tmp/secp256k1 && \
+    ./autogen.sh && \
+    ./configure --enable-module-schnorrsig --enable-module-extrakeys && \
+    make -j$(nproc) && \
+    make install && \
+    rm -rf /tmp/secp256k1
 
 # Set working directory
 WORKDIR /build
@@ -45,6 +58,9 @@ RUN gleam deps download
 # Copy source code
 COPY . .
 
+# Build the secp256k1 NIF
+RUN cd packages/oni_bitcoin/c_src && make
+
 # Build release
 RUN gleam build --target erlang
 RUN gleam export erlang-shipment
@@ -58,7 +74,8 @@ FROM erlang:26-alpine AS runtime
 RUN apk add --no-cache \
     openssl \
     ca-certificates \
-    tini
+    tini \
+    libgcc
 
 # Create non-root user for security
 RUN addgroup -g 1000 oni && \
@@ -67,9 +84,18 @@ RUN addgroup -g 1000 oni && \
 # Create data directory
 RUN mkdir -p /data && chown oni:oni /data
 
+# Copy libsecp256k1 from builder
+COPY --from=builder /usr/local/lib/libsecp256k1* /usr/local/lib/
+
+# Update library cache
+RUN ldconfig /usr/local/lib || true
+
 # Copy built application
 COPY --from=builder /build/build/erlang-shipment /app
 COPY --from=builder /build/build/erlang-shipment/entrypoint.sh /app/
+
+# Copy NIF binary to application priv directory
+COPY --from=builder /build/packages/oni_bitcoin/priv/oni_secp256k1.so /app/priv/
 
 # Set ownership
 RUN chown -R oni:oni /app

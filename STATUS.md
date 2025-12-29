@@ -2,7 +2,7 @@
 
 This document tracks the implementation status of oni across all packages and features.
 
-> **Last Updated**: 2025-01-15
+> **Last Updated**: 2025-12-29
 
 ## Summary
 
@@ -35,7 +35,7 @@ This document tracks the implementation status of oni across all packages and fe
 | Block serialization | ✅ Done | |
 | P2P message types | ✅ Done | In `message.gleam` |
 | Output descriptors | ✅ Done | In `descriptors.gleam` |
-| secp256k1 NIF | ⚠️ Partial | Interface defined, NIF stubbed |
+| secp256k1 NIF | ✅ Done | C code complete, CI/Docker integrated |
 
 ### oni_consensus (Consensus)
 
@@ -165,7 +165,7 @@ This document tracks the implementation status of oni across all packages and fe
 
 | Package | Test Files | Coverage |
 |---------|------------|----------|
-| oni_bitcoin | 3 | Core serialization, messages, descriptors |
+| oni_bitcoin | 4 | Core serialization, messages, descriptors, secp256k1/BIP-340 |
 | oni_consensus | 8 | Script, validation, sighash, mempool |
 | oni_storage | 6 | UTXO, persistence, pruning |
 | oni_p2p | 5 | Networking, sync, compact blocks |
@@ -190,8 +190,8 @@ This document tracks the implementation status of oni across all packages and fe
 ## Known Gaps / Remaining Work
 
 ### Critical for Production
-1. **Signature verification**: secp256k1 NIF C code complete; requires libsecp256k1 build
-2. **IBD testing**: End-to-end sync with real network (G3 headers-first, H1 regtest)
+1. **IBD testing**: End-to-end sync with real network (H1 regtest)
+2. **libsecp256k1 installation**: Users need libsecp256k1 v0.5.0+ with schnorrsig module
 
 ### Important Improvements
 1. **Differential testing**: Run against Bitcoin Core test vectors
@@ -208,6 +208,9 @@ This document tracks the implementation status of oni across all packages and fe
 1. **Sighash implementation**: Complete for legacy, BIP143, BIP341
 2. **Persistent storage**: DETS backend with unified_storage bridge
 3. **secp256k1 Gleam wiring**: Schnorr/ECDSA verify, Taproot tweak functions
+4. **secp256k1 NIF CI/CD**: GitHub Actions now builds NIF with libsecp256k1
+5. **Docker NIF support**: Dockerfile builds libsecp256k1 and NIF
+6. **BIP-340 test vectors**: Schnorr verification test suite added
 
 ## Legend
 

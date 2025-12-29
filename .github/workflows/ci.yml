@@ -61,11 +61,59 @@ jobs:
       - name: Type check all packages
         run: make check
 
+  # Build secp256k1 NIF - required for signature verification
+  nif-build:
+    name: Build secp256k1 NIF
+    runs-on: ubuntu-latest
+    needs: format
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Erlang/OTP
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{ env.OTP_VERSION }}
+          gleam-version: ${{ env.GLEAM_VERSION }}
+
+      - name: Cache libsecp256k1
+        id: cache-secp256k1
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/lib/libsecp256k1*
+          key: libsecp256k1-${{ runner.os }}-v0.5.0-schnorrsig
+
+      - name: Install libsecp256k1 build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y automake autoconf libtool
+
+      - name: Build libsecp256k1
+        if: steps.cache-secp256k1.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --branch v0.5.0 https://github.com/bitcoin-core/secp256k1.git /tmp/secp256k1
+          cd /tmp/secp256k1
+          ./autogen.sh
+          ./configure --enable-module-schnorrsig --enable-module-extrakeys
+          make -j$(nproc)
+          sudo make install
+          sudo ldconfig
+
+      - name: Build NIF
+        run: make nif
+
+      - name: Upload NIF artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: secp256k1-nif
+          path: packages/oni_bitcoin/priv/oni_secp256k1.so
+          retention-days: 1
+
   # Matrix test across multiple OTP versions
   test:
     name: Test (OTP ${{ matrix.otp }})
     runs-on: ubuntu-latest
-    needs: typecheck
+    needs: [typecheck, nif-build]
     strategy:
       fail-fast: false
       matrix:
@@ -93,6 +141,24 @@ jobs:
           key: gleam-${{ runner.os }}-${{ matrix.gleam }}-${{ matrix.otp }}-${{ hashFiles('packages/*/gleam.toml') }}
           restore-keys: |
             gleam-${{ runner.os }}-${{ matrix.gleam }}-${{ matrix.otp }}-
+
+      - name: Download NIF artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: secp256k1-nif
+          path: packages/oni_bitcoin/priv/
+
+      - name: Install libsecp256k1 runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y automake autoconf libtool
+          git clone --depth 1 --branch v0.5.0 https://github.com/bitcoin-core/secp256k1.git /tmp/secp256k1
+          cd /tmp/secp256k1
+          ./autogen.sh
+          ./configure --enable-module-schnorrsig --enable-module-extrakeys
+          make -j$(nproc)
+          sudo make install
+          sudo ldconfig
 
       - name: Run tests
         run: make test
@@ -185,7 +251,7 @@ jobs:
   quality-gate:
     name: Quality Gate
     runs-on: ubuntu-latest
-    needs: [format, typecheck, test, docs]
+    needs: [format, typecheck, nif-build, test, docs]
     if: always()
     steps:
       - name: Check all jobs passed
@@ -196,6 +262,10 @@ jobs:
           fi
           if [[ "${{ needs.typecheck.result }}" != "success" ]]; then
             echo "❌ Type check failed"
+            exit 1
+          fi
+          if [[ "${{ needs.nif-build.result }}" != "success" ]]; then
+            echo "❌ NIF build failed"
             exit 1
           fi
           if [[ "${{ needs.test.result }}" != "success" ]]; then
