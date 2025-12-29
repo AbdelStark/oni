@@ -211,6 +211,8 @@ This document tracks the implementation status of oni across all packages and fe
 4. **secp256k1 NIF CI/CD**: GitHub Actions now builds NIF with libsecp256k1
 5. **Docker NIF support**: Dockerfile builds libsecp256k1 and NIF
 6. **BIP-340 test vectors**: Schnorr verification test suite added
+7. **Event router integration**: P2P events now properly routed to chainstate/mempool/sync
+8. **Integration tests enabled**: End-to-end block connection tests added
 
 ## Legend
 

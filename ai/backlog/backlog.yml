@@ -382,7 +382,7 @@
 - id: H1
   title: "End-to-end regtest sync"
   subsystem: node
-  status: pending
+  status: in_progress
   depends_on: [G3, C4, D5]
   description: >
     Complete end-to-end sync test on regtest network.
@@ -393,7 +393,9 @@
     - "e2e"
   notes: >
     Dependencies now ready: G3 (headers-first sync), D5 (sighash), C4 (NIF wiring).
-    Requires: libsecp256k1 build for Schnorr signatures, running regtest node.
+    Event router now properly wired in oni_node.gleam. P2P events flow to
+    chainstate/mempool/sync. Integration tests enabled with block connection tests.
+    Remaining: actual regtest connection test with running bitcoind.
 
 - id: H2
   title: "Integration test suite"
