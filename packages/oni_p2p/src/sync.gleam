@@ -44,6 +44,18 @@ pub const max_locators = 101
 /// Download window size (how far ahead to request)
 pub const download_window_size = 1024
 
+/// Stall timeout in milliseconds (2 minutes)
+pub const stall_timeout_ms = 120_000
+
+/// Time between stall checks in milliseconds (30 seconds)
+pub const stall_check_interval_ms = 30_000
+
+/// Minimum download speed before considering peer slow (bytes/sec)
+pub const min_peer_download_speed = 1024
+
+/// Moving average window for peer performance (number of samples)
+pub const peer_performance_window = 10
+
 // ============================================================================
 // Sync State
 // ============================================================================
@@ -472,8 +484,8 @@ pub type DownloadManager {
   DownloadManager(
     /// Blocks that need to be downloaded
     queue: List(BlockRequest),
-    /// Currently downloading
-    in_flight: Dict(String, BlockRequest),
+    /// Currently downloading (with timing info for stall detection)
+    in_flight: Dict(String, InFlightRequest),
     /// Completed downloads
     completed: Dict(String, Block),
     /// Per-peer assignments
@@ -489,6 +501,34 @@ pub type BlockRequest {
     hash: BlockHash,
     height: Int,
     priority: Int,
+  )
+}
+
+/// In-flight request with timing information
+pub type InFlightRequest {
+  InFlightRequest(
+    request: BlockRequest,
+    peer: String,
+    requested_at: Int,
+    size_hint: Int,
+  )
+}
+
+/// Peer performance metrics
+pub type PeerPerformance {
+  PeerPerformance(
+    /// Total bytes downloaded from this peer
+    bytes_downloaded: Int,
+    /// Total download time in milliseconds
+    download_time_ms: Int,
+    /// Number of completed requests
+    completed_requests: Int,
+    /// Number of timed-out requests
+    timeout_requests: Int,
+    /// Last activity timestamp
+    last_activity: Int,
+    /// Computed average speed (bytes/sec)
+    avg_speed: Int,
   )
 }
 
@@ -513,10 +553,12 @@ pub fn download_manager_add(
 }
 
 /// Get next blocks to request from a peer
+/// @param current_time Current time in milliseconds for stall tracking
 pub fn download_manager_next_for_peer(
   manager: DownloadManager,
   peer: PeerId,
   max_count: Int,
+  current_time: Int,
 ) -> #(DownloadManager, List(BlockRequest)) {
   let peer_key = oni_p2p.peer_id_to_string(peer)
 
@@ -539,10 +581,16 @@ pub fn download_manager_next_for_peer(
       // Take from queue
       let #(assigned, remaining) = list.split(manager.queue, to_assign)
 
-      // Update in-flight tracking
+      // Update in-flight tracking with timing information
       let new_in_flight = list.fold(assigned, manager.in_flight, fn(acc, req) {
         let key = oni_bitcoin.hash256_to_hex(req.hash.hash)
-        dict.insert(acc, key, req)
+        let in_flight_req = InFlightRequest(
+          request: req,
+          peer: peer_key,
+          requested_at: current_time,
+          size_hint: 0,  // Unknown until received
+        )
+        dict.insert(acc, key, in_flight_req)
       })
 
       // Update peer assignments
@@ -603,6 +651,135 @@ pub fn download_manager_is_complete(manager: DownloadManager) -> Bool {
 /// Get count of pending downloads
 pub fn download_manager_pending_count(manager: DownloadManager) -> Int {
   list.length(manager.queue) + dict.size(manager.in_flight)
+}
+
+// ============================================================================
+// Stall Detection and Request Reassignment
+// ============================================================================
+
+/// Check for stalled requests and return hashes that should be reassigned
+pub fn download_manager_check_stalls(
+  manager: DownloadManager,
+  current_time: Int,
+) -> #(DownloadManager, List(BlockRequest)) {
+  // Find requests that have been in-flight longer than stall_timeout_ms
+  let #(stalled, active) = dict.to_list(manager.in_flight)
+    |> list.partition(fn(entry) {
+      let #(_key, req) = entry
+      current_time - req.requested_at > stall_timeout_ms
+    })
+
+  case list.is_empty(stalled) {
+    True -> #(manager, [])
+    False -> {
+      // Extract the requests to be reassigned
+      let stalled_requests = list.map(stalled, fn(entry) {
+        let #(_key, in_flight) = entry
+        in_flight.request
+      })
+
+      // Remove stalled from in-flight
+      let new_in_flight = dict.from_list(active)
+
+      // Add back to queue with higher priority (lower height = higher priority)
+      let prioritized = list.map(stalled_requests, fn(req) {
+        BlockRequest(..req, priority: req.height)
+      })
+
+      let new_queue = list.append(prioritized, manager.queue)
+        |> list.sort(fn(a, b) { int.compare(a.priority, b.priority) })
+
+      // Update peer assignments
+      let stalled_hashes = list.map(stalled_requests, fn(r) { r.hash })
+      let new_peer_assignments = dict.map_values(manager.peer_assignments, fn(_peer, hashes) {
+        list.filter(hashes, fn(h) {
+          !list.any(stalled_hashes, fn(sh) { block_hash_eq(h, sh) })
+        })
+      })
+
+      let new_manager = DownloadManager(
+        ..manager,
+        queue: new_queue,
+        in_flight: new_in_flight,
+        peer_assignments: new_peer_assignments,
+        total_in_flight: dict.size(new_in_flight),
+      )
+
+      #(new_manager, stalled_requests)
+    }
+  }
+}
+
+/// Create new peer performance record
+pub fn peer_performance_new() -> PeerPerformance {
+  PeerPerformance(
+    bytes_downloaded: 0,
+    download_time_ms: 0,
+    completed_requests: 0,
+    timeout_requests: 0,
+    last_activity: 0,
+    avg_speed: 0,
+  )
+}
+
+/// Update peer performance after successful download
+pub fn peer_performance_record_success(
+  perf: PeerPerformance,
+  bytes: Int,
+  duration_ms: Int,
+  current_time: Int,
+) -> PeerPerformance {
+  let new_bytes = perf.bytes_downloaded + bytes
+  let new_time = perf.download_time_ms + duration_ms
+  let new_completed = perf.completed_requests + 1
+
+  // Compute average speed (avoid division by zero)
+  let avg_speed = case new_time > 0 {
+    True -> new_bytes * 1000 / new_time
+    False -> 0
+  }
+
+  PeerPerformance(
+    ..perf,
+    bytes_downloaded: new_bytes,
+    download_time_ms: new_time,
+    completed_requests: new_completed,
+    last_activity: current_time,
+    avg_speed: avg_speed,
+  )
+}
+
+/// Update peer performance after timeout
+pub fn peer_performance_record_timeout(
+  perf: PeerPerformance,
+  current_time: Int,
+) -> PeerPerformance {
+  PeerPerformance(
+    ..perf,
+    timeout_requests: perf.timeout_requests + 1,
+    last_activity: current_time,
+  )
+}
+
+/// Check if a peer is performing well enough to receive more requests
+pub fn peer_is_healthy(perf: PeerPerformance) -> Bool {
+  // Peer is healthy if:
+  // 1. Has a reasonable speed OR hasn't been tested yet
+  // 2. Doesn't have too many timeouts relative to successes
+  let speed_ok = perf.avg_speed >= min_peer_download_speed || perf.completed_requests < 3
+  let timeout_ratio_ok = case perf.completed_requests + perf.timeout_requests {
+    0 -> True
+    total -> perf.timeout_requests * 100 / total < 25  // Less than 25% timeouts
+  }
+  speed_ok && timeout_ratio_ok
+}
+
+/// Score peer for request assignment (higher is better)
+pub fn peer_performance_score(perf: PeerPerformance) -> Int {
+  // Base score on speed with penalty for timeouts
+  let speed_score = perf.avg_speed
+  let timeout_penalty = perf.timeout_requests * min_peer_download_speed
+  int.max(0, speed_score - timeout_penalty)
 }
 
 // ============================================================================
@@ -801,9 +978,11 @@ fn create_requests_loop(
 }
 
 /// Get blocks to request from a peer
+/// @param current_time Current time in milliseconds for stall tracking
 pub fn sync_get_blocks_for_peer(
   coord: SyncCoordinator,
   peer: PeerId,
+  current_time: Int,
 ) -> #(SyncCoordinator, List(Message)) {
   case coord.state {
     SyncBlocks(_) -> {
@@ -811,6 +990,7 @@ pub fn sync_get_blocks_for_peer(
         coord.download_manager,
         peer,
         max_blocks_in_flight_per_peer,
+        current_time,
       )
 
       case list.is_empty(requests) {
@@ -833,6 +1013,27 @@ pub fn sync_get_blocks_for_peer(
     }
     _ -> #(coord, [])
   }
+}
+
+/// Check for stalled requests and reassign them
+/// Should be called periodically (every stall_check_interval_ms)
+pub fn sync_check_stalls(
+  coord: SyncCoordinator,
+  current_time: Int,
+) -> #(SyncCoordinator, Int) {
+  let #(new_dm, stalled) = download_manager_check_stalls(
+    coord.download_manager,
+    current_time,
+  )
+
+  let stall_count = list.length(stalled)
+
+  let new_coord = SyncCoordinator(
+    ..coord,
+    download_manager: new_dm,
+  )
+
+  #(new_coord, stall_count)
 }
 
 /// Handle received block
