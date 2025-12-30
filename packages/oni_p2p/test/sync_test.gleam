@@ -141,14 +141,170 @@ pub fn download_manager_next_for_peer_test() {
 
   let dm_with_requests = sync.download_manager_add(dm, requests)
   let peer = oni_p2p.peer_id("test-peer")
+  let current_time = 1_000_000  // 1 second in milliseconds
 
-  let #(updated_dm, assigned) = sync.download_manager_next_for_peer(dm_with_requests, peer, 2)
+  let #(updated_dm, assigned) = sync.download_manager_next_for_peer(dm_with_requests, peer, 2, current_time)
 
   // Should have assigned 2 blocks
   list.length(assigned) |> should.equal(2)
 
   // Should have 1 remaining in queue
   sync.download_manager_pending_count(updated_dm) |> should.equal(3)  // 2 in-flight + 1 queued
+}
+
+// ============================================================================
+// Stall Detection Tests
+// ============================================================================
+
+pub fn stall_detection_no_stalls_test() {
+  let dm = sync.download_manager_new()
+  let requests = [sync.BlockRequest(make_block_hash(1), 1, 100)]
+  let dm_with_requests = sync.download_manager_add(dm, requests)
+  let peer = oni_p2p.peer_id("test-peer")
+
+  // Request at time 0
+  let #(dm_in_flight, _) = sync.download_manager_next_for_peer(dm_with_requests, peer, 1, 0)
+
+  // Check at time 60 seconds (well under 2 minute timeout)
+  let #(_dm_after, stalled) = sync.download_manager_check_stalls(dm_in_flight, 60_000)
+
+  // Should not detect any stalls
+  list.length(stalled) |> should.equal(0)
+}
+
+pub fn stall_detection_with_stalls_test() {
+  let dm = sync.download_manager_new()
+  let requests = [
+    sync.BlockRequest(make_block_hash(1), 1, 100),
+    sync.BlockRequest(make_block_hash(2), 2, 99),
+  ]
+  let dm_with_requests = sync.download_manager_add(dm, requests)
+  let peer = oni_p2p.peer_id("test-peer")
+
+  // Request at time 0
+  let #(dm_in_flight, _) = sync.download_manager_next_for_peer(dm_with_requests, peer, 2, 0)
+
+  // Check at time 3 minutes (over 2 minute timeout)
+  let #(dm_after, stalled) = sync.download_manager_check_stalls(dm_in_flight, 180_000)
+
+  // Should detect 2 stalled requests
+  list.length(stalled) |> should.equal(2)
+
+  // Stalled requests should be back in queue
+  sync.download_manager_pending_count(dm_after) |> should.equal(2)
+}
+
+pub fn stall_detection_partial_stalls_test() {
+  let dm = sync.download_manager_new()
+  let requests = [
+    sync.BlockRequest(make_block_hash(1), 1, 100),
+    sync.BlockRequest(make_block_hash(2), 2, 99),
+  ]
+  let dm_with_requests = sync.download_manager_add(dm, requests)
+  let peer = oni_p2p.peer_id("test-peer")
+
+  // Request first block at time 0
+  let #(dm1, _) = sync.download_manager_next_for_peer(dm_with_requests, peer, 1, 0)
+
+  // Request second block at time 150 seconds
+  let #(dm2, _) = sync.download_manager_next_for_peer(dm1, peer, 1, 150_000)
+
+  // Check at time 180 seconds (3 minutes)
+  // First block is 180s old (stalled), second is 30s old (not stalled)
+  let #(_dm_after, stalled) = sync.download_manager_check_stalls(dm2, 180_000)
+
+  // Should only detect 1 stalled request (the first one)
+  list.length(stalled) |> should.equal(1)
+}
+
+// ============================================================================
+// Peer Performance Tests
+// ============================================================================
+
+pub fn peer_performance_new_test() {
+  let perf = sync.peer_performance_new()
+
+  perf.bytes_downloaded |> should.equal(0)
+  perf.completed_requests |> should.equal(0)
+  perf.timeout_requests |> should.equal(0)
+  perf.avg_speed |> should.equal(0)
+}
+
+pub fn peer_performance_record_success_test() {
+  let perf = sync.peer_performance_new()
+
+  // Download 10KB in 100ms
+  let updated = sync.peer_performance_record_success(perf, 10_000, 100, 1000)
+
+  updated.bytes_downloaded |> should.equal(10_000)
+  updated.completed_requests |> should.equal(1)
+  updated.download_time_ms |> should.equal(100)
+  // Speed should be 10000 * 1000 / 100 = 100000 bytes/sec
+  updated.avg_speed |> should.equal(100_000)
+}
+
+pub fn peer_performance_record_timeout_test() {
+  let perf = sync.peer_performance_new()
+
+  let updated = sync.peer_performance_record_timeout(perf, 1000)
+
+  updated.timeout_requests |> should.equal(1)
+  updated.completed_requests |> should.equal(0)
+}
+
+pub fn peer_is_healthy_new_peer_test() {
+  // New peer with no history should be considered healthy
+  let perf = sync.peer_performance_new()
+  sync.peer_is_healthy(perf) |> should.be_true
+}
+
+pub fn peer_is_healthy_good_peer_test() {
+  // Peer with good speed and no timeouts
+  let perf = sync.peer_performance_new()
+    |> sync.peer_performance_record_success(100_000, 100, 1000)
+    |> sync.peer_performance_record_success(100_000, 100, 2000)
+    |> sync.peer_performance_record_success(100_000, 100, 3000)
+
+  sync.peer_is_healthy(perf) |> should.be_true
+}
+
+pub fn peer_is_healthy_slow_peer_test() {
+  // Peer with very slow speed (less than 1KB/s)
+  let perf = sync.peer_performance_new()
+    |> sync.peer_performance_record_success(500, 1000, 1000)  // 500 bytes/sec
+    |> sync.peer_performance_record_success(500, 1000, 2000)
+    |> sync.peer_performance_record_success(500, 1000, 3000)
+
+  // After 3 samples, slow peer should be marked unhealthy
+  sync.peer_is_healthy(perf) |> should.be_false
+}
+
+pub fn peer_is_healthy_high_timeout_test() {
+  // Peer with too many timeouts
+  let perf = sync.peer_performance_new()
+    |> sync.peer_performance_record_success(10_000, 100, 1000)
+    |> sync.peer_performance_record_timeout(2000)
+    |> sync.peer_performance_record_timeout(3000)
+    |> sync.peer_performance_record_timeout(4000)
+
+  // 3 timeouts out of 4 requests (75%) should be unhealthy
+  sync.peer_is_healthy(perf) |> should.be_false
+}
+
+pub fn peer_performance_score_test() {
+  // Score is based on speed minus penalty for timeouts
+  let good_perf = sync.peer_performance_new()
+    |> sync.peer_performance_record_success(100_000, 100, 1000)
+
+  let bad_perf = sync.peer_performance_new()
+    |> sync.peer_performance_record_timeout(1000)
+    |> sync.peer_performance_record_timeout(2000)
+
+  let good_score = sync.peer_performance_score(good_perf)
+  let bad_score = sync.peer_performance_score(bad_perf)
+
+  // Good peer should have higher score
+  { good_score > bad_score } |> should.be_true
 }
 
 // ============================================================================
