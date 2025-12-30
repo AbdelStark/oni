@@ -218,6 +218,7 @@ This document tracks the implementation status of oni across all packages and fe
 11. **Expanded differential testing**: 100+ script test vectors covering all opcode categories
 12. **Consensus fuzz testing**: 50+ fuzz tests for script, tx, header, and CompactSize parsing
 13. **Block download pipelining**: Stall detection, request reassignment, and peer performance tracking
+14. **Sync test coverage**: 11 new tests for stall detection and peer performance metrics
 
 ## Legend
 
