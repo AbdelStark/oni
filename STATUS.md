@@ -219,6 +219,7 @@ This document tracks the implementation status of oni across all packages and fe
 12. **Consensus fuzz testing**: 50+ fuzz tests for script, tx, header, and CompactSize parsing
 13. **Block download pipelining**: Stall detection, request reassignment, and peer performance tracking
 14. **Sync test coverage**: 11 new tests for stall detection and peer performance metrics
+15. **Benchmark definitions**: Standard crypto/validation benchmarks with regression detection
 
 ## Legend
 

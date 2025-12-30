@@ -599,6 +599,250 @@ fn pad_left(s: String, len: Int, pad: String) -> String {
 }
 
 // ============================================================================
+// Standard Benchmark Definitions
+// ============================================================================
+
+/// Benchmark category for reporting
+pub type BenchCategory {
+  BenchCrypto
+  BenchScript
+  BenchSerialization
+  BenchValidation
+  BenchNetwork
+  BenchStorage
+}
+
+/// Predefined benchmark for crypto operations
+pub type CryptoBench {
+  /// SHA256 single hash
+  BenchSha256Single
+  /// SHA256 double hash (sha256d)
+  BenchSha256Double
+  /// RIPEMD160 hash
+  BenchRipemd160
+  /// HASH160 (SHA256 + RIPEMD160)
+  BenchHash160
+  /// ECDSA signature verification
+  BenchEcdsaVerify
+  /// Schnorr signature verification
+  BenchSchnorrVerify
+  /// Schnorr batch verification (10 sigs)
+  BenchSchnorrBatch10
+  /// Schnorr batch verification (100 sigs)
+  BenchSchnorrBatch100
+}
+
+/// Predefined benchmark for script execution
+pub type ScriptBench {
+  /// Simple P2PKH script execution
+  BenchScriptP2pkh
+  /// Simple P2SH script execution
+  BenchScriptP2sh
+  /// Multisig 2-of-3 verification
+  BenchScriptMultisig2of3
+  /// Complex script with many operations
+  BenchScriptComplex100Ops
+}
+
+/// Predefined benchmark for serialization
+pub type SerializationBench {
+  /// Decode simple transaction (1 input, 1 output)
+  BenchDecodeTxSimple
+  /// Decode complex transaction (10 inputs, 10 outputs)
+  BenchDecodeTxComplex
+  /// Decode block header
+  BenchDecodeBlockHeader
+  /// Decode full block (100 transactions)
+  BenchDecodeBlock100Tx
+  /// Encode simple transaction
+  BenchEncodeTxSimple
+  /// Encode full block
+  BenchEncodeBlock
+}
+
+/// Predefined benchmark for block validation
+pub type ValidationBench {
+  /// Validate block header (PoW, timestamp)
+  BenchValidateHeader
+  /// Validate coinbase transaction
+  BenchValidateCoinbase
+  /// Validate standard transaction
+  BenchValidateTx
+  /// Connect block to chainstate
+  BenchConnectBlock
+  /// Compute merkle root (100 transactions)
+  BenchMerkleRoot100
+  /// Compute merkle root (1000 transactions)
+  BenchMerkleRoot1000
+}
+
+/// Benchmark metadata for reporting
+pub type BenchmarkMeta {
+  BenchmarkMeta(
+    /// Unique identifier
+    id: String,
+    /// Human-readable name
+    name: String,
+    /// Category for grouping
+    category: BenchCategory,
+    /// Description of what is measured
+    description: String,
+    /// Expected baseline (operations per second)
+    expected_ops_per_sec: Int,
+    /// Threshold for regression detection (percentage)
+    regression_threshold_pct: Int,
+  )
+}
+
+/// Standard crypto benchmark metadata
+pub fn crypto_bench_meta(bench: CryptoBench) -> BenchmarkMeta {
+  case bench {
+    BenchSha256Single -> BenchmarkMeta(
+      id: "crypto.sha256.single",
+      name: "SHA256 Single Hash",
+      category: BenchCrypto,
+      description: "Single SHA256 hash of 32 bytes",
+      expected_ops_per_sec: 1_000_000,
+      regression_threshold_pct: 10,
+    )
+    BenchSha256Double -> BenchmarkMeta(
+      id: "crypto.sha256d",
+      name: "SHA256 Double Hash",
+      category: BenchCrypto,
+      description: "Double SHA256 hash (sha256d) of 32 bytes",
+      expected_ops_per_sec: 500_000,
+      regression_threshold_pct: 10,
+    )
+    BenchRipemd160 -> BenchmarkMeta(
+      id: "crypto.ripemd160",
+      name: "RIPEMD160 Hash",
+      category: BenchCrypto,
+      description: "RIPEMD160 hash of 32 bytes",
+      expected_ops_per_sec: 1_000_000,
+      regression_threshold_pct: 10,
+    )
+    BenchHash160 -> BenchmarkMeta(
+      id: "crypto.hash160",
+      name: "HASH160",
+      category: BenchCrypto,
+      description: "HASH160 (SHA256 + RIPEMD160) of 32 bytes",
+      expected_ops_per_sec: 500_000,
+      regression_threshold_pct: 10,
+    )
+    BenchEcdsaVerify -> BenchmarkMeta(
+      id: "crypto.ecdsa.verify",
+      name: "ECDSA Verify",
+      category: BenchCrypto,
+      description: "ECDSA signature verification",
+      expected_ops_per_sec: 10_000,
+      regression_threshold_pct: 15,
+    )
+    BenchSchnorrVerify -> BenchmarkMeta(
+      id: "crypto.schnorr.verify",
+      name: "Schnorr Verify",
+      category: BenchCrypto,
+      description: "BIP-340 Schnorr signature verification",
+      expected_ops_per_sec: 10_000,
+      regression_threshold_pct: 15,
+    )
+    BenchSchnorrBatch10 -> BenchmarkMeta(
+      id: "crypto.schnorr.batch10",
+      name: "Schnorr Batch Verify (10)",
+      category: BenchCrypto,
+      description: "Batch verify 10 Schnorr signatures",
+      expected_ops_per_sec: 5000,
+      regression_threshold_pct: 15,
+    )
+    BenchSchnorrBatch100 -> BenchmarkMeta(
+      id: "crypto.schnorr.batch100",
+      name: "Schnorr Batch Verify (100)",
+      category: BenchCrypto,
+      description: "Batch verify 100 Schnorr signatures",
+      expected_ops_per_sec: 500,
+      regression_threshold_pct: 15,
+    )
+  }
+}
+
+/// Standard validation benchmark metadata
+pub fn validation_bench_meta(bench: ValidationBench) -> BenchmarkMeta {
+  case bench {
+    BenchValidateHeader -> BenchmarkMeta(
+      id: "validation.header",
+      name: "Validate Block Header",
+      category: BenchValidation,
+      description: "Validate block header (PoW, timestamp, difficulty)",
+      expected_ops_per_sec: 100_000,
+      regression_threshold_pct: 10,
+    )
+    BenchValidateCoinbase -> BenchmarkMeta(
+      id: "validation.coinbase",
+      name: "Validate Coinbase",
+      category: BenchValidation,
+      description: "Validate coinbase transaction",
+      expected_ops_per_sec: 50_000,
+      regression_threshold_pct: 10,
+    )
+    BenchValidateTx -> BenchmarkMeta(
+      id: "validation.tx",
+      name: "Validate Transaction",
+      category: BenchValidation,
+      description: "Validate standard P2PKH transaction",
+      expected_ops_per_sec: 5000,
+      regression_threshold_pct: 15,
+    )
+    BenchConnectBlock -> BenchmarkMeta(
+      id: "validation.connect",
+      name: "Connect Block",
+      category: BenchValidation,
+      description: "Connect block to chainstate (100 txs)",
+      expected_ops_per_sec: 100,
+      regression_threshold_pct: 20,
+    )
+    BenchMerkleRoot100 -> BenchmarkMeta(
+      id: "validation.merkle100",
+      name: "Merkle Root (100 tx)",
+      category: BenchValidation,
+      description: "Compute merkle root for 100 transactions",
+      expected_ops_per_sec: 10_000,
+      regression_threshold_pct: 10,
+    )
+    BenchMerkleRoot1000 -> BenchmarkMeta(
+      id: "validation.merkle1000",
+      name: "Merkle Root (1000 tx)",
+      category: BenchValidation,
+      description: "Compute merkle root for 1000 transactions",
+      expected_ops_per_sec: 1000,
+      regression_threshold_pct: 10,
+    )
+  }
+}
+
+/// Check if benchmark result indicates regression
+pub fn is_regression(
+  result: BenchResult,
+  expected_ops: Int,
+  threshold_pct: Int,
+) -> Bool {
+  let threshold = int.to_float(expected_ops) *. { 1.0 -. int.to_float(threshold_pct) /. 100.0 }
+  result.ops_per_sec <. threshold
+}
+
+/// Format benchmark result with regression check
+pub fn format_result_with_check(
+  result: BenchResult,
+  meta: BenchmarkMeta,
+) -> String {
+  let base = format_result(result)
+  let status = case is_regression(result, meta.expected_ops_per_sec, meta.regression_threshold_pct) {
+    True -> " [REGRESSION]"
+    False -> " [OK]"
+  }
+  base <> status
+
+}
+
+// ============================================================================
 // FFI / External Functions
 // ============================================================================
 
