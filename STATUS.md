@@ -195,7 +195,7 @@ This document tracks the implementation status of oni across all packages and fe
 
 ### Important Improvements
 1. **Differential testing**: ✅ Framework with 100+ script test vectors implemented
-2. **Fuzz testing coverage**: Expand to all parsing code
+2. **Fuzz testing coverage**: ✅ Consensus + P2P parsing covered (50+ tests each)
 3. **Performance benchmarks**: IBD speed, mempool throughput
 4. **Memory profiling**: UTXO cache behavior under load
 
@@ -216,6 +216,7 @@ This document tracks the implementation status of oni across all packages and fe
 9. **Simulated P2P sync tests**: Event router block/header routing validated
 10. **Persistence validation tests**: Crash recovery and restart tests added
 11. **Expanded differential testing**: 100+ script test vectors covering all opcode categories
+12. **Consensus fuzz testing**: 50+ fuzz tests for script, tx, header, and CompactSize parsing
 
 ## Legend
 
