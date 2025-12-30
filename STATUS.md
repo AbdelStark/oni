@@ -2,7 +2,7 @@
 
 This document tracks the implementation status of oni across all packages and features.
 
-> **Last Updated**: 2025-12-29
+> **Last Updated**: 2025-12-30
 
 ## Summary
 
@@ -194,7 +194,7 @@ This document tracks the implementation status of oni across all packages and fe
 2. **libsecp256k1 installation**: Users need libsecp256k1 v0.5.0+ with schnorrsig module
 
 ### Important Improvements
-1. **Differential testing**: Run against Bitcoin Core test vectors
+1. **Differential testing**: ✅ Framework with 100+ script test vectors implemented
 2. **Fuzz testing coverage**: Expand to all parsing code
 3. **Performance benchmarks**: IBD speed, mempool throughput
 4. **Memory profiling**: UTXO cache behavior under load
@@ -215,6 +215,7 @@ This document tracks the implementation status of oni across all packages and fe
 8. **Integration tests enabled**: End-to-end block connection tests added
 9. **Simulated P2P sync tests**: Event router block/header routing validated
 10. **Persistence validation tests**: Crash recovery and restart tests added
+11. **Expanded differential testing**: 100+ script test vectors covering all opcode categories
 
 ## Legend
 

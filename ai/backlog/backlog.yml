@@ -416,7 +416,7 @@
 - id: I1
   title: "Differential test harness"
   subsystem: consensus
-  status: pending
+  status: done
   depends_on: [D5, E1]
   description: >
     Build differential testing harness against Bitcoin Core.
@@ -425,6 +425,11 @@
     - "Transaction validation matches Bitcoin Core"
   tests:
     - "diff"
+  notes: >
+    COMPLETED: 100+ script test vectors added covering: basic push data,
+    arithmetic operations, stack operations, hash operations, comparisons,
+    boolean logic, flow control, verify operations, disabled opcodes,
+    script number encoding, multisig, error conditions, altstack, and NOPs.
 
 - id: L1
   title: "Fuzz testing expansion"
