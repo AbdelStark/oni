@@ -190,7 +190,7 @@ This document tracks the implementation status of oni across all packages and fe
 ## Known Gaps / Remaining Work
 
 ### Critical for Production
-1. **IBD testing**: End-to-end sync with real network (H1 regtest)
+1. **Real network sync**: Validate with actual Bitcoin Core regtest node
 2. **libsecp256k1 installation**: Users need libsecp256k1 v0.5.0+ with schnorrsig module
 
 ### Important Improvements
@@ -211,6 +211,10 @@ This document tracks the implementation status of oni across all packages and fe
 4. **secp256k1 NIF CI/CD**: GitHub Actions now builds NIF with libsecp256k1
 5. **Docker NIF support**: Dockerfile builds libsecp256k1 and NIF
 6. **BIP-340 test vectors**: Schnorr verification test suite added
+7. **Event router integration**: P2P events now properly routed to chainstate/mempool/sync
+8. **Integration tests enabled**: End-to-end block connection tests added
+9. **Simulated P2P sync tests**: Event router block/header routing validated
+10. **Persistence validation tests**: Crash recovery and restart tests added
 
 ## Legend
 

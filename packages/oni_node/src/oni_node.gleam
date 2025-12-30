@@ -14,6 +14,7 @@ import gleam/io
 import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
 import gleam/result
+import event_router.{type RouterMsg}
 import http_server.{type ServerMsg}
 import node_rpc.{type RpcNodeHandles}
 import oni_bitcoin
@@ -120,6 +121,8 @@ pub type NodeState {
     chainstate: Subject(ChainstateMsg),
     mempool: Subject(MempoolMsg),
     sync: Subject(SyncMsg),
+    /// Event router for P2P message handling
+    event_router: Option(Subject(RouterMsg)),
     /// P2P network listener (if enabled)
     p2p_listener: Option(Subject(ListenerMsg)),
     /// RPC HTTP server (if enabled)
@@ -198,21 +201,22 @@ pub fn start_with_config(config: NodeConfig) -> Result(NodeState, String) {
     False -> #(None, None)
   }
 
-  // Start P2P listener if enabled
-  let p2p_listener = case config.enable_p2p {
+  // Start P2P listener and event router if enabled
+  let #(event_router_handle, p2p_listener) = case config.enable_p2p {
     True -> {
-      case start_p2p_listener(config) {
-        Ok(listener) -> {
+      case start_p2p_with_router(config, chainstate, mempool, sync) {
+        Ok(#(router, listener)) -> {
+          io.println("  ✓ Event router started")
           io.println("  ✓ P2P listener started on " <> config.p2p_bind <> ":" <> int.to_string(config.p2p_port))
-          Some(listener)
+          #(Some(router), Some(listener))
         }
         Error(err) -> {
-          io.println("  ✗ P2P listener failed: " <> err)
-          None
+          io.println("  ✗ P2P startup failed: " <> err)
+          #(None, None)
         }
       }
     }
-    False -> None
+    False -> #(None, None)
   }
 
   io.println("Node started successfully!")
@@ -222,6 +226,7 @@ pub fn start_with_config(config: NodeConfig) -> Result(NodeState, String) {
     chainstate: chainstate,
     mempool: mempool,
     sync: sync,
+    event_router: event_router_handle,
     p2p_listener: p2p_listener,
     rpc_server: rpc_server,
     rpc_handles: rpc_handles,
@@ -280,8 +285,18 @@ fn start_rpc_server(
   Ok(#(rpc_handles, server))
 }
 
-/// Start the P2P listener
-fn start_p2p_listener(config: NodeConfig) -> Result(Subject(ListenerMsg), String) {
+/// Start the P2P listener with proper event routing
+///
+/// This function creates the full P2P integration:
+/// 1. Starts the event router which connects chainstate, mempool, and sync
+/// 2. Creates a P2P event handler that forwards events to the router
+/// 3. Starts the P2P listener with the event handler
+fn start_p2p_with_router(
+  config: NodeConfig,
+  chainstate: Subject(ChainstateMsg),
+  mempool: Subject(MempoolMsg),
+  sync: Subject(SyncMsg),
+) -> Result(#(Subject(RouterMsg), Subject(ListenerMsg)), String) {
   let p2p_config = p2p_network.P2PConfig(
     network: config.network,
     listen_port: config.p2p_port,
@@ -293,52 +308,140 @@ fn start_p2p_listener(config: NodeConfig) -> Result(Subject(ListenerMsg), String
     best_height: 0,
   )
 
-  // Create a simple event handler actor for P2P events
-  // In a full implementation, this would route events to sync coordinator
-  case start_p2p_event_handler() {
-    Ok(event_handler) -> {
-      p2p_network.start_listener(p2p_config, event_handler)
-      |> result.map_error(fn(_) { "Failed to start P2P listener" })
+  // First start the P2P listener with a temporary handler
+  // We need the listener subject to pass to the event router
+  case start_temp_listener(p2p_config) {
+    Error(err) -> Error(err)
+    Ok(#(listener, event_handler_subject)) -> {
+      // Create router handles
+      let router_handles = event_router.RouterHandles(
+        chainstate: chainstate,
+        mempool: mempool,
+        sync: sync,
+        p2p: listener,
+      )
+
+      // Start the event router
+      let router_config = event_router.RouterConfig(
+        max_pending_blocks: 16,
+        max_pending_txs: 100,
+        debug: False,
+      )
+
+      case event_router.start(router_config, router_handles) {
+        Error(_) -> {
+          // Stop the listener if router fails
+          p2p_network.stop_listener(listener)
+          Error("Failed to start event router")
+        }
+        Ok(router) -> {
+          // Now update the event handler to forward to the router
+          // We send a message to update the forwarding target
+          process.send(event_handler_subject, SetRouterTarget(router))
+          Ok(#(router, listener))
+        }
+      }
     }
-    Error(_) -> Error("Failed to start P2P event handler")
   }
 }
 
-/// P2P event handler actor state
-type P2PEventHandlerState {
-  P2PEventHandlerState(events_received: Int)
+/// Message type for the forwarding event handler
+type ForwardingHandlerMsg {
+  /// Set the router target to forward events to
+  SetRouterTarget(Subject(RouterMsg))
+  /// Forward a P2P event
+  ForwardEvent(PeerEvent)
 }
 
-/// Start a simple P2P event handler
-fn start_p2p_event_handler() -> Result(Subject(PeerEvent), actor.StartError) {
-  actor.start(P2PEventHandlerState(events_received: 0), handle_p2p_event)
+/// State for the forwarding event handler
+type ForwardingHandlerState {
+  ForwardingHandlerState(
+    router: Option(Subject(RouterMsg)),
+    events_buffered: List(PeerEvent),
+  )
 }
 
-/// Handle P2P events (placeholder - would route to sync/mempool)
-fn handle_p2p_event(
-  event: PeerEvent,
-  state: P2PEventHandlerState,
-) -> actor.Next(PeerEvent, P2PEventHandlerState) {
-  case event {
-    p2p_network.MessageReceived(peer_id, _message) -> {
-      // In a full implementation, route to appropriate handler:
-      // - Block messages -> sync coordinator
-      // - Transaction messages -> mempool
-      // - Header messages -> sync coordinator
-      io.println("[P2P] Message received from peer " <> int.to_string(peer_id))
-      actor.continue(P2PEventHandlerState(events_received: state.events_received + 1))
+/// Start a temporary P2P listener with a forwarding event handler
+fn start_temp_listener(
+  p2p_config: p2p_network.P2PConfig,
+) -> Result(#(Subject(ListenerMsg), Subject(ForwardingHandlerMsg)), String) {
+  // Start the forwarding handler actor
+  case actor.start(
+    ForwardingHandlerState(router: None, events_buffered: []),
+    handle_forwarding_msg,
+  ) {
+    Error(_) -> Error("Failed to start event handler")
+    Ok(handler) -> {
+      // Create a subject that converts PeerEvents to ForwardingHandlerMsg
+      let event_adapter = create_event_adapter(handler)
+
+      case event_adapter {
+        Error(_) -> Error("Failed to create event adapter")
+        Ok(adapter) -> {
+          case p2p_network.start_listener(p2p_config, adapter) {
+            Error(_) -> Error("Failed to start P2P listener")
+            Ok(listener) -> Ok(#(listener, handler))
+          }
+        }
+      }
     }
-    p2p_network.PeerHandshakeComplete(peer_id, _version) -> {
-      io.println("[P2P] Peer " <> int.to_string(peer_id) <> " handshake complete")
-      actor.continue(P2PEventHandlerState(events_received: state.events_received + 1))
+  }
+}
+
+/// Create an adapter that converts PeerEvent to ForwardingHandlerMsg
+fn create_event_adapter(
+  handler: Subject(ForwardingHandlerMsg),
+) -> Result(Subject(PeerEvent), actor.StartError) {
+  actor.start(handler, fn(event: PeerEvent, h: Subject(ForwardingHandlerMsg)) {
+    process.send(h, ForwardEvent(event))
+    actor.continue(h)
+  })
+}
+
+/// Handle forwarding handler messages
+fn handle_forwarding_msg(
+  msg: ForwardingHandlerMsg,
+  state: ForwardingHandlerState,
+) -> actor.Next(ForwardingHandlerMsg, ForwardingHandlerState) {
+  case msg {
+    SetRouterTarget(router) -> {
+      // Flush any buffered events to the router
+      flush_buffered_events(state.events_buffered, router)
+      actor.continue(ForwardingHandlerState(
+        router: Some(router),
+        events_buffered: [],
+      ))
     }
-    p2p_network.PeerDisconnectedEvent(peer_id, reason) -> {
-      io.println("[P2P] Peer " <> int.to_string(peer_id) <> " disconnected: " <> reason)
-      actor.continue(P2PEventHandlerState(events_received: state.events_received + 1))
+
+    ForwardEvent(event) -> {
+      case state.router {
+        Some(router) -> {
+          // Forward to router
+          process.send(router, event_router.ProcessEvent(event))
+          actor.continue(state)
+        }
+        None -> {
+          // Buffer the event until router is set
+          actor.continue(ForwardingHandlerState(
+            ..state,
+            events_buffered: [event, ..state.events_buffered],
+          ))
+        }
+      }
     }
-    p2p_network.PeerError(peer_id, _error) -> {
-      io.println("[P2P] Peer " <> int.to_string(peer_id) <> " error")
-      actor.continue(P2PEventHandlerState(events_received: state.events_received + 1))
+  }
+}
+
+/// Flush buffered events to the router
+fn flush_buffered_events(
+  events: List(PeerEvent),
+  router: Subject(RouterMsg),
+) -> Nil {
+  case events {
+    [] -> Nil
+    [event, ..rest] -> {
+      flush_buffered_events(rest, router)
+      process.send(router, event_router.ProcessEvent(event))
     }
   }
 }
@@ -380,6 +483,15 @@ pub fn stop(node: NodeState) -> Nil {
     None -> Nil
   }
 
+  // Stop event router
+  case node.event_router {
+    Some(router) -> {
+      process.send(router, event_router.Shutdown)
+      io.println("  ✓ Event router stopped")
+    }
+    None -> Nil
+  }
+
   // Stop core subsystems
   process.send(node.sync, oni_supervisor.SyncShutdown)
   io.println("  ✓ Sync coordinator stopped")
@@ -400,6 +512,21 @@ pub fn is_ready(node: NodeState) -> Bool {
   // For now, just check chainstate responds
   let height = get_height(node)
   height >= 0
+}
+
+/// Get the event router handle (for testing and debugging)
+pub fn get_event_router(node: NodeState) -> Option(Subject(RouterMsg)) {
+  node.event_router
+}
+
+/// Get event router statistics (for monitoring)
+pub fn get_router_stats(node: NodeState) -> Option(event_router.RouterStats) {
+  case node.event_router {
+    Some(router) -> {
+      Some(process.call(router, event_router.GetStats, 5000))
+    }
+    None -> None
+  }
 }
 
 /// Get node info for debugging
