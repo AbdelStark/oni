@@ -212,6 +212,79 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
+  # E2E tests - run against live node
+  e2e:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' || github.event.pull_request.draft == false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Erlang/OTP
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{ env.OTP_VERSION }}
+          gleam-version: ${{ env.GLEAM_VERSION }}
+
+      - name: Cache Gleam build
+        uses: actions/cache@v4
+        with:
+          path: |
+            packages/*/build
+            ~/.cache/gleam
+          key: gleam-${{ runner.os }}-${{ env.GLEAM_VERSION }}-${{ env.OTP_VERSION }}-${{ hashFiles('packages/*/gleam.toml') }}
+          restore-keys: |
+            gleam-${{ runner.os }}-${{ env.GLEAM_VERSION }}-${{ env.OTP_VERSION }}-
+
+      - name: Build packages
+        run: make build
+
+      - name: Start oni node in regtest mode
+        run: |
+          cd packages/oni_node
+          erl \
+            -noshell \
+            -pa build/dev/erlang/*/ebin \
+            -pa ../oni_bitcoin/build/dev/erlang/*/ebin \
+            -pa ../oni_consensus/build/dev/erlang/*/ebin \
+            -pa ../oni_storage/build/dev/erlang/*/ebin \
+            -pa ../oni_p2p/build/dev/erlang/*/ebin \
+            -pa ../oni_rpc/build/dev/erlang/*/ebin \
+            -eval 'cli:run([<<"--regtest">>])' &
+          echo $! > /tmp/oni_node.pid
+          cd ../..
+
+      - name: Wait for node to be ready
+        run: |
+          echo "Waiting for RPC to be ready..."
+          for i in {1..30}; do
+            if curl -s --user user:pass -X POST -H 'Content-Type: application/json' \
+              -d '{"jsonrpc":"2.0","id":1,"method":"getblockchaininfo"}' \
+              http://127.0.0.1:18443/ 2>/dev/null | grep -q '"chain":"regtest"'; then
+              echo "RPC is ready!"
+              exit 0
+            fi
+            echo "Waiting... ($i/30)"
+            sleep 1
+          done
+          echo "RPC failed to become ready"
+          exit 1
+
+      - name: Run E2E tests
+        run: |
+          chmod +x scripts/regtest_e2e_tests.sh
+          ./scripts/regtest_e2e_tests.sh --skip-start
+
+      - name: Stop oni node
+        if: always()
+        run: |
+          if [ -f /tmp/oni_node.pid ]; then
+            kill $(cat /tmp/oni_node.pid) 2>/dev/null || true
+          fi
+          pkill -f "cli:run" 2>/dev/null || true
+
   # Integration tests (when available)
   integration:
     name: Integration Tests

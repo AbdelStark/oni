@@ -19,6 +19,7 @@ import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
+import gleam/string
 import oni_bitcoin
 import oni_rpc.{
   type MethodHandler, type RpcConfig, type RpcContext, type RpcError,
@@ -1623,47 +1624,70 @@ fn create_getblock_handler(
     // getblock "blockhash" ( verbosity )
     case params {
       ParamsArray([RpcString(blockhash), ..rest]) -> {
-        let verbosity = case rest {
-          [RpcInt(v), ..] -> v
-          [RpcBool(True), ..] -> 1
-          [RpcBool(False), ..] -> 0
-          _ -> 1
-        }
+        // Validate blockhash format (64 hex chars)
+        case string.length(blockhash) == 64 {
+          False -> Error(InvalidParams("Invalid blockhash"))
+          True -> {
+            // Check if this is a known block (genesis or tip)
+            let network = query_chainstate_network(chainstate)
+            let net_params = case network {
+              oni_bitcoin.Mainnet -> oni_bitcoin.mainnet_params()
+              oni_bitcoin.Testnet -> oni_bitcoin.testnet_params()
+              oni_bitcoin.Regtest -> oni_bitcoin.regtest_params()
+              oni_bitcoin.Signet -> oni_bitcoin.testnet_params()
+            }
+            let genesis_hex = oni_bitcoin.block_hash_to_hex(net_params.genesis_hash)
+            let tip_hash = query_chainstate_tip(chainstate)
+            let tip_hex = case tip_hash {
+              Some(h) -> oni_bitcoin.block_hash_to_hex(h)
+              None -> ""
+            }
 
-        let _ = chainstate
-        let _ = blockhash
+            // Check if blockhash matches genesis or tip
+            let is_known =
+              blockhash == genesis_hex || blockhash == tip_hex
 
-        case verbosity {
-          0 -> {
-            // Return raw hex block data
-            Error(Internal("Block not found"))
-          }
-          1 -> {
-            // Return block info with txids
-            let result =
-              dict.new()
-              |> dict.insert("hash", RpcString(blockhash))
-              |> dict.insert("confirmations", RpcInt(1))
-              |> dict.insert("size", RpcInt(0))
-              |> dict.insert("strippedsize", RpcInt(0))
-              |> dict.insert("weight", RpcInt(0))
-              |> dict.insert("height", RpcInt(0))
-              |> dict.insert("version", RpcInt(1))
-              |> dict.insert("versionHex", RpcString("00000001"))
-              |> dict.insert("merkleroot", RpcString(""))
-              |> dict.insert("tx", RpcArray([]))
-              |> dict.insert("time", RpcInt(0))
-              |> dict.insert("mediantime", RpcInt(0))
-              |> dict.insert("nonce", RpcInt(0))
-              |> dict.insert("bits", RpcString("1d00ffff"))
-              |> dict.insert("difficulty", RpcFloat(1.0))
-              |> dict.insert("chainwork", RpcString(""))
-              |> dict.insert("nTx", RpcInt(0))
-            Ok(RpcObject(result))
-          }
-          _ -> {
-            // Return block info with full tx details
-            Error(Internal("Block not found"))
+            case is_known {
+              False -> Error(Internal("Block not found"))
+              True -> {
+                let verbosity = case rest {
+                  [RpcInt(v), ..] -> v
+                  [RpcBool(True), ..] -> 1
+                  [RpcBool(False), ..] -> 0
+                  _ -> 1
+                }
+
+                case verbosity {
+                  0 -> {
+                    // Return raw hex block data
+                    Error(Internal("Raw block data not available"))
+                  }
+                  _ -> {
+                    // Return block info with txids
+                    let result =
+                      dict.new()
+                      |> dict.insert("hash", RpcString(blockhash))
+                      |> dict.insert("confirmations", RpcInt(1))
+                      |> dict.insert("size", RpcInt(0))
+                      |> dict.insert("strippedsize", RpcInt(0))
+                      |> dict.insert("weight", RpcInt(0))
+                      |> dict.insert("height", RpcInt(0))
+                      |> dict.insert("version", RpcInt(1))
+                      |> dict.insert("versionHex", RpcString("00000001"))
+                      |> dict.insert("merkleroot", RpcString(""))
+                      |> dict.insert("tx", RpcArray([]))
+                      |> dict.insert("time", RpcInt(0))
+                      |> dict.insert("mediantime", RpcInt(0))
+                      |> dict.insert("nonce", RpcInt(0))
+                      |> dict.insert("bits", RpcString("1d00ffff"))
+                      |> dict.insert("difficulty", RpcFloat(1.0))
+                      |> dict.insert("chainwork", RpcString(""))
+                      |> dict.insert("nTx", RpcInt(0))
+                    Ok(RpcObject(result))
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -1736,36 +1760,48 @@ fn create_getmempoolentry_handler(
     // getmempoolentry "txid"
     case params {
       ParamsArray([RpcString(txid_hex), ..]) -> {
-        let _ = mempool
-        let _ = txid_hex
+        // First check if the txid is in the mempool
+        let mempool_txids = query_mempool_txids(mempool)
+        let txid_in_mempool =
+          list.any(mempool_txids, fn(txid) {
+            oni_bitcoin.txid_to_hex(txid) == txid_hex
+          })
 
-        // Return mempool entry info
-        let result =
-          dict.new()
-          |> dict.insert("vsize", RpcInt(250))
-          |> dict.insert("weight", RpcInt(1000))
-          |> dict.insert("time", RpcInt(0))
-          |> dict.insert("height", RpcInt(0))
-          |> dict.insert("descendantcount", RpcInt(1))
-          |> dict.insert("descendantsize", RpcInt(250))
-          |> dict.insert("ancestorcount", RpcInt(1))
-          |> dict.insert("ancestorsize", RpcInt(250))
-          |> dict.insert("wtxid", RpcString(txid_hex))
-          |> dict.insert(
-            "fees",
-            RpcObject(
+        case txid_in_mempool {
+          False -> {
+            // Transaction not in mempool - return error like Bitcoin Core
+            Error(InvalidParams("Transaction not in mempool"))
+          }
+          True -> {
+            // Return mempool entry info
+            let result =
               dict.new()
-              |> dict.insert("base", RpcFloat(0.00001))
-              |> dict.insert("modified", RpcFloat(0.00001))
-              |> dict.insert("ancestor", RpcFloat(0.00001))
-              |> dict.insert("descendant", RpcFloat(0.00001)),
-            ),
-          )
-          |> dict.insert("depends", RpcArray([]))
-          |> dict.insert("spentby", RpcArray([]))
-          |> dict.insert("bip125-replaceable", RpcBool(True))
+              |> dict.insert("vsize", RpcInt(250))
+              |> dict.insert("weight", RpcInt(1000))
+              |> dict.insert("time", RpcInt(0))
+              |> dict.insert("height", RpcInt(0))
+              |> dict.insert("descendantcount", RpcInt(1))
+              |> dict.insert("descendantsize", RpcInt(250))
+              |> dict.insert("ancestorcount", RpcInt(1))
+              |> dict.insert("ancestorsize", RpcInt(250))
+              |> dict.insert("wtxid", RpcString(txid_hex))
+              |> dict.insert(
+                "fees",
+                RpcObject(
+                  dict.new()
+                  |> dict.insert("base", RpcFloat(0.00001))
+                  |> dict.insert("modified", RpcFloat(0.00001))
+                  |> dict.insert("ancestor", RpcFloat(0.00001))
+                  |> dict.insert("descendant", RpcFloat(0.00001)),
+                ),
+              )
+              |> dict.insert("depends", RpcArray([]))
+              |> dict.insert("spentby", RpcArray([]))
+              |> dict.insert("bip125-replaceable", RpcBool(True))
 
-        Ok(RpcObject(result))
+            Ok(RpcObject(result))
+          }
+        }
       }
       _ -> Error(InvalidParams("getmempoolentry requires txid"))
     }
@@ -1806,10 +1842,43 @@ fn create_getblockhash_handler(
     // getblockhash height
     case params {
       ParamsArray([RpcInt(height), ..]) -> {
-        let _ = chainstate
-        let _ = height
-        // Would look up block hash at height
-        Error(Internal("Block not found at height"))
+        let chain_height = query_chainstate_height(chainstate)
+        let network = query_chainstate_network(chainstate)
+
+        // Validate height is in valid range
+        case height >= 0 && height <= chain_height {
+          False -> Error(Internal("Block height out of range"))
+          True -> {
+            // For height 0, return genesis hash
+            case height {
+              0 -> {
+                let net_params = case network {
+                  oni_bitcoin.Mainnet -> oni_bitcoin.mainnet_params()
+                  oni_bitcoin.Testnet -> oni_bitcoin.testnet_params()
+                  oni_bitcoin.Regtest -> oni_bitcoin.regtest_params()
+                  oni_bitcoin.Signet -> oni_bitcoin.testnet_params()
+                }
+                Ok(RpcString(oni_bitcoin.block_hash_to_hex(net_params.genesis_hash)))
+              }
+              _ -> {
+                // For other heights, query tip if it's the current height
+                case height == chain_height {
+                  True -> {
+                    case query_chainstate_tip(chainstate) {
+                      Some(hash) ->
+                        Ok(RpcString(oni_bitcoin.block_hash_to_hex(hash)))
+                      None -> Error(Internal("Block not found at height"))
+                    }
+                  }
+                  False -> {
+                    // Would need block index lookup for intermediate heights
+                    Error(Internal("Block lookup not yet implemented"))
+                  }
+                }
+              }
+            }
+          }
+        }
       }
       _ -> Error(InvalidParams("getblockhash requires height"))
     }

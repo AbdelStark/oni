@@ -25,6 +25,8 @@ help:
 	@echo "Testing:"
 	@echo "  make test-vectors     - run test vector suite"
 	@echo "  make test-differential - run differential tests vs bitcoind"
+	@echo "  make test-e2e         - run E2E tests (node must be running)"
+	@echo "  make test-e2e-full    - run E2E tests (starts node automatically)"
 	@echo "  make test-all         - run all test suites"
 	@echo ""
 	@echo "CI/CD:"
@@ -143,44 +145,33 @@ nif:
 # Run node in mainnet mode
 run: build
 	@echo "==> Starting oni node (mainnet)..."
-	@cd packages/oni_node && erl \
-	  -pa build/dev/erlang/*/ebin \
-	  -pa ../oni_bitcoin/build/dev/erlang/*/ebin \
-	  -pa ../oni_consensus/build/dev/erlang/*/ebin \
-	  -pa ../oni_storage/build/dev/erlang/*/ebin \
-	  -pa ../oni_p2p/build/dev/erlang/*/ebin \
-	  -pa ../oni_rpc/build/dev/erlang/*/ebin \
-	  -eval 'application:start(oni_node)'
+	@cd packages/oni_node && gleam run
 
 # Run node in testnet mode
 run-testnet: build
 	@echo "==> Starting oni node (testnet)..."
 	@cd packages/oni_node && erl \
+	  -noshell \
 	  -pa build/dev/erlang/*/ebin \
 	  -pa ../oni_bitcoin/build/dev/erlang/*/ebin \
 	  -pa ../oni_consensus/build/dev/erlang/*/ebin \
 	  -pa ../oni_storage/build/dev/erlang/*/ebin \
 	  -pa ../oni_p2p/build/dev/erlang/*/ebin \
 	  -pa ../oni_rpc/build/dev/erlang/*/ebin \
-	  -oni_node network testnet \
-	  -oni_node p2p_port 18333 \
-	  -oni_node rpc_port 18332 \
-	  -eval 'application:start(oni_node)'
+	  -eval 'cli:run([<<"--testnet">>])'
 
 # Run node in regtest mode
 run-regtest: build
 	@echo "==> Starting oni node (regtest)..."
 	@cd packages/oni_node && erl \
+	  -noshell \
 	  -pa build/dev/erlang/*/ebin \
 	  -pa ../oni_bitcoin/build/dev/erlang/*/ebin \
 	  -pa ../oni_consensus/build/dev/erlang/*/ebin \
 	  -pa ../oni_storage/build/dev/erlang/*/ebin \
 	  -pa ../oni_p2p/build/dev/erlang/*/ebin \
 	  -pa ../oni_rpc/build/dev/erlang/*/ebin \
-	  -oni_node network regtest \
-	  -oni_node p2p_port 18444 \
-	  -oni_node rpc_port 18443 \
-	  -eval 'application:start(oni_node)'
+	  -eval 'cli:run([<<"--regtest">>])'
 
 # Run test vectors
 test-vectors:
@@ -193,6 +184,18 @@ test-differential:
 	@echo "==> Running differential tests..."
 	@chmod +x scripts/run_regtest_harness.sh
 	@./scripts/run_regtest_harness.sh differential
+
+# Run E2E regtest tests (requires running node or will start one)
+test-e2e:
+	@echo "==> Running E2E regtest tests..."
+	@chmod +x scripts/regtest_e2e_tests.sh
+	@./scripts/regtest_e2e_tests.sh --skip-start
+
+# Run E2E tests with node startup
+test-e2e-full:
+	@echo "==> Running full E2E regtest tests (starting node)..."
+	@chmod +x scripts/regtest_e2e_tests.sh
+	@./scripts/regtest_e2e_tests.sh
 
 # Run all test suites
 test-all: test test-vectors

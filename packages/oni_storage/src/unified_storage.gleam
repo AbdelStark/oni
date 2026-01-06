@@ -24,8 +24,8 @@ import gleam/option.{type Option, None, Some}
 import gleam/result
 import oni_bitcoin.{type Block, type BlockHash, type OutPoint, type Transaction}
 import oni_storage.{
-  type BlockIndexEntry, type BlockStatus, type BlockUndo, type Chainstate,
-  type Coin, type StorageError, type UtxoView,
+  type BlockIndexEntry, type BlockUndo, type Chainstate, type Coin,
+  type StorageError, type UtxoView,
 }
 import persistent_storage.{type PersistentStorageHandle}
 
@@ -99,7 +99,7 @@ pub fn close(storage: UnifiedStorage) -> Result(Nil, StorageError) {
       case persistent_storage.chainstate_put(handle, storage.chainstate) {
         Error(e) -> Error(e)
         Ok(_) -> {
-          persistent_storage.persistent_storage_close(handle)
+          let _ = persistent_storage.persistent_storage_close(handle)
           Ok(Nil)
         }
       }

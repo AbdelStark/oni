@@ -20,13 +20,11 @@
 // and some RPC methods will fail for pruned data.
 
 import gleam/int
-import gleam/list
 import gleam/option.{type Option, None, Some}
-import gleam/result
 import oni_bitcoin.{type BlockHash}
 import oni_storage.{
-  type BlockIndex, type BlockIndexEntry, type BlockStore, type Chainstate,
-  type StorageError, type UndoStore,
+  type BlockIndex, type BlockStore, type Chainstate, type StorageError,
+  type UndoStore,
 }
 
 // ============================================================================
@@ -334,7 +332,6 @@ pub fn auto_prune(
             Ok(#(new_store, new_undo, result)) -> {
               let new_state =
                 PruningState(
-                  ..prune_state,
                   pruned_height: result.new_pruned_height,
                   bytes_pruned: prune_state.bytes_pruned + result.bytes_freed,
                   blocks_pruned: prune_state.blocks_pruned

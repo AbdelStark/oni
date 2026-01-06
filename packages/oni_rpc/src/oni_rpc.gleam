@@ -248,12 +248,14 @@ pub fn parse_request_string(json: String) -> Result(RpcRequest, RpcError) {
           // Extract id
           let id = extract_json_id(trimmed)
 
-          // For now, accept minimal request
+          // Extract params
+          let params = extract_json_params(trimmed)
+
           Ok(RpcRequest(
             jsonrpc: rpc_version,
             id: id,
             method: method,
-            params: ParamsNone,
+            params: params,
           ))
         }
       }
@@ -285,6 +287,263 @@ fn extract_json_id(json: String) -> RpcId {
   case extract_json_string(json, "id") {
     Ok(id_str) -> IdString(id_str)
     Error(_) -> IdNull
+  }
+}
+
+/// Extract params from JSON-RPC request
+/// Supports array params like [0], ["hash"], [true], [1, "test"]
+fn extract_json_params(json: String) -> RpcParams {
+  // Find "params": in the JSON
+  case string.contains(json, "\"params\"") {
+    False -> ParamsNone
+    True -> {
+      // Split on "params": to find the value
+      case string.split(json, "\"params\"") {
+        [_, rest, ..] -> {
+          // Find the colon and the value start
+          let trimmed = string.trim_left(rest)
+          case string.starts_with(trimmed, ":") {
+            False -> ParamsNone
+            True -> {
+              let after_colon =
+                string.drop_left(trimmed, 1) |> string.trim_left()
+              parse_json_value_for_params(after_colon)
+            }
+          }
+        }
+        _ -> ParamsNone
+      }
+    }
+  }
+}
+
+/// Parse a JSON value and convert to RpcParams
+fn parse_json_value_for_params(json: String) -> RpcParams {
+  let trimmed = string.trim(json)
+  case string.first(trimmed) {
+    // Array params
+    Ok("[") -> {
+      case parse_json_array(trimmed) {
+        Ok(values) -> ParamsArray(values)
+        Error(_) -> ParamsNone
+      }
+    }
+    // Object params
+    Ok("{") -> {
+      case parse_json_object(trimmed) {
+        Ok(obj) -> ParamsObject(obj)
+        Error(_) -> ParamsNone
+      }
+    }
+    // null or other
+    _ -> ParamsNone
+  }
+}
+
+/// Parse a JSON array like [1, "test", true, null]
+fn parse_json_array(json: String) -> Result(List(RpcValue), Nil) {
+  let trimmed = string.trim(json)
+  case string.starts_with(trimmed, "[") {
+    False -> Error(Nil)
+    True -> {
+      // Find the matching closing bracket
+      case find_matching_bracket(trimmed, 0, 0) {
+        Error(_) -> Error(Nil)
+        Ok(end_pos) -> {
+          // Extract content between brackets
+          let content =
+            string.slice(trimmed, 1, end_pos - 1)
+            |> string.trim()
+          case content {
+            "" -> Ok([])
+            _ -> parse_array_elements(content, [])
+          }
+        }
+      }
+    }
+  }
+}
+
+/// Find the position of the matching closing bracket
+fn find_matching_bracket(json: String, pos: Int, depth: Int) -> Result(Int, Nil) {
+  case string.pop_grapheme(string.drop_left(json, pos)) {
+    Error(_) -> Error(Nil)
+    Ok(#(char, _)) -> {
+      case char {
+        "[" -> find_matching_bracket(json, pos + 1, depth + 1)
+        "]" -> {
+          case depth {
+            1 -> Ok(pos)
+            _ -> find_matching_bracket(json, pos + 1, depth - 1)
+          }
+        }
+        "\"" -> {
+          // Skip string content
+          case skip_json_string(json, pos + 1) {
+            Ok(new_pos) -> find_matching_bracket(json, new_pos, depth)
+            Error(_) -> Error(Nil)
+          }
+        }
+        _ -> find_matching_bracket(json, pos + 1, depth)
+      }
+    }
+  }
+}
+
+/// Skip past a JSON string (handling escapes)
+fn skip_json_string(json: String, pos: Int) -> Result(Int, Nil) {
+  case string.pop_grapheme(string.drop_left(json, pos)) {
+    Error(_) -> Error(Nil)
+    Ok(#(char, _)) -> {
+      case char {
+        "\"" -> Ok(pos + 1)
+        "\\" -> skip_json_string(json, pos + 2)
+        // Skip escaped char
+        _ -> skip_json_string(json, pos + 1)
+      }
+    }
+  }
+}
+
+/// Parse array elements separated by commas
+fn parse_array_elements(
+  content: String,
+  acc: List(RpcValue),
+) -> Result(List(RpcValue), Nil) {
+  let trimmed = string.trim(content)
+  case trimmed {
+    "" -> Ok(list.reverse(acc))
+    _ -> {
+      // Find the next element (handle nested structures)
+      case find_element_end(trimmed, 0, 0, False) {
+        Error(_) -> Error(Nil)
+        Ok(end_pos) -> {
+          let element = string.slice(trimmed, 0, end_pos) |> string.trim()
+          let rest =
+            string.drop_left(trimmed, end_pos)
+            |> string.trim_left()
+            |> fn(s) {
+              case string.starts_with(s, ",") {
+                True -> string.drop_left(s, 1)
+                False -> s
+              }
+            }
+
+          case parse_json_value(element) {
+            Error(_) -> Error(Nil)
+            Ok(value) -> parse_array_elements(rest, [value, ..acc])
+          }
+        }
+      }
+    }
+  }
+}
+
+/// Find where the current element ends (at comma or end of string)
+fn find_element_end(
+  json: String,
+  pos: Int,
+  depth: Int,
+  in_string: Bool,
+) -> Result(Int, Nil) {
+  case string.pop_grapheme(string.drop_left(json, pos)) {
+    Error(_) -> Ok(pos)
+    // End of string
+    Ok(#(char, _)) -> {
+      case in_string {
+        True -> {
+          case char {
+            "\"" -> find_element_end(json, pos + 1, depth, False)
+            "\\" -> find_element_end(json, pos + 2, depth, True)
+            _ -> find_element_end(json, pos + 1, depth, True)
+          }
+        }
+        False -> {
+          case char {
+            "\"" -> find_element_end(json, pos + 1, depth, True)
+            "[" | "{" -> find_element_end(json, pos + 1, depth + 1, False)
+            "]" | "}" -> find_element_end(json, pos + 1, depth - 1, False)
+            "," -> {
+              case depth {
+                0 -> Ok(pos)
+                _ -> find_element_end(json, pos + 1, depth, False)
+              }
+            }
+            _ -> find_element_end(json, pos + 1, depth, False)
+          }
+        }
+      }
+    }
+  }
+}
+
+/// Parse a single JSON value
+fn parse_json_value(json: String) -> Result(RpcValue, Nil) {
+  let trimmed = string.trim(json)
+  case string.first(trimmed) {
+    Error(_) -> Error(Nil)
+    Ok(first_char) -> {
+      case first_char {
+        // String
+        "\"" -> {
+          // Extract string content (simple version)
+          let content = string.drop_left(trimmed, 1)
+          case string.split(content, "\"") {
+            [str, ..] -> Ok(RpcString(str))
+            _ -> Error(Nil)
+          }
+        }
+        // Array
+        "[" -> {
+          case parse_json_array(trimmed) {
+            Ok(arr) -> Ok(RpcArray(arr))
+            Error(_) -> Error(Nil)
+          }
+        }
+        // Object
+        "{" -> {
+          case parse_json_object(trimmed) {
+            Ok(obj) -> Ok(RpcObject(obj))
+            Error(_) -> Error(Nil)
+          }
+        }
+        // true, false, null, or number
+        _ -> {
+          case trimmed {
+            "true" -> Ok(RpcBool(True))
+            "false" -> Ok(RpcBool(False))
+            "null" -> Ok(RpcNull)
+            _ -> {
+              // Try to parse as number
+              case int.parse(trimmed) {
+                Ok(n) -> Ok(RpcInt(n))
+                Error(_) -> {
+                  case float.parse(trimmed) {
+                    Ok(f) -> Ok(RpcFloat(f))
+                    Error(_) -> Error(Nil)
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+/// Parse a JSON object (simplified)
+fn parse_json_object(json: String) -> Result(Dict(String, RpcValue), Nil) {
+  let trimmed = string.trim(json)
+  case
+    string.starts_with(trimmed, "{") && string.ends_with(trimmed, "}")
+  {
+    False -> Error(Nil)
+    True -> {
+      // For now, return empty dict - full object parsing is complex
+      // Most RPC calls use array params anyway
+      Ok(dict.new())
+    }
   }
 }
 
