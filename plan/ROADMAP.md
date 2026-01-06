@@ -8,7 +8,7 @@ This roadmap tracks oni's progress toward becoming a production-grade Bitcoin fu
 
 ## Current Focus
 
-**Goal**: Complete signature verification and achieve headers-first sync with regtest.
+**Goal**: Validate end-to-end sync with Bitcoin Core regtest node.
 
 ---
 
@@ -43,7 +43,7 @@ This roadmap tracks oni's progress toward becoming a production-grade Bitcoin fu
 
 ## Milestone 2 — oni_consensus (Script + Validation) ✅
 
-**Status: Complete (core functionality)**
+**Status: Complete**
 
 - [x] Full opcode table and parser
 - [x] Script execution engine
@@ -53,18 +53,20 @@ This roadmap tracks oni's progress toward becoming a production-grade Bitcoin fu
 - [x] OP_CHECKSEQUENCEVERIFY (BIP112)
 - [x] Control flow (IF/ELSE/ENDIF/NOTIF)
 - [x] Sighash type definitions
+- [x] Sighash computation (legacy, BIP143 SegWit, BIP341 Taproot)
 - [x] Merkle root and witness commitment
 - [x] Transaction stateless validation
 - [x] Block filter support (BIP157)
 - [x] Mempool validation and policy
-- [ ] Sighash preimage computation (in progress)
-- [ ] secp256k1 signature verification (in progress)
+- [x] secp256k1 NIF with ECDSA/Schnorr verification
+- [x] Differential testing (100+ Bitcoin Core script vectors)
+- [x] Consensus fuzz testing
 
 ---
 
 ## Milestone 3 — oni_storage (Chainstate) ✅
 
-**Status: Complete (in-memory backend)**
+**Status: Complete**
 
 - [x] UTXO view interface with batch operations
 - [x] Coin type with maturity tracking
@@ -75,10 +77,11 @@ This roadmap tracks oni's progress toward becoming a production-grade Bitcoin fu
 - [x] Disconnect block with undo data
 - [x] Block and header stores
 - [x] DB backend interface abstraction
+- [x] Persistent storage (DETS backend + unified_storage)
 - [x] AssumeUTXO support structure
 - [x] Pruning mode support
 - [x] Transaction index
-- [ ] Persistent backend implementation (planned)
+- [x] DB maintenance utilities
 
 ---
 
@@ -104,13 +107,13 @@ This roadmap tracks oni's progress toward becoming a production-grade Bitcoin fu
 
 ## Milestone 5 — End-to-End Regtest Node 🚧
 
-**Status: In Progress**
+**Status: Near Complete**
 
 - [x] OTP application structure
 - [x] Supervision tree
 - [x] Configuration management
 - [x] CLI interface
-- [x] RPC server (JSON-RPC 2.0)
+- [x] RPC server (JSON-RPC 2.0 with working HTTP)
 - [x] Authentication and rate limiting
 - [x] Prometheus metrics
 - [x] Structured logging
@@ -118,9 +121,12 @@ This roadmap tracks oni's progress toward becoming a production-grade Bitcoin fu
 - [x] IBD coordinator structure
 - [x] Parallel validation framework
 - [x] Reorg handler
-- [ ] Full signature verification
-- [ ] Regtest sync testing
-- [ ] Integration test suite
+- [x] Event router integration
+- [x] Block download pipelining with stall detection
+- [x] Signature verification (secp256k1 NIF)
+- [x] Node runs and responds to RPC calls
+- [ ] Regtest sync with Bitcoin Core
+- [ ] Full integration test suite
 
 ---
 

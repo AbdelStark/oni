@@ -14,7 +14,7 @@ This project uses AI-assisted development guidelines.
 
 ## Current Status
 
-**Stage**: Core infrastructure implemented (Milestones 0-4 complete). Working toward end-to-end regtest sync.
+**Stage**: Core infrastructure complete (Milestones 0-5 near complete). Node runs and responds to RPC.
 
 See `STATUS.md` for detailed implementation matrix.
 
@@ -51,8 +51,8 @@ make ci         # Full CI pipeline
 ```
 packages/
 ├── oni_bitcoin    # Primitives + serialization (COMPLETE)
-├── oni_consensus  # Script + validation (CORE COMPLETE)
-├── oni_storage    # DB + chainstate (IN PROGRESS)
+├── oni_consensus  # Script + validation (COMPLETE)
+├── oni_storage    # DB + chainstate (COMPLETE)
 ├── oni_p2p        # Networking (COMPLETE)
 ├── oni_rpc        # RPC server (COMPLETE)
 └── oni_node       # OTP application (COMPLETE)

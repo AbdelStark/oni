@@ -15,7 +15,7 @@ oni aims to be a **fully validating, mainnet-compatible Bitcoin full node** with
 
 ## Project Status
 
-> **Status: Active Development** — Core infrastructure implemented, working toward mainnet sync capability.
+> **Status: Active Development** — Core infrastructure complete, node runs and responds to RPC. Working toward regtest sync validation.
 
 ### Implementation Progress
 
@@ -35,16 +35,19 @@ See [STATUS.md](STATUS.md) for detailed implementation status.
 ### Implemented
 - **Bitcoin primitives**: Transactions, blocks, scripts, addresses (P2PKH, P2SH, Bech32/Bech32m)
 - **Script interpreter**: Full opcode support including OP_CHECKLOCKTIMEVERIFY (BIP65), OP_CHECKSEQUENCEVERIFY (BIP112)
+- **Signature verification**: secp256k1 NIF with ECDSA and Schnorr support
+- **Sighash computation**: Legacy, BIP143 (SegWit), and BIP341 (Taproot)
 - **Validation**: Stateless and contextual transaction/block validation
-- **Storage**: In-memory UTXO set with connect/disconnect block, undo data generation
+- **Storage**: In-memory and DETS persistent backends, UTXO set with connect/disconnect block
 - **P2P foundation**: Message framing, compact blocks (BIP152), Erlay (BIP330), v2 transport (BIP324)
-- **RPC server**: JSON-RPC 2.0 with authentication and rate limiting
+- **RPC server**: JSON-RPC 2.0 HTTP server with authentication and rate limiting
+- **Node**: OTP application that runs and responds to RPC calls
 - **Operations**: Prometheus metrics, structured logging, health endpoints
 
 ### In Progress
-- Signature verification with secp256k1 NIF
+- Regtest sync validation with Bitcoin Core
+- Full integration test suite
 - Headers-first IBD synchronization
-- Persistent storage backend
 - Full mainnet sync capability
 
 ## Quick Start

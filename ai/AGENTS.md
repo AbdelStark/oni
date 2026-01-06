@@ -4,13 +4,12 @@ oni is designed for multi-agent development. This file describes recommended age
 
 ## 1. Project Status
 
-**Current Stage**: Core infrastructure implemented (Milestones 0-4 complete). Working on Milestone 5 (end-to-end regtest sync).
+**Current Stage**: Core infrastructure complete (Milestones 0-5 near complete). Node runs and responds to RPC.
 
 Key remaining work:
-- Signature verification (secp256k1 NIF)
-- Sighash preimage computation
-- Persistent storage backend
-- End-to-end integration testing
+- Regtest sync validation with Bitcoin Core
+- Full integration test suite
+- Mainnet sync capability
 
 See [STATUS.md](/STATUS.md) for detailed implementation status.
 
@@ -34,7 +33,7 @@ See [STATUS.md](/STATUS.md) for detailed implementation status.
 - Mempool policy logic (except shared primitives)
 - P2P relay decisions
 
-**Current Status:** Script engine complete, sighash computation in progress.
+**Current Status:** Complete. Script engine, sighash (all types), and secp256k1 NIF done.
 
 ### 2.2 Primitives Agent
 **Scope:**
@@ -62,7 +61,7 @@ See [STATUS.md](/STATUS.md) for detailed implementation status.
 - Crash recovery and migrations
 - Reorg correctness
 
-**Current Status:** In-memory backend complete, persistent backend in progress.
+**Current Status:** Complete. In-memory and DETS persistent backends implemented.
 
 ### 2.4 P2P Agent
 **Scope:**
