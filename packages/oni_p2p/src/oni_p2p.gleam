@@ -342,10 +342,7 @@ pub fn inv_type_from_int(n: Int) -> InvType {
 
 /// Encode an inventory item
 pub fn encode_inv_item(item: InvItem) -> BitArray {
-  <<
-    { inv_type_to_int(item.inv_type) }:32-little,
-    item.hash.bytes:bits,
-  >>
+  <<{ inv_type_to_int(item.inv_type) }:32-little, item.hash.bytes:bits>>
 }
 
 /// Decode an inventory item
@@ -1506,9 +1503,7 @@ pub fn handshake_initiate(
   nonce: Int,
   start_height: Int,
 ) -> List(Message) {
-  [
-    version_message(services, timestamp, remote_addr, nonce, start_height),
-  ]
+  [version_message(services, timestamp, remote_addr, nonce, start_height)]
 }
 
 /// Handle incoming version message during handshake
@@ -1520,12 +1515,7 @@ pub fn handshake_on_version(
     False -> Error(ProtocolViolation("Protocol version too old"))
     True -> {
       // Send verack and any feature negotiation messages
-      let msgs = [
-        MsgVerack,
-        MsgWtxidRelay,
-        MsgSendAddrV2,
-        MsgSendHeaders,
-      ]
+      let msgs = [MsgVerack, MsgWtxidRelay, MsgSendAddrV2, MsgSendHeaders]
       Ok(msgs)
     }
   }
@@ -1608,28 +1598,21 @@ pub fn create_getdata_txs(txids: List(Txid), witness: Bool) -> Message {
 
 /// DNS seeds for mainnet peer discovery
 pub const mainnet_dns_seeds = [
-  "seed.bitcoin.sipa.be",
-  "dnsseed.bluematt.me",
+  "seed.bitcoin.sipa.be", "dnsseed.bluematt.me",
   "dnsseed.bitcoin.dashjr-list-of-hierarchical-deterministic-seeds.today",
-  "seed.bitcoinstats.com",
-  "seed.bitcoin.jonasschnelli.ch",
-  "seed.btc.petertodd.net",
-  "seed.bitcoin.sprovoost.nl",
-  "dnsseed.emzy.de",
+  "seed.bitcoinstats.com", "seed.bitcoin.jonasschnelli.ch",
+  "seed.btc.petertodd.net", "seed.bitcoin.sprovoost.nl", "dnsseed.emzy.de",
   "seed.bitcoin.wiz.biz",
 ]
 
 /// DNS seeds for testnet peer discovery
 pub const testnet_dns_seeds = [
-  "testnet-seed.bitcoin.jonasschnelli.ch",
-  "seed.tbtc.petertodd.net",
+  "testnet-seed.bitcoin.jonasschnelli.ch", "seed.tbtc.petertodd.net",
   "testnet-seed.bluematt.me",
 ]
 
 /// DNS seeds for signet peer discovery
-pub const signet_dns_seeds = [
-  "seed.signet.bitcoin.sprovoost.nl",
-]
+pub const signet_dns_seeds = ["seed.signet.bitcoin.sprovoost.nl"]
 
 /// Network type for DNS seed selection
 pub type Network {

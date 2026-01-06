@@ -461,16 +461,7 @@ pub fn build_histogram(
 ) -> List(HistogramEntry) {
   // Define histogram buckets (sat/vB ranges)
   let bucket_ranges = [
-    1.0,
-    2.0,
-    5.0,
-    10.0,
-    20.0,
-    50.0,
-    100.0,
-    200.0,
-    500.0,
-    1000.0,
+    1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0, 500.0, 1000.0,
   ]
 
   build_histogram_recursive(tx_fees, bucket_ranges, [])

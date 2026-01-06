@@ -194,10 +194,7 @@ pub fn parse_nolisten_test() {
 pub fn parse_multiple_args_test() {
   let result =
     cli.parse_args([
-      "--regtest",
-      "--datadir=/data/regtest",
-      "--rpcport=18443",
-      "--port=18444",
+      "--regtest", "--datadir=/data/regtest", "--rpcport=18443", "--port=18444",
       "--debug",
     ])
   should.be_ok(result)
@@ -224,11 +221,7 @@ pub fn parse_multiple_args_test() {
 }
 
 pub fn parse_rpc_auth_test() {
-  let result =
-    cli.parse_args([
-      "--rpcuser=myuser",
-      "--rpcpassword=mypassword",
-    ])
+  let result = cli.parse_args(["--rpcuser=myuser", "--rpcpassword=mypassword"])
   should.be_ok(result)
 
   let args = case result {
@@ -245,10 +238,7 @@ pub fn parse_rpc_auth_test() {
 
 pub fn parse_addnode_test() {
   let result =
-    cli.parse_args([
-      "--addnode=192.168.1.1:8333",
-      "--addnode=192.168.1.2:8333",
-    ])
+    cli.parse_args(["--addnode=192.168.1.1:8333", "--addnode=192.168.1.2:8333"])
   should.be_ok(result)
 
   let args = case result {

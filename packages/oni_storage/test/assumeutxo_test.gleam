@@ -318,12 +318,7 @@ pub fn parse_header_test() {
 pub fn parse_invalid_magic_fails_test() {
   // Wrong magic
   let data = <<
-    0x12_34_56_78:32-big,
-    1:16-little,
-    0:8,
-    0:256,
-    100:32-little,
-    1000:64-little,
+    0x12_34_56_78:32-big, 1:16-little, 0:8, 0:256, 100:32-little, 1000:64-little,
   >>
 
   let result = assumeutxo.parse_header(data)
@@ -337,11 +332,7 @@ pub fn parse_invalid_magic_fails_test() {
 pub fn parse_unsupported_version_fails_test() {
   // Wrong version
   let data = <<
-    0x55_54_58_4F:32-big,
-    99:16-little,
-    0:8,
-    0:256,
-    100:32-little,
+    0x55_54_58_4F:32-big, 99:16-little, 0:8, 0:256, 100:32-little,
     1000:64-little,
   >>
 
@@ -359,38 +350,8 @@ pub fn parse_unsupported_version_fails_test() {
 
 pub fn new_download_test() {
   let expected_hash = <<
-    1,
-    2,
-    3,
-    4,
-    5,
-    6,
-    7,
-    8,
-    9,
-    10,
-    11,
-    12,
-    13,
-    14,
-    15,
-    16,
-    17,
-    18,
-    19,
-    20,
-    21,
-    22,
-    23,
-    24,
-    25,
-    26,
-    27,
-    28,
-    29,
-    30,
-    31,
-    32,
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
+    22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32,
   >>
   let state = assumeutxo.new_download(expected_hash, 1_000_000)
 

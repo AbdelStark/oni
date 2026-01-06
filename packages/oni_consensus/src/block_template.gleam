@@ -656,11 +656,7 @@ pub fn create_coinbase_with_extra_nonce(
   let extra_nonce_placeholder = <<0:64>>
   // 8 bytes for extra nonce
   let coinbase_script =
-    bit_array.concat([
-      height_script,
-      extra_data,
-      extra_nonce_placeholder,
-    ])
+    bit_array.concat([height_script, extra_data, extra_nonce_placeholder])
 
   // Calculate extra nonce range
   let extra_nonce_start =
@@ -922,13 +918,7 @@ fn create_coinbase_parts(
   // 1 witness item, 32 bytes, all zeros
   let locktime = <<0:32-little>>
 
-  let coinbase2 =
-    bit_array.concat([
-      sequence,
-      output_data,
-      witness,
-      locktime,
-    ])
+  let coinbase2 = bit_array.concat([sequence, output_data, witness, locktime])
 
   #(coinbase1, coinbase2)
 }
@@ -956,11 +946,7 @@ fn create_outputs_data(
     }
     Some(commitment) -> {
       let witness_script =
-        bit_array.concat([
-          <<0x6a, 0x24>>,
-          witness_commitment_header,
-          commitment,
-        ])
+        bit_array.concat([<<0x6a, 0x24>>, witness_commitment_header, commitment])
       let witness_output =
         bit_array.concat([
           <<0:64-little>>,

@@ -341,27 +341,11 @@ pub fn version_invalid_user_agent_length_test() {
   let timestamp = 1_234_567_890
   // addr_recv: services(8) + ip(16) + port(2) = 26 bytes
   let addr_recv = <<
-    1:64-little,
-    0:80,
-    0xFF:8,
-    0xFF:8,
-    127:8,
-    0:8,
-    0:8,
-    1:8,
-    8333:16-big,
+    1:64-little, 0:80, 0xFF:8, 0xFF:8, 127:8, 0:8, 0:8, 1:8, 8333:16-big,
   >>
   // addr_from: same
   let addr_from = <<
-    1:64-little,
-    0:80,
-    0xFF:8,
-    0xFF:8,
-    127:8,
-    0:8,
-    0:8,
-    1:8,
-    0:16-big,
+    1:64-little, 0:80, 0xFF:8, 0xFF:8, 127:8, 0:8, 0:8, 1:8, 0:16-big,
   >>
   let nonce = 12_345
   // User agent with length claiming 255 bytes but only 5 provided
@@ -643,22 +627,8 @@ pub fn ipv4_mapped_roundtrip_test() {
 pub fn ipv6_roundtrip_test() {
   // Create a non-mapped IPv6 address (first 10 bytes not all zero + ffff)
   let ipv6_bytes = <<
-    0x20,
-    0x01,
-    0x0D,
-    0xB8,
-    0x00,
-    0x00,
-    0x00,
-    0x00,
-    0x00,
-    0x00,
-    0x00,
-    0x00,
-    0x00,
-    0x00,
-    0x00,
-    0x01,
+    0x20, 0x01, 0x0D, 0xB8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x01,
   >>
 
   case oni_p2p.decode_ip(ipv6_bytes) {
@@ -791,9 +761,7 @@ pub fn getdata_roundtrip_test() {
 }
 
 pub fn notfound_roundtrip_test() {
-  let items = [
-    oni_p2p.InvItem(oni_p2p.InvTx, oni_bitcoin.Hash256(<<99:256>>)),
-  ]
+  let items = [oni_p2p.InvItem(oni_p2p.InvTx, oni_bitcoin.Hash256(<<99:256>>))]
   let msg = oni_p2p.MsgNotFound(items)
   let encoded = oni_p2p.encode_message(msg, oni_bitcoin.Mainnet)
 

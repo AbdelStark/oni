@@ -518,9 +518,7 @@ fn process_block_transactions(
       })
 
     let new_undos =
-      list.append(undos, [
-        oni_storage.TxUndo(spent_coins: input_undos),
-      ])
+      list.append(undos, [oni_storage.TxUndo(spent_coins: input_undos)])
 
     #(new_additions, new_removals, new_undos)
   })

@@ -182,10 +182,7 @@ fn is_coinbase(tx: Transaction) -> Bool {
 
 /// Serialize an outpoint
 fn serialize_outpoint(outpoint: OutPoint) -> BitArray {
-  bit_array.concat([
-    outpoint.txid.hash.bytes,
-    <<outpoint.vout:32-little>>,
-  ])
+  bit_array.concat([outpoint.txid.hash.bytes, <<outpoint.vout:32-little>>])
 }
 
 // ============================================================================
@@ -619,10 +616,7 @@ pub fn genesis_filter_header(filter: BlockFilter) -> FilterHeader {
 /// Serialize a block filter
 pub fn encode_filter(filter: BlockFilter) -> BitArray {
   let n_bytes = oni_bitcoin.compact_size_encode(filter.n_elements)
-  bit_array.concat([
-    n_bytes,
-    filter.filter_data,
-  ])
+  bit_array.concat([n_bytes, filter.filter_data])
 }
 
 /// Deserialize a block filter

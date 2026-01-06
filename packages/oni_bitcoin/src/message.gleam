@@ -29,31 +29,8 @@ pub const message_magic = "Bitcoin Signed Message:\n"
 
 /// Magic prefix with length byte for hashing
 pub const message_magic_bytes = <<
-  24,
-  66,
-  105,
-  116,
-  99,
-  111,
-  105,
-  110,
-  32,
-  83,
-  105,
-  103,
-  110,
-  101,
-  100,
-  32,
-  77,
-  101,
-  115,
-  115,
-  97,
-  103,
-  101,
-  58,
-  10,
+  24, 66, 105, 116, 99, 111, 105, 110, 32, 83, 105, 103, 110, 101, 100, 32, 77,
+  101, 115, 115, 97, 103, 101, 58, 10,
 >>
 
 /// Signature header base for uncompressed keys

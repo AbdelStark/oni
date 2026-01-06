@@ -149,25 +149,8 @@ pub fn execute_max_stack_test() {
   let flags = oni_consensus.default_script_flags()
   // Push 10 elements then drop them
   let script = <<
-    0x51,
-    0x51,
-    0x51,
-    0x51,
-    0x51,
-    0x51,
-    0x51,
-    0x51,
-    0x51,
-    0x51,
-    0x75,
-    0x75,
-    0x75,
-    0x75,
-    0x75,
-    0x75,
-    0x75,
-    0x75,
-    0x75,
+    0x51, 0x51, 0x51, 0x51, 0x51, 0x51, 0x51, 0x51, 0x51, 0x51, 0x75, 0x75, 0x75,
+    0x75, 0x75, 0x75, 0x75, 0x75, 0x75,
   >>
   let ctx = oni_consensus.script_context_new(script, flags)
   let result = oni_consensus.execute_script(ctx)
@@ -192,22 +175,8 @@ pub fn execute_op_return_data_test() {
   let flags = oni_consensus.default_script_flags()
   // OP_RETURN followed by some data
   let script = <<
-    0x6a,
-    0x0e,
-    0x68,
-    0x65,
-    0x6c,
-    0x6c,
-    0x6f,
-    0x20,
-    0x77,
-    0x6f,
-    0x72,
-    0x6c,
-    0x64,
-    0x21,
-    0x21,
-    0x21,
+    0x6a, 0x0e, 0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x20, 0x77, 0x6f, 0x72, 0x6c, 0x64,
+    0x21, 0x21, 0x21,
   >>
   let ctx = oni_consensus.script_context_new(script, flags)
   case oni_consensus.execute_script(ctx) {
@@ -342,19 +311,13 @@ pub fn tx_decode_truncated_input_count_test() {
 pub fn tx_decode_zero_inputs_and_outputs_test() {
   // Version + 0 inputs + 0 outputs + locktime (should fail - invalid tx)
   let tx = <<
-    0x01,
-    0x00,
-    0x00,
-    0x00,
+    0x01, 0x00, 0x00, 0x00,
     // version 1
     0x00,
     // 0 inputs
     0x00,
     // 0 outputs
-    0x00,
-    0x00,
-    0x00,
-    0x00,
+    0x00, 0x00, 0x00, 0x00,
   >>
   // locktime
   case oni_bitcoin.decode_tx(tx) {
@@ -367,10 +330,7 @@ pub fn tx_decode_zero_inputs_and_outputs_test() {
 pub fn tx_decode_witness_marker_no_flag_test() {
   // SegWit marker (0x00) but missing flag byte
   let tx = <<
-    0x01,
-    0x00,
-    0x00,
-    0x00,
+    0x01, 0x00, 0x00, 0x00,
     // version
     0x00,
   >>
@@ -384,16 +344,9 @@ pub fn tx_decode_witness_marker_no_flag_test() {
 pub fn tx_decode_large_input_count_test() {
   // Claim to have 0xFFFFFFFF inputs (will fail due to bounds)
   let tx = <<
-    0x01,
-    0x00,
-    0x00,
-    0x00,
+    0x01, 0x00, 0x00, 0x00,
     // version
-    0xff,
-    0xff,
-    0xff,
-    0xff,
-    0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff,
   >>
   // Huge compact size
   case oni_bitcoin.decode_tx(tx) {
@@ -406,16 +359,11 @@ pub fn tx_decode_large_input_count_test() {
 pub fn tx_decode_truncated_prevout_test() {
   // 1 input but prevout is truncated
   let tx = <<
-    0x01,
-    0x00,
-    0x00,
-    0x00,
+    0x01, 0x00, 0x00, 0x00,
     // version
     0x01,
     // 1 input
-    0x00,
-    0x00,
-    0x00,
+    0x00, 0x00, 0x00,
   >>
   // only 3 bytes of 36-byte prevout
   case oni_bitcoin.decode_tx(tx) {
@@ -428,44 +376,25 @@ pub fn tx_decode_negative_output_value_test() {
   // Transaction with negative output value (invalid)
   // This tests the Amount bounds checking
   let tx = <<
-    0x01,
-    0x00,
-    0x00,
-    0x00,
+    0x01, 0x00, 0x00, 0x00,
     // version
     0x01,
     // 1 input
     0:256,
     // null prevout txid
-    0xff,
-    0xff,
-    0xff,
-    0xff,
+    0xff, 0xff, 0xff, 0xff,
     // prevout vout
     0x00,
     // empty scriptsig
-    0xff,
-    0xff,
-    0xff,
-    0xff,
+    0xff, 0xff, 0xff, 0xff,
     // sequence
     0x01,
     // 1 output
-    0xff,
-    0xff,
-    0xff,
-    0xff,
-    0xff,
-    0xff,
-    0xff,
-    0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
     // max uint64 (negative in signed)
     0x00,
     // empty scriptpubkey
-    0x00,
-    0x00,
-    0x00,
-    0x00,
+    0x00, 0x00, 0x00, 0x00,
   >>
   // locktime
   case oni_bitcoin.decode_tx(tx) {

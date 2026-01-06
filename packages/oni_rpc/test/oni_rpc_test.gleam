@@ -45,11 +45,7 @@ pub fn value_to_bool_test() {
 
 pub fn value_get_array_element_test() {
   let arr =
-    oni_rpc.RpcArray([
-      oni_rpc.RpcInt(1),
-      oni_rpc.RpcInt(2),
-      oni_rpc.RpcInt(3),
-    ])
+    oni_rpc.RpcArray([oni_rpc.RpcInt(1), oni_rpc.RpcInt(2), oni_rpc.RpcInt(3)])
 
   case oni_rpc.value_get_array_element(arr, 1) {
     Some(oni_rpc.RpcInt(2)) -> should.be_ok(Ok(Nil))

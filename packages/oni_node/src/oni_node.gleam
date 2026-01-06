@@ -444,10 +444,10 @@ fn handle_forwarding_msg(
         None -> {
           // Buffer the event until router is set
           actor.continue(
-            ForwardingHandlerState(..state, events_buffered: [
-              event,
-              ..state.events_buffered
-            ]),
+            ForwardingHandlerState(
+              ..state,
+              events_buffered: [event, ..state.events_buffered],
+            ),
           )
         }
       }

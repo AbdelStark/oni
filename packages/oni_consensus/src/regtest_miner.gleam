@@ -149,11 +149,7 @@ pub fn create_coinbase(
   let message_bytes = bit_array.from_string(config.coinbase_message)
 
   let script_sig_bytes =
-    bit_array.concat([
-      height_script,
-      extra_nonce_bytes,
-      message_bytes,
-    ])
+    bit_array.concat([height_script, extra_nonce_bytes, message_bytes])
 
   // Coinbase input (null prevout)
   let coinbase_input =
@@ -519,10 +515,7 @@ pub fn calculate_witness_commitment(
   // Commitment = SHA256d(witness_merkle_root || witness_reserved_value)
   let witness_reserved_value = <<0:256>>
   oni_bitcoin.sha256d(
-    bit_array.concat([
-      witness_merkle,
-      witness_reserved_value,
-    ]),
+    bit_array.concat([witness_merkle, witness_reserved_value]),
   )
 }
 

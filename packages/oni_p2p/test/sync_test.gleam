@@ -373,11 +373,7 @@ pub fn sync_get_stats_test() {
 // ============================================================================
 
 pub fn find_common_ancestor_identical_chains_test() {
-  let chain = [
-    make_block_hash(0),
-    make_block_hash(1),
-    make_block_hash(2),
-  ]
+  let chain = [make_block_hash(0), make_block_hash(1), make_block_hash(2)]
 
   case sync.find_common_ancestor(chain, chain) {
     Some(#(_hash, height)) -> height |> should.equal(2)
@@ -386,11 +382,7 @@ pub fn find_common_ancestor_identical_chains_test() {
 }
 
 pub fn find_common_ancestor_fork_test() {
-  let chain1 = [
-    make_block_hash(0),
-    make_block_hash(1),
-    make_block_hash(2),
-  ]
+  let chain1 = [make_block_hash(0), make_block_hash(1), make_block_hash(2)]
 
   let chain2 = [
     make_block_hash(0),

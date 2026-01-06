@@ -118,11 +118,7 @@ pub fn mempool_add_no_outputs_tx_test() {
         oni_bitcoin.TxIn(
           prevout: null_outpoint,
           script_sig: oni_bitcoin.script_from_bytes(<<
-            0x04,
-            0x00,
-            0x00,
-            0x00,
-            0x00,
+            0x04, 0x00, 0x00, 0x00, 0x00,
           >>),
           sequence: 0xFFFFFFFF,
           witness: [],

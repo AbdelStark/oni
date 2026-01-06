@@ -1062,10 +1062,7 @@ fn serialize_input(input: TxIn) -> BitArray {
 }
 
 fn serialize_outpoint(outpoint: OutPoint) -> BitArray {
-  bit_array.concat([
-    outpoint.txid.hash.bytes,
-    <<outpoint.vout:32-little>>,
-  ])
+  bit_array.concat([outpoint.txid.hash.bytes, <<outpoint.vout:32-little>>])
 }
 
 fn serialize_outputs(outputs: List(TxOut)) -> BitArray {

@@ -339,38 +339,9 @@ pub fn mainnet_params() -> NetworkParams {
   // Mainnet genesis hash in internal byte order (little-endian)
   // Display: 000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f
   let genesis_bytes = <<
-    0x6f,
-    0xe2,
-    0x8c,
-    0x0a,
-    0xb6,
-    0xf1,
-    0xb3,
-    0x72,
-    0xc1,
-    0xa6,
-    0xa2,
-    0x46,
-    0xae,
-    0x63,
-    0xf7,
-    0x4f,
-    0x93,
-    0x1e,
-    0x83,
-    0x65,
-    0xe1,
-    0x5a,
-    0x08,
-    0x9c,
-    0x68,
-    0xd6,
-    0x19,
-    0x00,
-    0x00,
-    0x00,
-    0x00,
-    0x00,
+    0x6f, 0xe2, 0x8c, 0x0a, 0xb6, 0xf1, 0xb3, 0x72, 0xc1, 0xa6, 0xa2, 0x46, 0xae,
+    0x63, 0xf7, 0x4f, 0x93, 0x1e, 0x83, 0x65, 0xe1, 0x5a, 0x08, 0x9c, 0x68, 0xd6,
+    0x19, 0x00, 0x00, 0x00, 0x00, 0x00,
   >>
   let assert Ok(genesis) = block_hash_from_bytes(genesis_bytes)
 
@@ -389,38 +360,9 @@ pub fn testnet_params() -> NetworkParams {
   // Testnet genesis hash in internal byte order (little-endian)
   // Display: 000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943
   let genesis_bytes = <<
-    0x43,
-    0x49,
-    0x7f,
-    0xd7,
-    0xf8,
-    0x26,
-    0x95,
-    0x71,
-    0x08,
-    0xf4,
-    0xa3,
-    0x0f,
-    0xd9,
-    0xce,
-    0xc3,
-    0xae,
-    0xba,
-    0x79,
-    0x97,
-    0x20,
-    0x84,
-    0xe9,
-    0x0e,
-    0xad,
-    0x01,
-    0xea,
-    0x33,
-    0x09,
-    0x00,
-    0x00,
-    0x00,
-    0x00,
+    0x43, 0x49, 0x7f, 0xd7, 0xf8, 0x26, 0x95, 0x71, 0x08, 0xf4, 0xa3, 0x0f, 0xd9,
+    0xce, 0xc3, 0xae, 0xba, 0x79, 0x97, 0x20, 0x84, 0xe9, 0x0e, 0xad, 0x01, 0xea,
+    0x33, 0x09, 0x00, 0x00, 0x00, 0x00,
   >>
   let assert Ok(genesis) = block_hash_from_bytes(genesis_bytes)
 
@@ -439,38 +381,9 @@ pub fn regtest_params() -> NetworkParams {
   // Regtest genesis hash in internal byte order (little-endian)
   // Display: 0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206
   let genesis_bytes = <<
-    0x06,
-    0x22,
-    0x6e,
-    0x46,
-    0x11,
-    0x1a,
-    0x0b,
-    0x59,
-    0xca,
-    0xaf,
-    0x12,
-    0x60,
-    0x43,
-    0xeb,
-    0x5b,
-    0xbf,
-    0x28,
-    0xc3,
-    0x4f,
-    0x3a,
-    0x5e,
-    0x33,
-    0x2a,
-    0x1f,
-    0xc7,
-    0xb2,
-    0xb7,
-    0x3c,
-    0xf1,
-    0x88,
-    0x91,
-    0x0f,
+    0x06, 0x22, 0x6e, 0x46, 0x11, 0x1a, 0x0b, 0x59, 0xca, 0xaf, 0x12, 0x60, 0x43,
+    0xeb, 0x5b, 0xbf, 0x28, 0xc3, 0x4f, 0x3a, 0x5e, 0x33, 0x2a, 0x1f, 0xc7, 0xb2,
+    0xb7, 0x3c, 0xf1, 0x88, 0x91, 0x0f,
   >>
   let assert Ok(genesis) = block_hash_from_bytes(genesis_bytes)
 
@@ -1134,11 +1047,7 @@ fn encode_outputs(outputs: List(TxOut)) -> BitArray {
     let script_len = compact_size_encode(bit_array.byte_size(script))
     let value = amount_to_sats(output.value)
     let output_data =
-      bit_array.concat([
-        <<value:64-little>>,
-        script_len,
-        script,
-      ])
+      bit_array.concat([<<value:64-little>>, script_len, script])
     bit_array.append(acc, output_data)
   })
 }
@@ -3157,10 +3066,10 @@ fn update_psbt_input(
     }
     <<0x02, pubkey:bits>> -> {
       // Partial signature
-      PsbtInput(..input, partial_sigs: [
-        #(<<pubkey:bits>>, value),
-        ..input.partial_sigs
-      ])
+      PsbtInput(
+        ..input,
+        partial_sigs: [#(<<pubkey:bits>>, value), ..input.partial_sigs],
+      )
     }
     <<0x03>> -> {
       // Sighash type
@@ -3279,10 +3188,10 @@ fn update_psbt_output(
     }
     <<0x02, pubkey:bits>> -> {
       // BIP32 derivation
-      PsbtOutput(..output, bip32_derivation: [
-        #(<<pubkey:bits>>, value),
-        ..output.bip32_derivation
-      ])
+      PsbtOutput(
+        ..output,
+        bip32_derivation: [#(<<pubkey:bits>>, value), ..output.bip32_derivation],
+      )
     }
     <<0x05>> -> {
       // Tap internal key
@@ -3388,10 +3297,10 @@ pub fn psbt_add_partial_sig(
 ) -> Result(Psbt, PsbtError) {
   case
     list_update_at(psbt.inputs, input_index, fn(input) {
-      PsbtInput(..input, partial_sigs: [
-        #(pubkey, signature),
-        ..input.partial_sigs
-      ])
+      PsbtInput(
+        ..input,
+        partial_sigs: [#(pubkey, signature), ..input.partial_sigs],
+      )
     })
   {
     Error(_) -> Error(PsbtInputCountMismatch)

@@ -59,11 +59,7 @@ pub fn index_block_transactions_single_test() {
 }
 
 pub fn index_block_transactions_multiple_test() {
-  let txids = [
-    create_test_txid(),
-    create_test_txid(),
-    create_test_txid(),
-  ]
+  let txids = [create_test_txid(), create_test_txid(), create_test_txid()]
   let block_hash = create_test_block_hash()
 
   let entries = txindex.index_block_transactions(block_hash, 500_000, txids)

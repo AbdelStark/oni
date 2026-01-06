@@ -330,10 +330,11 @@ pub fn minisketch_add(sketch: Minisketch, element: BitArray) -> Minisketch {
       // Add element to the sketch
       // In production, this would use proper field operations
       let new_data = xor_into_sketch(sketch.data, element)
-      Minisketch(..sketch, data: new_data, elements: [
-        element,
-        ..sketch.elements
-      ])
+      Minisketch(
+        ..sketch,
+        data: new_data,
+        elements: [element, ..sketch.elements],
+      )
     }
   }
 }
@@ -887,22 +888,8 @@ fn estimate_bytes_saved(num_txs: Int) -> Int {
 fn generate_random_salt() -> BitArray {
   // In production, use secure random
   <<
-    0x12,
-    0x34,
-    0x56,
-    0x78,
-    0x9a,
-    0xbc,
-    0xde,
-    0xf0,
-    0x11,
-    0x22,
-    0x33,
-    0x44,
-    0x55,
-    0x66,
-    0x77,
-    0x88,
+    0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0, 0x11, 0x22, 0x33, 0x44, 0x55,
+    0x66, 0x77, 0x88,
   >>
 }
 
