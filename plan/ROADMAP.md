@@ -137,13 +137,19 @@ This roadmap tracks oni's progress toward becoming a production-grade Bitcoin fu
 
 ## Milestone 6 — End-to-End Mainnet Node
 
-**Status: Not Started**
+**Status: In Progress**
 
-- [ ] Persistent storage backend
-- [ ] IBD to mainnet tip
-- [ ] Stable sync under load
-- [ ] Reorg handling under adversarial conditions
-- [ ] Memory-bounded operation
+- [x] Persistent storage backend (DETS with UTXO, block index, undo data)
+- [x] Block storage and retrieval
+- [x] Headers-first IBD coordinator with proper validation
+- [x] Header PoW verification
+- [x] Header timestamp validation
+- [x] Difficulty transition validation
+- [x] Mainnet DNS seeds for peer discovery
+- [x] Checkpoints for mainnet (up to block 820,000)
+- [x] Reorg handler implementation
+- [ ] Live mainnet IBD testing
+- [ ] Memory-bounded operation validation
 - [ ] Production deployment testing
 
 ---

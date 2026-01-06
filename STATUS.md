@@ -226,6 +226,8 @@ This document tracks the implementation status of oni across all packages and fe
 17. **secp256k1 signing functions**: NIF extended with ECDSA/Schnorr signing, private key derivation
 18. **E2E regtest test suite**: 52 comprehensive E2E tests for RPC, mining, and chain operations
 19. **CI E2E integration**: E2E tests run automatically in CI against live regtest node
+20. **IBD header validation**: Complete PoW, timestamp, and difficulty validation for headers-first sync
+21. **Mainnet checkpoints**: Checkpoint verification up to block 820,000
 
 ## Legend
 
