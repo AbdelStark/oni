@@ -10,11 +10,18 @@
 
 -module(oni_secp256k1).
 -export([
+    %% Verification
     ecdsa_verify/3,
     schnorr_verify/3,
+    %% Public key operations
     parse_pubkey/1,
     pubkey_to_xonly/1,
-    tweak_pubkey/2
+    tweak_pubkey/2,
+    %% Signing
+    private_to_public/1,
+    ecdsa_sign/2,
+    schnorr_sign/3,
+    tweak_private_key/2
 ]).
 
 %% NIF stubs that get replaced when the NIF is loaded
@@ -177,4 +184,118 @@ tweak_pubkey(_, _) ->
 
 %% NIF stub
 tweak_pubkey_nif(_InternalKey, _TweakHash) ->
+    erlang:nif_error(nif_not_loaded).
+
+%% ============================================================================
+%% Signing Operations
+%% ============================================================================
+
+%% @doc Derive public key from private key
+%% @param PrivateKey 32-byte private key
+%% @returns {ok, CompressedPubKey} | {error, Reason}
+-spec private_to_public(binary()) -> {ok, binary()} | {error, atom()}.
+private_to_public(PrivateKey) when byte_size(PrivateKey) =:= 32 ->
+    case catch private_to_public_nif(PrivateKey) of
+        {'EXIT', {undef, _}} ->
+            %% Fallback using Erlang's crypto module
+            private_to_public_fallback(PrivateKey);
+        Result ->
+            Result
+    end;
+private_to_public(_) ->
+    {error, invalid_private_key_length}.
+
+private_to_public_fallback(PrivateKey) ->
+    try
+        PubKey = crypto:generate_key(ecdh, secp256k1, PrivateKey),
+        case PubKey of
+            {Pub, _} when byte_size(Pub) =:= 65 ->
+                %% Compress the public key
+                <<_:8, X:256, Y:256>> = Pub,
+                Prefix = case Y band 1 of
+                    0 -> 2;
+                    1 -> 3
+                end,
+                {ok, <<Prefix:8, X:256>>};
+            _ ->
+                {error, invalid_public_key}
+        end
+    catch
+        _:_ ->
+            {error, key_derivation_failed}
+    end.
+
+%% NIF stub
+private_to_public_nif(_PrivateKey) ->
+    erlang:nif_error(nif_not_loaded).
+
+%% @doc Sign a message hash with ECDSA
+%% @param MsgHash 32-byte message hash
+%% @param PrivateKey 32-byte private key
+%% @returns {ok, DERSignature} | {error, Reason}
+-spec ecdsa_sign(binary(), binary()) -> {ok, binary()} | {error, atom()}.
+ecdsa_sign(MsgHash, PrivateKey)
+    when byte_size(MsgHash) =:= 32, byte_size(PrivateKey) =:= 32 ->
+    case catch ecdsa_sign_nif(MsgHash, PrivateKey) of
+        {'EXIT', {undef, _}} ->
+            %% Fallback using Erlang's crypto module
+            ecdsa_sign_fallback(MsgHash, PrivateKey);
+        Result ->
+            Result
+    end;
+ecdsa_sign(_, _) ->
+    {error, invalid_input_lengths}.
+
+ecdsa_sign_fallback(MsgHash, PrivateKey) ->
+    try
+        Sig = crypto:sign(ecdsa, sha256, {digest, MsgHash}, [PrivateKey, secp256k1]),
+        {ok, Sig}
+    catch
+        _:_ ->
+            {error, sign_failed}
+    end.
+
+%% NIF stub
+ecdsa_sign_nif(_MsgHash, _PrivateKey) ->
+    erlang:nif_error(nif_not_loaded).
+
+%% @doc Sign a message hash with BIP-340 Schnorr
+%% @param MsgHash 32-byte message hash
+%% @param PrivateKey 32-byte private key
+%% @param AuxRand 32-byte auxiliary randomness
+%% @returns {ok, Signature} | {error, Reason}
+-spec schnorr_sign(binary(), binary(), binary()) -> {ok, binary()} | {error, atom()}.
+schnorr_sign(MsgHash, PrivateKey, AuxRand)
+    when byte_size(MsgHash) =:= 32, byte_size(PrivateKey) =:= 32, byte_size(AuxRand) =:= 32 ->
+    case catch schnorr_sign_nif(MsgHash, PrivateKey, AuxRand) of
+        {'EXIT', {undef, _}} ->
+            {error, nif_not_loaded};
+        Result ->
+            Result
+    end;
+schnorr_sign(_, _, _) ->
+    {error, invalid_input_lengths}.
+
+%% NIF stub
+schnorr_sign_nif(_MsgHash, _PrivateKey, _AuxRand) ->
+    erlang:nif_error(nif_not_loaded).
+
+%% @doc Tweak a private key for HD derivation
+%% @param PrivateKey 32-byte private key
+%% @param Tweak 32-byte tweak value
+%% @returns {ok, TweakedPrivateKey} | {error, Reason}
+-spec tweak_private_key(binary(), binary()) -> {ok, binary()} | {error, atom()}.
+tweak_private_key(PrivateKey, Tweak)
+    when byte_size(PrivateKey) =:= 32, byte_size(Tweak) =:= 32 ->
+    case catch tweak_private_key_nif(PrivateKey, Tweak) of
+        {'EXIT', {undef, _}} ->
+            {error, nif_not_loaded};
+        Result ->
+            Result
+    end;
+tweak_private_key(_, _) ->
+    {error, invalid_input_lengths}.
+
+%% NIF stub
+tweak_private_key_nif(_PrivateKey, _Tweak) ->
     erlang:nif_error(nif_not_loaded).

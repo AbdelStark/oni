@@ -23,7 +23,9 @@ import gleam/otp/actor
 import oni_bitcoin.{type Block, type BlockHash, type Network, type Transaction}
 import oni_storage.{type BlockIndexEntry, type BlockUndo}
 import oni_supervisor.{type MempoolMsg}
-import persistent_chainstate.{type PersistentChainstateMsg}
+import persistent_chainstate.{
+  type PersistentChainstateMsg, ConnectBlock, DisconnectBlock, GetBlock,
+}
 
 // ============================================================================
 // Configuration
@@ -222,22 +224,76 @@ fn handle_message(
 // Reorg Logic
 // ============================================================================
 
-/// Check if a reorg is needed
+/// Check if a reorg is needed by comparing chain work
 fn check_reorg(
-  _new_tip: BlockHash,
-  _new_work: Int,
+  new_tip: BlockHash,
+  new_work: Int,
   state: ReorgState,
 ) -> ReorgResult {
-  // In a full implementation:
-  // 1. Compare new_work to current tip's work
-  // 2. If new chain has more work, check depth
-  // 3. Return appropriate result
-
   case state.current_tip {
+    // No current tip - we're at genesis, no reorg possible
     None -> NoReorgNeeded
-    Some(_current) -> {
-      // Would compute reorg depth and compare work
-      NoReorgNeeded
+
+    Some(current_tip) -> {
+      // Get current tip's info from block index
+      let current_hex = oni_bitcoin.block_hash_to_hex(current_tip)
+      let new_hex = oni_bitcoin.block_hash_to_hex(new_tip)
+
+      // Same block = no reorg needed
+      case current_hex == new_hex {
+        True -> NoReorgNeeded
+        False -> {
+          case dict.get(state.block_index, current_hex) {
+            Error(_) -> {
+              // Current tip not in index - shouldn't happen
+              NoReorgNeeded
+            }
+            Ok(current_block) -> {
+              // Compare total work: new chain must have MORE work to trigger reorg
+              case new_work > current_block.total_work {
+                False -> {
+                  // New chain doesn't have more work - no reorg
+                  NoReorgNeeded
+                }
+                True -> {
+                  // New chain has more work - calculate reorg depth
+                  case dict.get(state.block_index, new_hex) {
+                    Error(_) -> NoReorgNeeded
+                    Ok(new_block) -> {
+                      // Find common ancestor to determine depth
+                      case
+                        find_common_ancestor(
+                          current_block,
+                          new_block,
+                          state.block_index,
+                        )
+                      {
+                        Error(_) -> NoReorgNeeded
+                        Ok(#(ancestor, disconnect_path, _connect_path)) -> {
+                          let depth = list.length(disconnect_path)
+
+                          // Check if reorg depth exceeds limit
+                          case depth > state.config.max_reorg_depth {
+                            True -> ReorgTooDeep(depth)
+                            False -> {
+                              let _ = ancestor
+                              ReorgRequired(
+                                old_tip: current_tip,
+                                new_tip: new_tip,
+                                depth: depth,
+                              )
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 }
@@ -401,10 +457,6 @@ fn disconnect_blocks_loop(
   case remaining {
     [] -> Ok(#(collected_txs, state))
     [block, ..rest] -> {
-      // Disconnect this block via chainstate
-      // In a full implementation, we would call the chainstate actor
-      // and collect the transactions from the disconnected block
-
       case state.config.debug {
         True ->
           io.println(
@@ -414,8 +466,28 @@ fn disconnect_blocks_loop(
         False -> Nil
       }
 
-      // For now, simulate success
-      disconnect_blocks_loop(rest, collected_txs, state)
+      // First, get the full block to collect its transactions
+      let block_txs = case
+        process.call(state.chainstate, GetBlock(block.hash, _), 30_000)
+      {
+        Some(full_block) ->
+          // Skip coinbase (first tx), collect the rest
+          case full_block.transactions {
+            [_, ..rest_txs] -> rest_txs
+            [] -> []
+          }
+        None -> []
+      }
+
+      // Disconnect the block via chainstate
+      case process.call(state.chainstate, DisconnectBlock, 60_000) {
+        Ok(_) -> {
+          // Block disconnected successfully, continue with next
+          let new_collected = list.append(collected_txs, block_txs)
+          disconnect_blocks_loop(rest, new_collected, state)
+        }
+        Error(err) -> Error("Failed to disconnect block: " <> err)
+      }
     }
   }
 }
@@ -436,12 +508,6 @@ fn connect_blocks_loop(
   case remaining {
     [] -> Ok(#(confirmed_txids, state))
     [block, ..rest] -> {
-      // Connect this block via chainstate
-      // In a full implementation, we would:
-      // 1. Fetch the full block
-      // 2. Validate and connect it
-      // 3. Collect confirmed txids
-
       case state.config.debug {
         True ->
           io.println(
@@ -450,8 +516,29 @@ fn connect_blocks_loop(
         False -> Nil
       }
 
-      // For now, simulate success
-      connect_blocks_loop(rest, confirmed_txids, state)
+      // Fetch the full block from storage
+      case process.call(state.chainstate, GetBlock(block.hash, _), 30_000) {
+        None ->
+          Error(
+            "Block not found in storage: "
+            <> oni_bitcoin.block_hash_to_hex(block.hash),
+          )
+        Some(full_block) -> {
+          // Connect the block via chainstate
+          case
+            process.call(state.chainstate, ConnectBlock(full_block, _), 60_000)
+          {
+            Error(err) -> Error("Failed to connect block: " <> err)
+            Ok(_) -> {
+              // Collect all txids from this block (for filtering resubmissions)
+              let block_txids =
+                list.map(full_block.transactions, oni_bitcoin.txid_from_tx)
+              let new_confirmed = list.append(confirmed_txids, block_txids)
+              connect_blocks_loop(rest, new_confirmed, state)
+            }
+          }
+        }
+      }
     }
   }
 }

@@ -249,6 +249,8 @@ pub type MempoolMsg {
   GetTemplateData(height: Int, bits: Int, reply: Subject(MempoolTemplateData))
   /// Clear the mempool (e.g., after a block is connected)
   ClearConfirmed(txids: List(oni_bitcoin.Txid))
+  /// Revalidate and re-add transactions after a reorg
+  RevalidateAndAdd(txs: List(oni_bitcoin.Transaction))
   /// Shutdown the mempool
   MempoolShutdown
 }
@@ -390,6 +392,35 @@ fn handle_mempool_msg(
       let template_data = build_template_data(state, height, bits)
       process.send(reply, template_data)
       actor.continue(state)
+    }
+
+    RevalidateAndAdd(txs) -> {
+      // Revalidate and re-add transactions after a reorg
+      // This is called when blocks are disconnected and txs need to go back to mempool
+      let new_state =
+        list.fold(txs, state, fn(acc_state, tx) {
+          // Basic validation - in production would do full contextual validation
+          case validate_tx_basic(tx) {
+            Ok(Nil) -> {
+              let txid = oni_bitcoin.txid_from_tx(tx)
+              let txid_hex = oni_bitcoin.txid_to_hex(txid)
+              // Only add if not already in mempool
+              case dict.has_key(acc_state.txs, txid_hex) {
+                True -> acc_state
+                False -> {
+                  let new_txs = dict.insert(acc_state.txs, txid_hex, tx)
+                  MempoolState(
+                    ..acc_state,
+                    txs: new_txs,
+                    size: acc_state.size + 1,
+                  )
+                }
+              }
+            }
+            Error(_) -> acc_state
+          }
+        })
+      actor.continue(new_state)
     }
 
     MempoolShutdown -> {

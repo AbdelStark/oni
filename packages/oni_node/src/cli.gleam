@@ -17,10 +17,13 @@
 import gleam/erlang/process
 import gleam/int
 import gleam/io
+import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/string
+import node_rpc
 import oni_bitcoin
 import oni_node
+import rpc_service
 
 // ============================================================================
 // CLI Types
@@ -364,12 +367,47 @@ fn get_info(_args: CliArgs) -> Nil {
   io.println("(RPC client not yet implemented)")
 }
 
-fn generate_blocks(args: CliArgs, count: Int, _address: Option(String)) -> Nil {
+fn generate_blocks(args: CliArgs, count: Int, address: Option(String)) -> Nil {
   case args.network {
     oni_bitcoin.Regtest -> {
       io.println("Generating " <> int.to_string(count) <> " blocks...")
-      // In a real implementation, this would call the mining code
-      io.println("(Block generation not yet implemented)")
+
+      // Start node components for mining
+      case node_rpc.start_node_with_rpc(oni_bitcoin.Regtest, 100_000) {
+        Error(err) -> {
+          io.println("Error starting node: " <> err)
+        }
+        Ok(#(_node_handles, rpc_handles)) -> {
+          // Perform mining via RPC handles
+          let reply = process.new_subject()
+          let mining_msg = case address {
+            Some(addr) ->
+              rpc_service.MineToAddress(count, addr, 1_000_000, reply)
+            None -> rpc_service.MineBlocks(count, 1_000_000, reply)
+          }
+
+          // Send mining request to chainstate adapter
+          process.send(rpc_handles.chainstate, mining_msg)
+
+          // Wait for result with timeout
+          case process.receive(reply, 300_000) {
+            Ok(rpc_service.GenerateSuccess(hashes)) -> {
+              io.println(
+                "Successfully mined "
+                <> int.to_string(list.length(hashes))
+                <> " blocks:",
+              )
+              list.each(hashes, fn(hash) { io.println("  " <> hash) })
+            }
+            Ok(rpc_service.GenerateError(err)) -> {
+              io.println("Mining failed: " <> err)
+            }
+            Error(_) -> {
+              io.println("Mining timed out")
+            }
+          }
+        }
+      }
     }
     _ -> {
       io.println("Error: Block generation is only available in regtest mode")

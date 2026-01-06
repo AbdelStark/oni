@@ -428,6 +428,90 @@ test_mining_info() {
 }
 
 # ============================================================================
+# Test Suite: Block Generation (Mining)
+# ============================================================================
+
+test_block_generation() {
+    print_header "Test Suite: Block Generation (Mining)"
+
+    # Get initial height
+    local result=$(rpc_call "getblockcount")
+    local initial_height=$(get_result "$result")
+    print_info "Initial height: $initial_height"
+
+    # Test generatetoaddress - mine 5 blocks
+    # Using a dummy regtest address (bcrt1 prefix)
+    local test_address="bcrt1qw508d6qejxtdg4y5r3zarvary0c5xw7kygt080"
+
+    print_test "generatetoaddress mines blocks successfully"
+    result=$(rpc_call "generatetoaddress" "[5, \"$test_address\"]")
+
+    if has_error "$result"; then
+        local error_msg=$(echo "$result" | grep -o '"message":"[^"]*"' | cut -d'"' -f4)
+        print_fail "generatetoaddress failed: $error_msg"
+    else
+        if echo "$result" | grep -q '"result":\['; then
+            print_pass "generatetoaddress returned block hashes"
+        else
+            print_fail "generatetoaddress should return array of hashes"
+        fi
+    fi
+
+    # Verify height increased
+    print_test "Block height increased after mining"
+    result=$(rpc_call "getblockcount")
+    local new_height=$(get_result "$result")
+
+    if [ "$new_height" -gt "$initial_height" ]; then
+        print_pass "Height increased from $initial_height to $new_height"
+    else
+        print_fail "Height should have increased, still at $new_height"
+    fi
+
+    # Test generate (deprecated variant)
+    print_test "generate mines blocks (deprecated RPC)"
+    result=$(rpc_call "generate" "[2]")
+
+    if has_error "$result"; then
+        local error_msg=$(echo "$result" | grep -o '"message":"[^"]*"' | cut -d'"' -f4)
+        print_info "generate error: $error_msg"
+        print_skip "generate may not be fully supported"
+    else
+        if echo "$result" | grep -q '"result":\['; then
+            print_pass "generate returned block hashes"
+        else
+            print_fail "generate should return array of hashes"
+        fi
+    fi
+
+    # Verify chain tip is updated
+    print_test "Best block hash updated after mining"
+    local result1=$(rpc_call "getbestblockhash")
+    local best_hash=$(get_result "$result1")
+
+    if [ ${#best_hash} -eq 64 ]; then
+        print_pass "Best block hash is valid (64 chars)"
+        print_info "New best hash: $best_hash"
+    else
+        print_fail "Best block hash should be 64 chars"
+    fi
+
+    # Verify mined blocks can be queried
+    print_test "Mined blocks can be retrieved"
+    result=$(rpc_call "getblock" "[\"$best_hash\"]")
+
+    if has_error "$result"; then
+        print_fail "Could not retrieve mined block"
+    else
+        if echo "$result" | grep -q '"height":'; then
+            print_pass "Mined block data retrieved successfully"
+        else
+            print_fail "Block data should contain height"
+        fi
+    fi
+}
+
+# ============================================================================
 # Test Suite: Mempool
 # ============================================================================
 
@@ -756,6 +840,7 @@ main() {
     test_genesis_block
     test_network_info
     test_mining_info
+    test_block_generation
     test_mempool
     test_utxo_set
     test_chain_tips

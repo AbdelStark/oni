@@ -340,10 +340,47 @@ pub fn put_undo(
 }
 
 // ============================================================================
+// Block Data Operations
+// ============================================================================
+
+/// Get a full block by hash from persistent storage
+pub fn get_block(storage: UnifiedStorage, hash: BlockHash) -> Option(Block) {
+  case storage.persistent {
+    None -> None
+    Some(handle) -> {
+      case persistent_storage.block_get(handle, hash) {
+        Ok(block) -> Some(block)
+        Error(_) -> None
+      }
+    }
+  }
+}
+
+/// Store a full block to persistent storage
+pub fn put_block(
+  storage: UnifiedStorage,
+  hash: BlockHash,
+  block: Block,
+) -> Result(Nil, StorageError) {
+  case storage.persistent {
+    None -> Ok(Nil)
+    Some(handle) -> persistent_storage.block_put(handle, hash, block)
+  }
+}
+
+/// Check if a block exists in persistent storage
+pub fn has_block(storage: UnifiedStorage, hash: BlockHash) -> Bool {
+  case storage.persistent {
+    None -> False
+    Some(handle) -> persistent_storage.block_has(handle, hash)
+  }
+}
+
+// ============================================================================
 // Block Connect/Disconnect
 // ============================================================================
 
-/// Connect a block - update UTXO set and chainstate
+/// Connect a block - update UTXO set, chainstate, and persist block
 pub fn connect_block(
   storage: UnifiedStorage,
   block: Block,
@@ -379,10 +416,12 @@ pub fn connect_block(
   ))
 
   // Store undo data
-  case put_undo(final_storage, block_hash, undo) {
-    Ok(_) -> Ok(#(final_storage, undo))
-    Error(e) -> Error(e)
-  }
+  use _ <- result.try(put_undo(final_storage, block_hash, undo))
+
+  // Persist the full block data
+  use _ <- result.try(put_block(final_storage, block_hash, block))
+
+  Ok(#(final_storage, undo))
 }
 
 /// Disconnect a block - revert UTXO set using undo data

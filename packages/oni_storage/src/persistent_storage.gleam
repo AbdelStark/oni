@@ -43,6 +43,8 @@ pub type PersistentStorageHandle {
     chainstate_db: DbHandle,
     /// Block undo data database
     undo_db: DbHandle,
+    /// Full block data database
+    block_db: DbHandle,
     /// Data directory path
     data_dir: String,
   )
@@ -100,11 +102,18 @@ pub fn persistent_storage_open(
     |> result.map_error(db_error_to_storage_error),
   )
 
+  // Open block database
+  use block_db <- result.try(
+    db_backend.db_open(data_dir <> "/blocks.db", options)
+    |> result.map_error(db_error_to_storage_error),
+  )
+
   Ok(PersistentStorageHandle(
     utxo_db: utxo_db,
     block_index_db: block_index_db,
     chainstate_db: chainstate_db,
     undo_db: undo_db,
+    block_db: block_db,
     data_dir: data_dir,
   ))
 }
@@ -130,6 +139,10 @@ pub fn persistent_storage_close(
     db_backend.db_close(handle.undo_db)
     |> result.map_error(db_error_to_storage_error),
   )
+  use _ <- result.try(
+    db_backend.db_close(handle.block_db)
+    |> result.map_error(db_error_to_storage_error),
+  )
   Ok(Nil)
 }
 
@@ -151,6 +164,10 @@ pub fn persistent_storage_sync(
   )
   use _ <- result.try(
     db_backend.db_sync(handle.undo_db)
+    |> result.map_error(db_error_to_storage_error),
+  )
+  use _ <- result.try(
+    db_backend.db_sync(handle.block_db)
     |> result.map_error(db_error_to_storage_error),
   )
   Ok(Nil)
@@ -402,6 +419,55 @@ pub fn undo_delete(
 ) -> Result(Nil, StorageError) {
   let key = serialize_block_hash(hash)
   db_backend.db_delete(handle.undo_db, key)
+  |> result.map_error(db_error_to_storage_error)
+}
+
+// ============================================================================
+// Block Data Operations
+// ============================================================================
+
+/// Get a full block by hash
+pub fn block_get(
+  handle: PersistentStorageHandle,
+  hash: BlockHash,
+) -> Result(oni_bitcoin.Block, StorageError) {
+  let key = serialize_block_hash(hash)
+  use data <- result.try(
+    db_backend.db_get(handle.block_db, key)
+    |> result.map_error(db_error_to_storage_error),
+  )
+  // Decode the block using oni_bitcoin decoder
+  case oni_bitcoin.decode_block(data) {
+    Ok(#(block, _rest)) -> Ok(block)
+    Error(_) -> Error(oni_storage.CorruptData)
+  }
+}
+
+/// Put a full block
+pub fn block_put(
+  handle: PersistentStorageHandle,
+  hash: BlockHash,
+  block: oni_bitcoin.Block,
+) -> Result(Nil, StorageError) {
+  let key = serialize_block_hash(hash)
+  let value = oni_bitcoin.encode_block(block)
+  db_backend.db_put(handle.block_db, key, value)
+  |> result.map_error(db_error_to_storage_error)
+}
+
+/// Check if block exists
+pub fn block_has(handle: PersistentStorageHandle, hash: BlockHash) -> Bool {
+  let key = serialize_block_hash(hash)
+  db_backend.db_has(handle.block_db, key)
+}
+
+/// Delete a block
+pub fn block_delete(
+  handle: PersistentStorageHandle,
+  hash: BlockHash,
+) -> Result(Nil, StorageError) {
+  let key = serialize_block_hash(hash)
+  db_backend.db_delete(handle.block_db, key)
   |> result.map_error(db_error_to_storage_error)
 }
 

@@ -78,6 +78,8 @@ pub type PersistentChainstateMsg {
   GetUtxo(outpoint: OutPoint, reply: Subject(Option(Coin)))
   /// Get block index entry by hash
   GetBlockIndex(hash: BlockHash, reply: Subject(Option(BlockIndexEntry)))
+  /// Get a full block by hash
+  GetBlock(hash: BlockHash, reply: Subject(Option(Block)))
   /// Force sync to disk
   Sync(reply: Subject(Result(Nil, String)))
   /// Shutdown the chainstate (with final sync)
@@ -168,6 +170,65 @@ pub fn start(
   }
 }
 
+/// Validate chain integrity by walking back from tip to genesis
+fn validate_chain(
+  storage: PersistentStorageHandle,
+  tip_hash: BlockHash,
+  expected_height: Int,
+  network: Network,
+) -> Result(Nil, String) {
+  let params = get_network_params(network)
+  validate_chain_loop(storage, tip_hash, expected_height, params.genesis_hash)
+}
+
+fn validate_chain_loop(
+  storage: PersistentStorageHandle,
+  current_hash: BlockHash,
+  expected_height: Int,
+  genesis_hash: BlockHash,
+) -> Result(Nil, String) {
+  // At genesis - validation complete
+  case current_hash == genesis_hash {
+    True -> {
+      case expected_height == 0 {
+        True -> Ok(Nil)
+        False ->
+          Error("Chain validation failed: reached genesis but height mismatch")
+      }
+    }
+    False -> {
+      // Look up block index entry
+      case persistent_storage.block_index_get(storage, current_hash) {
+        Error(_) ->
+          Error(
+            "Chain validation failed: missing block index at height "
+            <> int.to_string(expected_height),
+          )
+        Ok(entry) -> {
+          // Verify height matches expectation
+          case entry.height == expected_height {
+            False ->
+              Error(
+                "Chain validation failed: height mismatch at "
+                <> int.to_string(expected_height),
+              )
+            True -> {
+              // Continue with prev block
+              // prev_hash is always a BlockHash - for genesis, we're done
+              validate_chain_loop(
+                storage,
+                entry.prev_hash,
+                expected_height - 1,
+                genesis_hash,
+              )
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
 /// Load existing chainstate or initialize with genesis
 fn load_or_init_chainstate(
   storage: PersistentStorageHandle,
@@ -175,12 +236,28 @@ fn load_or_init_chainstate(
 ) -> Result(#(Option(BlockHash), Int), String) {
   case persistent_storage.chainstate_get(storage) {
     Ok(chainstate) -> {
-      // Existing chainstate found
+      // Existing chainstate found - validate chain integrity
       io.println(
-        "[Chainstate] Loaded existing state at height "
+        "[Chainstate] Validating chain integrity at height "
         <> int.to_string(chainstate.best_height),
       )
-      Ok(#(Some(chainstate.best_block), chainstate.best_height))
+      case
+        validate_chain(
+          storage,
+          chainstate.best_block,
+          chainstate.best_height,
+          network,
+        )
+      {
+        Error(e) -> {
+          io.println("[Chainstate] Chain validation failed: " <> e)
+          Error("Chain validation failed: " <> e)
+        }
+        Ok(Nil) -> {
+          io.println("[Chainstate] Chain validation passed")
+          Ok(#(Some(chainstate.best_block), chainstate.best_height))
+        }
+      }
     }
     Error(oni_storage.NotFound) -> {
       // Initialize with genesis
@@ -300,6 +377,15 @@ fn handle_message(
         persistent_storage.block_index_get(state.storage, hash)
       {
         Ok(entry) -> Some(entry)
+        Error(_) -> None
+      }
+      process.send(reply, result)
+      actor.continue(state)
+    }
+
+    GetBlock(hash, reply) -> {
+      let result = case persistent_storage.block_get(state.storage, hash) {
+        Ok(block) -> Some(block)
         Error(_) -> None
       }
       process.send(reply, result)

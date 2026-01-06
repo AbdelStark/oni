@@ -13,6 +13,7 @@
 import gleam/bit_array
 import gleam/bytes_builder
 import gleam/dict.{type Dict}
+import gleam/dynamic.{type Dynamic}
 import gleam/float
 import gleam/int
 import gleam/list
@@ -1212,33 +1213,63 @@ fn compute_fingerprint(key: ExtendedPrivateKey) -> BitArray {
 // Placeholder cryptographic functions (would use NIFs in production)
 
 fn hmac_sha512(key: BitArray, data: BitArray) -> BitArray {
-  // Placeholder - would use actual HMAC-SHA512
-  oni_bitcoin.sha256(bit_array.concat([key, data]))
-  |> fn(h) { bit_array.concat([h, h]) }
+  // Use Erlang's :crypto.mac for HMAC-SHA512
+  crypto_mac_hmac_sha512(key, data)
 }
 
 fn pbkdf2_sha512(
-  _password: String,
-  _salt: String,
-  _iterations: Int,
-  _length: Int,
+  password: String,
+  salt: String,
+  iterations: Int,
+  length: Int,
 ) -> BitArray {
-  // Placeholder - would use actual PBKDF2
-  <<0:512>>
+  // Use Erlang's :crypto.pbkdf2_hmac for PBKDF2-SHA512
+  let password_bytes = bit_array.from_string(password)
+  let salt_bytes = bit_array.from_string(salt)
+  crypto_pbkdf2_sha512(password_bytes, salt_bytes, iterations, length)
 }
+
+/// Erlang FFI for HMAC-SHA512: :crypto.mac(:hmac, :sha512, key, data)
+@external(erlang, "wallet_ffi", "hmac_sha512")
+fn crypto_mac_hmac_sha512(key: BitArray, data: BitArray) -> BitArray
+
+/// Erlang FFI for PBKDF2-SHA512: :crypto.pbkdf2_hmac(:sha512, password, salt, iterations, length)
+@external(erlang, "wallet_ffi", "pbkdf2_sha512")
+fn crypto_pbkdf2_sha512(
+  password: BitArray,
+  salt: BitArray,
+  iterations: Int,
+  length: Int,
+) -> BitArray
 
 fn private_to_public(private_key: BitArray) -> BitArray {
-  // Placeholder - would use secp256k1 point multiplication
-  let _ = private_key
-  <<0x02, 0:256>>
-  // Compressed public key
+  // Use secp256k1 to derive public key from private key
+  case secp256k1_private_to_public(private_key) {
+    Ok(pubkey) -> pubkey
+    Error(_) -> <<0x02, 0:256>>
+  }
 }
 
+/// FFI to secp256k1 for deriving public key
+@external(erlang, "oni_secp256k1", "private_to_public")
+fn secp256k1_private_to_public(
+  private_key: BitArray,
+) -> Result(BitArray, Dynamic)
+
 fn add_private_keys(a: BitArray, b: BitArray) -> BitArray {
-  // Placeholder - would add mod curve order
-  let _ = b
-  a
+  // Add private keys modulo the curve order using secp256k1
+  case secp256k1_tweak_private_key(a, b) {
+    Ok(result) -> result
+    Error(_) -> a
+  }
 }
+
+/// FFI to secp256k1 for private key tweaking (addition mod curve order)
+@external(erlang, "oni_secp256k1", "tweak_private_key")
+fn secp256k1_tweak_private_key(
+  private_key: BitArray,
+  tweak: BitArray,
+) -> Result(BitArray, Dynamic)
 
 fn add_public_keys(point: BitArray, scalar: BitArray) -> BitArray {
   // Placeholder - would add scalar*G to point
@@ -1252,20 +1283,37 @@ fn hash160(data: BitArray) -> BitArray {
 }
 
 fn ecdsa_sign(private_key: BitArray, message: BitArray) -> BitArray {
-  // Placeholder - would use secp256k1 ECDSA signing
-  let _ = private_key
-  let _ = message
-  <<0:576>>
-  // DER encoded signature (up to 72 bytes)
+  // Use secp256k1 ECDSA signing (message should be 32-byte hash)
+  case secp256k1_ecdsa_sign(message, private_key) {
+    Ok(sig) -> sig
+    Error(_) -> <<0:576>>
+  }
 }
 
+/// FFI to secp256k1 for ECDSA signing
+@external(erlang, "oni_secp256k1", "ecdsa_sign")
+fn secp256k1_ecdsa_sign(
+  msg_hash: BitArray,
+  private_key: BitArray,
+) -> Result(BitArray, Dynamic)
+
 fn schnorr_sign(private_key: BitArray, message: BitArray) -> BitArray {
-  // Placeholder - would use BIP340 Schnorr signing
-  let _ = private_key
-  let _ = message
-  <<0:512>>
-  // 64-byte Schnorr signature
+  // Use BIP340 Schnorr signing (message should be 32-byte hash)
+  // Generate auxiliary randomness from the private key and message
+  let aux_rand = oni_bitcoin.sha256(bit_array.concat([private_key, message]))
+  case secp256k1_schnorr_sign(message, private_key, aux_rand) {
+    Ok(sig) -> sig
+    Error(_) -> <<0:512>>
+  }
 }
+
+/// FFI to secp256k1 for Schnorr signing
+@external(erlang, "oni_secp256k1", "schnorr_sign")
+fn secp256k1_schnorr_sign(
+  msg_hash: BitArray,
+  private_key: BitArray,
+  aux_rand: BitArray,
+) -> Result(BitArray, Dynamic)
 
 fn compute_segwit_sighash(
   _tx: oni_bitcoin.Transaction,

@@ -68,6 +68,21 @@ pub type ChainstateQuery {
   QueryNetwork(reply: Subject(oni_bitcoin.Network))
   /// Submit a mined block
   SubmitBlock(block: oni_bitcoin.Block, reply: Subject(SubmitBlockResult))
+  /// Generate blocks to an address (regtest only)
+  MineToAddress(
+    nblocks: Int,
+    address: String,
+    maxtries: Int,
+    reply: Subject(GenerateResult),
+  )
+  /// Generate blocks without address (regtest only)
+  MineBlocks(nblocks: Int, maxtries: Int, reply: Subject(GenerateResult))
+}
+
+/// Result of block generation
+pub type GenerateResult {
+  GenerateSuccess(hashes: List(String))
+  GenerateError(reason: String)
 }
 
 /// Result of block submission
@@ -427,6 +442,12 @@ fn register_stateful_handlers(
     "getblockstats",
     create_getblockstats_handler(chainstate),
   )
+  // Mining RPC methods (regtest only)
+  |> oni_rpc.server_register(
+    "generatetoaddress",
+    create_generatetoaddress_handler(chainstate),
+  )
+  |> oni_rpc.server_register("generate", create_generate_handler(chainstate))
 }
 
 // ============================================================================
@@ -698,6 +719,82 @@ fn submit_block(
 ) -> SubmitBlockResult {
   process.call(chainstate, SubmitBlock(block, _), 60_000)
   // Longer timeout for block validation
+}
+
+/// Create handler for generatetoaddress (regtest only)
+fn create_generatetoaddress_handler(
+  chainstate: Subject(ChainstateQuery),
+) -> MethodHandler {
+  fn(params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
+    // generatetoaddress nblocks "address" ( maxtries )
+    case params {
+      ParamsArray([RpcInt(nblocks), RpcString(address), ..rest]) -> {
+        case nblocks <= 0 {
+          True -> Error(InvalidParams("nblocks must be positive"))
+          False -> {
+            let maxtries = case rest {
+              [RpcInt(tries), ..] -> tries
+              _ -> 1_000_000
+            }
+
+            // Call mining via chainstate adapter
+            let result =
+              process.call(
+                chainstate,
+                MineToAddress(nblocks, address, maxtries, _),
+                600_000,
+              )
+            // 10 minute timeout for mining
+
+            case result {
+              GenerateSuccess(hashes) ->
+                Ok(RpcArray(list.map(hashes, fn(h) { RpcString(h) })))
+              GenerateError(reason) -> Error(Internal(reason))
+            }
+          }
+        }
+      }
+      _ ->
+        Error(InvalidParams("generatetoaddress nblocks \"address\" [maxtries]"))
+    }
+  }
+}
+
+/// Create handler for generate (deprecated, regtest only)
+fn create_generate_handler(
+  chainstate: Subject(ChainstateQuery),
+) -> MethodHandler {
+  fn(params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
+    // generate nblocks ( maxtries )
+    case params {
+      ParamsArray([RpcInt(nblocks), ..rest]) -> {
+        case nblocks <= 0 {
+          True -> Error(InvalidParams("nblocks must be positive"))
+          False -> {
+            let maxtries = case rest {
+              [RpcInt(tries), ..] -> tries
+              _ -> 1_000_000
+            }
+
+            // Call mining via chainstate adapter
+            let result =
+              process.call(
+                chainstate,
+                MineBlocks(nblocks, maxtries, _),
+                600_000,
+              )
+
+            case result {
+              GenerateSuccess(hashes) ->
+                Ok(RpcArray(list.map(hashes, fn(h) { RpcString(h) })))
+              GenerateError(reason) -> Error(Internal(reason))
+            }
+          }
+        }
+      }
+      _ -> Error(InvalidParams("generate nblocks [maxtries]"))
+    }
+  }
 }
 
 /// Create handler for sendrawtransaction that submits a transaction to mempool
@@ -1431,6 +1528,10 @@ fn create_help_handler() -> MethodHandler {
             "getchaintips\n\nReturns information about chain tips."
           "getblockstats" ->
             "getblockstats hash_or_height ( stats )\n\nReturns statistics for a block."
+          "generatetoaddress" ->
+            "generatetoaddress nblocks \"address\" ( maxtries )\n\nMine nblocks blocks to specified address. Regtest only."
+          "generate" ->
+            "generate nblocks ( maxtries )\n\nMine nblocks blocks. Regtest only. Deprecated: use generatetoaddress."
           _ -> "Unknown command: " <> command
         }
         Ok(RpcString(help_text))
@@ -1452,6 +1553,8 @@ fn create_help_handler() -> MethodHandler {
           <> "gettxoutsetinfo\n"
           <> "verifychain ( checklevel nblocks )\n"
           <> "\n== Mining ==\n"
+          <> "generate nblocks ( maxtries )\n"
+          <> "generatetoaddress nblocks \"address\" ( maxtries )\n"
           <> "getblocktemplate ( \"template_request\" )\n"
           <> "getmininginfo\n"
           <> "getnetworkhashps ( nblocks height )\n"
@@ -1636,7 +1739,8 @@ fn create_getblock_handler(
               oni_bitcoin.Regtest -> oni_bitcoin.regtest_params()
               oni_bitcoin.Signet -> oni_bitcoin.testnet_params()
             }
-            let genesis_hex = oni_bitcoin.block_hash_to_hex(net_params.genesis_hash)
+            let genesis_hex =
+              oni_bitcoin.block_hash_to_hex(net_params.genesis_hash)
             let tip_hash = query_chainstate_tip(chainstate)
             let tip_hex = case tip_hash {
               Some(h) -> oni_bitcoin.block_hash_to_hex(h)
@@ -1644,8 +1748,7 @@ fn create_getblock_handler(
             }
 
             // Check if blockhash matches genesis or tip
-            let is_known =
-              blockhash == genesis_hex || blockhash == tip_hex
+            let is_known = blockhash == genesis_hex || blockhash == tip_hex
 
             case is_known {
               False -> Error(Internal("Block not found"))
@@ -1858,7 +1961,11 @@ fn create_getblockhash_handler(
                   oni_bitcoin.Regtest -> oni_bitcoin.regtest_params()
                   oni_bitcoin.Signet -> oni_bitcoin.testnet_params()
                 }
-                Ok(RpcString(oni_bitcoin.block_hash_to_hex(net_params.genesis_hash)))
+                Ok(
+                  RpcString(oni_bitcoin.block_hash_to_hex(
+                    net_params.genesis_hash,
+                  )),
+                )
               }
               _ -> {
                 // For other heights, query tip if it's the current height

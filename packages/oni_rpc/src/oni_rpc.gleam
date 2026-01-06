@@ -535,9 +535,7 @@ fn parse_json_value(json: String) -> Result(RpcValue, Nil) {
 /// Parse a JSON object (simplified)
 fn parse_json_object(json: String) -> Result(Dict(String, RpcValue), Nil) {
   let trimmed = string.trim(json)
-  case
-    string.starts_with(trimmed, "{") && string.ends_with(trimmed, "}")
-  {
+  case string.starts_with(trimmed, "{") && string.ends_with(trimmed, "}") {
     False -> Error(Nil)
     True -> {
       // For now, return empty dict - full object parsing is complex
