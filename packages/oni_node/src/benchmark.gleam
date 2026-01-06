@@ -339,11 +339,10 @@ pub fn throughput_sample(tracker: ThroughputTracker) -> ThroughputTracker {
       let ops_per_sec =
         int.to_float(tracker.operations)
         /. { int.to_float(elapsed_us) /. 1_000_000.0 }
-      ThroughputTracker(
-        ..tracker,
-        last_sample_us: now,
-        samples: [ops_per_sec, ..tracker.samples],
-      )
+      ThroughputTracker(..tracker, last_sample_us: now, samples: [
+        ops_per_sec,
+        ..tracker.samples
+      ])
     }
   }
 }

@@ -345,18 +345,18 @@ pub fn sig_cache_batch_get(
       case sig_cache_get(current_cache, key, timestamp) {
         #(new_cache, Some(valid)) -> {
           let new_result =
-            BatchResult(
-              ..current_result,
-              cached: [#(key, valid), ..current_result.cached],
-            )
+            BatchResult(..current_result, cached: [
+              #(key, valid),
+              ..current_result.cached
+            ])
           #(new_cache, new_result)
         }
         #(new_cache, None) -> {
           let new_result =
-            BatchResult(
-              ..current_result,
-              uncached: [key, ..current_result.uncached],
-            )
+            BatchResult(..current_result, uncached: [
+              key,
+              ..current_result.uncached
+            ])
           #(new_cache, new_result)
         }
       }

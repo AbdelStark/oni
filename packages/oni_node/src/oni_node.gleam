@@ -12,10 +12,13 @@ import event_router.{type RouterMsg}
 import gleam/erlang/process.{type Subject}
 import gleam/int
 import gleam/io
+import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
 import gleam/result
+import gleam/string
 import http_server.{type ServerMsg, StartAccepting}
+import ibd_coordinator.{type IbdMsg}
 import node_rpc.{type RpcNodeHandles}
 import oni_bitcoin
 import oni_consensus
@@ -25,7 +28,7 @@ import oni_supervisor.{
   type ChainstateMsg, type MempoolMsg, type SyncMsg, GetHeight, GetStatus,
   GetTip,
 }
-import p2p_network.{type ListenerMsg, type PeerEvent}
+import p2p_network.{type ListenerMsg, type PeerEvent, ConnectTo}
 import rpc_http
 import rpc_service
 
@@ -121,6 +124,8 @@ pub type NodeState {
     chainstate: Subject(ChainstateMsg),
     mempool: Subject(MempoolMsg),
     sync: Subject(SyncMsg),
+    /// IBD coordinator for initial sync
+    ibd: Option(Subject(IbdMsg)),
     /// Event router for P2P message handling
     event_router: Option(Subject(RouterMsg)),
     /// P2P network listener (if enabled)
@@ -230,6 +235,55 @@ pub fn start_with_config(config: NodeConfig) -> Result(NodeState, String) {
     False -> #(None, None)
   }
 
+  // Start IBD coordinator if P2P is enabled
+  let ibd_handle = case p2p_listener {
+    Some(listener) -> {
+      let ibd_config = ibd_coordinator.default_config(config.network)
+      case ibd_coordinator.start(ibd_config, listener) {
+        Ok(ibd) -> {
+          io.println("  ✓ IBD coordinator started")
+          Some(ibd)
+        }
+        Error(_) -> {
+          io.println("  ✗ IBD coordinator failed to start")
+          None
+        }
+      }
+    }
+    None -> None
+  }
+
+  // Discover and connect to peers via DNS seeds
+  case p2p_listener {
+    Some(listener) -> {
+      io.println("  Discovering peers via DNS...")
+      let p2p_network = network_to_p2p_network(config.network)
+      let peers = oni_p2p.discover_peers_dns(p2p_network)
+      let peer_count = list.length(peers)
+      io.println(
+        "  ✓ Found " <> int.to_string(peer_count) <> " peers from DNS seeds",
+      )
+
+      // Connect to first few peers
+      let to_connect = list.take(peers, config.max_outbound)
+      list.each(to_connect, fn(dns_addr) {
+        let net_addr =
+          oni_p2p.NetAddr(
+            services: oni_p2p.default_services(),
+            ip: parse_ip_string(dns_addr.ip),
+            port: dns_addr.port,
+          )
+        process.send(listener, ConnectTo(net_addr))
+      })
+      io.println(
+        "  ✓ Initiated connection to "
+        <> int.to_string(list.length(to_connect))
+        <> " peers",
+      )
+    }
+    None -> Nil
+  }
+
   io.println("Node started successfully!")
 
   Ok(NodeState(
@@ -237,6 +291,7 @@ pub fn start_with_config(config: NodeConfig) -> Result(NodeState, String) {
     chainstate: chainstate,
     mempool: mempool,
     sync: sync,
+    ibd: ibd_handle,
     event_router: event_router_handle,
     p2p_listener: p2p_listener,
     rpc_server: rpc_server,
@@ -444,10 +499,10 @@ fn handle_forwarding_msg(
         None -> {
           // Buffer the event until router is set
           actor.continue(
-            ForwardingHandlerState(
-              ..state,
-              events_buffered: [event, ..state.events_buffered],
-            ),
+            ForwardingHandlerState(..state, events_buffered: [
+              event,
+              ..state.events_buffered
+            ]),
           )
         }
       }
@@ -493,6 +548,15 @@ pub fn stop(node: NodeState) -> Nil {
     Some(server) -> {
       http_server.stop(server)
       io.println("  ✓ RPC server stopped")
+    }
+    None -> Nil
+  }
+
+  // Stop IBD coordinator
+  case node.ibd {
+    Some(ibd) -> {
+      process.send(ibd, ibd_coordinator.Shutdown)
+      io.println("  ✓ IBD coordinator stopped")
     }
     None -> Nil
   }
@@ -742,4 +806,38 @@ fn print_banner() {
     "╚═══════════════════════════════════════════════════════════════╝",
   )
   io.println("")
+}
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+/// Parse an IP address string into IpAddr type
+fn parse_ip_string(ip_str: String) -> oni_p2p.IpAddr {
+  // Try to parse as IPv4 (format: "a.b.c.d")
+  let parts = string.split(ip_str, ".")
+  case parts {
+    [a, b, c, d] -> {
+      case int.parse(a), int.parse(b), int.parse(c), int.parse(d) {
+        Ok(a_int), Ok(b_int), Ok(c_int), Ok(d_int) ->
+          oni_p2p.IPv4(a_int, b_int, c_int, d_int)
+        _, _, _, _ -> oni_p2p.IPv4(127, 0, 0, 1)
+      }
+    }
+    _ -> {
+      // Not IPv4, return localhost as fallback
+      // Full IPv6 parsing would be more complex
+      oni_p2p.IPv4(127, 0, 0, 1)
+    }
+  }
+}
+
+/// Convert oni_bitcoin.Network to oni_p2p.Network
+fn network_to_p2p_network(network: oni_bitcoin.Network) -> oni_p2p.Network {
+  case network {
+    oni_bitcoin.Mainnet -> oni_p2p.Mainnet
+    oni_bitcoin.Testnet -> oni_p2p.Testnet
+    oni_bitcoin.Signet -> oni_p2p.Signet
+    oni_bitcoin.Regtest -> oni_p2p.Regtest
+  }
 }

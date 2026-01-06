@@ -1655,12 +1655,33 @@ pub type DnsResult {
   DnsTimeout
 }
 
-/// Query a single DNS seed (returns placeholder - actual impl in native code)
-pub fn query_dns_seed(seed: String, port: Int) -> DnsResult {
-  // This is a placeholder - actual DNS resolution needs native code
-  // In a real implementation, this would use erlang's inet module
-  // or a NIF for asynchronous DNS resolution
-  DnsOk([DnsAddress(ip: "127.0.0.1", port: port, source_seed: seed)])
+/// Query a single DNS seed using native DNS resolution
+@external(erlang, "p2p_network_ffi", "dns_lookup")
+pub fn query_dns_seed(seed: String, port: Int) -> DnsResult
+
+/// Query all DNS seeds for a network and collect addresses
+pub fn discover_peers_dns(network: Network) -> List(DnsAddress) {
+  let seeds = get_dns_seeds(network)
+  let port = get_default_port(network)
+  query_all_seeds(seeds, port, [])
+}
+
+fn query_all_seeds(
+  seeds: List(String),
+  port: Int,
+  acc: List(DnsAddress),
+) -> List(DnsAddress) {
+  case seeds {
+    [] -> acc
+    [seed, ..rest] -> {
+      let new_addrs = case query_dns_seed(seed, port) {
+        DnsOk(addrs) -> addrs
+        DnsError(_) -> []
+        DnsTimeout -> []
+      }
+      query_all_seeds(rest, port, list.append(acc, new_addrs))
+    }
+  }
 }
 
 /// Get network magic bytes

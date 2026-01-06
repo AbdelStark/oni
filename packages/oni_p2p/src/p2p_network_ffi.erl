@@ -15,7 +15,8 @@
     spawn_receiver/2,
     erlang_now_ms/0,
     erlang_now_secs/0,
-    generate_nonce/0
+    generate_nonce/0,
+    dns_lookup/2
 ]).
 
 %% Listen on a port
@@ -176,3 +177,24 @@ format_error(Reason) when is_list(Reason) ->
     list_to_binary(Reason);
 format_error(Reason) ->
     list_to_binary(io_lib:format("~p", [Reason])).
+
+%% DNS lookup for seed discovery
+%% Returns a list of {ok, [{ip, port, seed}]} or {error, reason}
+-spec dns_lookup(binary(), integer()) -> {ok, list()} | {error, binary()}.
+dns_lookup(Hostname, Port) when is_binary(Hostname) ->
+    dns_lookup(binary_to_list(Hostname), Port);
+dns_lookup(Hostname, Port) when is_list(Hostname) ->
+    case inet:gethostbyname(Hostname) of
+        {ok, {hostent, _Name, _Aliases, _AddrType, _Length, Addresses}} ->
+            Results = lists:map(fun(Addr) ->
+                IpStr = inet:ntoa(Addr),
+                {dns_address, list_to_binary(IpStr), Port, list_to_binary(Hostname)}
+            end, Addresses),
+            {dns_ok, Results};
+        {error, nxdomain} ->
+            {dns_error, <<"Domain not found">>};
+        {error, timeout} ->
+            dns_timeout;
+        {error, Reason} ->
+            {dns_error, format_error(Reason)}
+    end.

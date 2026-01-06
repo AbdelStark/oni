@@ -330,11 +330,10 @@ pub fn minisketch_add(sketch: Minisketch, element: BitArray) -> Minisketch {
       // Add element to the sketch
       // In production, this would use proper field operations
       let new_data = xor_into_sketch(sketch.data, element)
-      Minisketch(
-        ..sketch,
-        data: new_data,
-        elements: [element, ..sketch.elements],
-      )
+      Minisketch(..sketch, data: new_data, elements: [
+        element,
+        ..sketch.elements
+      ])
     }
   }
 }

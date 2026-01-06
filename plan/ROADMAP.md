@@ -146,8 +146,11 @@ This roadmap tracks oni's progress toward becoming a production-grade Bitcoin fu
 - [x] Header timestamp validation
 - [x] Difficulty transition validation
 - [x] Mainnet DNS seeds for peer discovery
+- [x] Real DNS resolution using Erlang inet module
 - [x] Checkpoints for mainnet (up to block 820,000)
 - [x] Reorg handler implementation
+- [x] IBD coordinator wired into node startup
+- [x] Automatic peer discovery and connection on startup
 - [ ] Live mainnet IBD testing
 - [ ] Memory-bounded operation validation
 - [ ] Production deployment testing

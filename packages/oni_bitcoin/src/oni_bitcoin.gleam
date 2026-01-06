@@ -3066,10 +3066,10 @@ fn update_psbt_input(
     }
     <<0x02, pubkey:bits>> -> {
       // Partial signature
-      PsbtInput(
-        ..input,
-        partial_sigs: [#(<<pubkey:bits>>, value), ..input.partial_sigs],
-      )
+      PsbtInput(..input, partial_sigs: [
+        #(<<pubkey:bits>>, value),
+        ..input.partial_sigs
+      ])
     }
     <<0x03>> -> {
       // Sighash type
@@ -3188,10 +3188,10 @@ fn update_psbt_output(
     }
     <<0x02, pubkey:bits>> -> {
       // BIP32 derivation
-      PsbtOutput(
-        ..output,
-        bip32_derivation: [#(<<pubkey:bits>>, value), ..output.bip32_derivation],
-      )
+      PsbtOutput(..output, bip32_derivation: [
+        #(<<pubkey:bits>>, value),
+        ..output.bip32_derivation
+      ])
     }
     <<0x05>> -> {
       // Tap internal key
@@ -3297,10 +3297,10 @@ pub fn psbt_add_partial_sig(
 ) -> Result(Psbt, PsbtError) {
   case
     list_update_at(psbt.inputs, input_index, fn(input) {
-      PsbtInput(
-        ..input,
-        partial_sigs: [#(pubkey, signature), ..input.partial_sigs],
-      )
+      PsbtInput(..input, partial_sigs: [
+        #(pubkey, signature),
+        ..input.partial_sigs
+      ])
     })
   {
     Error(_) -> Error(PsbtInputCountMismatch)

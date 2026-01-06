@@ -228,6 +228,8 @@ This document tracks the implementation status of oni across all packages and fe
 19. **CI E2E integration**: E2E tests run automatically in CI against live regtest node
 20. **IBD header validation**: Complete PoW, timestamp, and difficulty validation for headers-first sync
 21. **Mainnet checkpoints**: Checkpoint verification up to block 820,000
+22. **DNS peer discovery**: Real DNS resolution via Erlang inet module for mainnet/testnet seeds
+23. **IBD coordinator integration**: IBD coordinator wired into node startup with automatic peer connection
 
 ## Legend
 

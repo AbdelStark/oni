@@ -1246,11 +1246,10 @@ fn execute_if(
             _ -> False
           }
           Ok(
-            ScriptContext(
-              ..ctx,
-              stack: rest,
-              exec_stack: [condition, ..ctx.exec_stack],
-            ),
+            ScriptContext(..ctx, stack: rest, exec_stack: [
+              condition,
+              ..ctx.exec_stack
+            ]),
           )
         }
       }
@@ -2193,10 +2192,10 @@ fn execute_checkmultisig(
                                         False -> <<>>
                                       }
                                       Ok(
-                                        ScriptContext(
-                                          ..ctx,
-                                          stack: [result_byte, ..rest5],
-                                        ),
+                                        ScriptContext(..ctx, stack: [
+                                          result_byte,
+                                          ..rest5
+                                        ]),
                                       )
                                     }
                                   }
