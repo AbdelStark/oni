@@ -15,7 +15,7 @@ oni aims to be a **fully validating, mainnet-compatible Bitcoin full node** with
 
 ## Project Status
 
-> **Status: Active Development** — Core infrastructure complete, node runs and responds to RPC. Working toward regtest sync validation.
+> **Status: Active Development** — Milestones 0-5 complete. Node runs, responds to RPC, mines regtest blocks, and passes 52 E2E tests.
 
 ### Implementation Progress
 
@@ -35,26 +35,27 @@ See [STATUS.md](STATUS.md) for detailed implementation status.
 ### Implemented
 - **Bitcoin primitives**: Transactions, blocks, scripts, addresses (P2PKH, P2SH, Bech32/Bech32m)
 - **Script interpreter**: Full opcode support including OP_CHECKLOCKTIMEVERIFY (BIP65), OP_CHECKSEQUENCEVERIFY (BIP112)
-- **Signature verification**: secp256k1 NIF with ECDSA and Schnorr support
+- **Signature verification**: secp256k1 NIF with ECDSA and Schnorr signing/verification
 - **Sighash computation**: Legacy, BIP143 (SegWit), and BIP341 (Taproot)
 - **Validation**: Stateless and contextual transaction/block validation
 - **Storage**: In-memory and DETS persistent backends, UTXO set with connect/disconnect block
 - **P2P foundation**: Message framing, compact blocks (BIP152), Erlay (BIP330), v2 transport (BIP324)
 - **RPC server**: JSON-RPC 2.0 HTTP server with authentication and rate limiting
+- **Mining RPC**: `generatetoaddress` and `generate` for regtest block production
 - **Node**: OTP application that runs and responds to RPC calls
 - **Operations**: Prometheus metrics, structured logging, health endpoints
+- **E2E Testing**: 52 comprehensive regtest tests running in CI
 
-### In Progress
-- Regtest sync validation with Bitcoin Core
-- Full integration test suite
+### Next Steps
+- Persistent block storage backend
 - Headers-first IBD synchronization
-- Full mainnet sync capability
+- Full mainnet sync capability (Milestone 6)
 
 ## Quick Start
 
 ### Prerequisites
 - Erlang/OTP 26+ (27.2 recommended)
-- Gleam 1.6.3+
+- Gleam 1.6.2+
 
 ### Build and Test
 ```sh

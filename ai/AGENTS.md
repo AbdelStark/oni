@@ -4,12 +4,12 @@ oni is designed for multi-agent development. This file describes recommended age
 
 ## 1. Project Status
 
-**Current Stage**: Core infrastructure complete (Milestones 0-5 near complete). Node runs and responds to RPC.
+**Current Stage**: Milestones 0-5 complete. Node runs, responds to RPC, and passes 52 E2E regtest tests.
 
 Key remaining work:
-- Regtest sync validation with Bitcoin Core
-- Full integration test suite
-- Mainnet sync capability
+- Mainnet sync capability (Milestone 6)
+- Persistent block storage backend
+- Production hardening
 
 See [STATUS.md](/STATUS.md) for detailed implementation status.
 

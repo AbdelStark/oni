@@ -14,7 +14,7 @@ This project uses AI-assisted development guidelines.
 
 ## Current Status
 
-**Stage**: Core infrastructure complete (Milestones 0-5 near complete). Node runs and responds to RPC.
+**Stage**: Milestones 0-5 complete. Node runs, responds to RPC, mines regtest blocks, and passes 52 E2E tests.
 
 See `STATUS.md` for detailed implementation matrix.
 

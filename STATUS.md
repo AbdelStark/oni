@@ -2,7 +2,7 @@
 
 This document tracks the implementation status of oni across all packages and features.
 
-> **Last Updated**: 2025-12-30
+> **Last Updated**: 2026-01-06
 
 ## Summary
 
@@ -170,7 +170,9 @@ This document tracks the implementation status of oni across all packages and fe
 | oni_storage | 6 | UTXO, persistence, pruning |
 | oni_p2p | 5 | Networking, sync, compact blocks |
 | oni_rpc | 3 | RPC handlers, HTTP |
-| oni_node | 6 | E2E, CLI, integration |
+| oni_node | 7 | E2E regtest (52 tests), CLI, integration |
+
+**Total Tests**: 915+ unit tests, 52 E2E tests
 
 ## Infrastructure Status
 
@@ -220,6 +222,10 @@ This document tracks the implementation status of oni across all packages and fe
 13. **Block download pipelining**: Stall detection, request reassignment, and peer performance tracking
 14. **Sync test coverage**: 11 new tests for stall detection and peer performance metrics
 15. **Benchmark definitions**: Standard crypto/validation benchmarks with regression detection
+16. **Mining RPC (generatetoaddress)**: Full regtest mining via RPC with block connection
+17. **secp256k1 signing functions**: NIF extended with ECDSA/Schnorr signing, private key derivation
+18. **E2E regtest test suite**: 52 comprehensive E2E tests for RPC, mining, and chain operations
+19. **CI E2E integration**: E2E tests run automatically in CI against live regtest node
 
 ## Legend
 

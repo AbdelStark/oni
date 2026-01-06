@@ -10,6 +10,8 @@ This roadmap tracks oni's progress toward becoming a production-grade Bitcoin fu
 
 **Goal**: Achieve mainnet Initial Block Download (IBD) capability.
 
+**Recent Milestone**: Milestone 5 (End-to-End Regtest Node) is now complete with full E2E test coverage.
+
 ---
 
 ## Milestone 0 — Project Foundations ✅
@@ -123,10 +125,13 @@ This roadmap tracks oni's progress toward becoming a production-grade Bitcoin fu
 - [x] Reorg handler
 - [x] Event router integration
 - [x] Block download pipelining with stall detection
-- [x] Signature verification (secp256k1 NIF)
+- [x] Signature verification (secp256k1 NIF with ECDSA and Schnorr signing)
 - [x] Node runs and responds to RPC calls
+- [x] Mining RPC (generatetoaddress, generate)
 - [x] Regtest block mining and validation
-- [x] Full integration test suite (915+ tests)
+- [x] Full integration test suite (915+ unit tests)
+- [x] E2E regtest test suite (52 tests)
+- [x] CI E2E integration with live node testing
 
 ---
 
