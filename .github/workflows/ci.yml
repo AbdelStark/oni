@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GLEAM_VERSION: "1.6.3"
+  GLEAM_VERSION: "1.6.1"
   OTP_VERSION: "27.2"
 
 jobs:
