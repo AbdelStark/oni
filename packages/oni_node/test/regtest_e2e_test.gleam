@@ -166,10 +166,7 @@ pub fn block_subsidy_halvings_test() {
 
   // First halving at 210,000
   should.equal(regtest_miner.calculate_subsidy(210_000), initial_subsidy / 2)
-  should.equal(
-    regtest_miner.calculate_subsidy(420_000),
-    initial_subsidy / 4,
-  )
+  should.equal(regtest_miner.calculate_subsidy(420_000), initial_subsidy / 4)
 
   // After 64 halvings, subsidy is 0
   should.equal(regtest_miner.calculate_subsidy(64 * 210_000), 0)
@@ -401,7 +398,12 @@ pub fn mempool_rejects_empty_transaction_test() {
     Ok(mempool) -> {
       // Create empty (invalid) transaction
       let empty_tx =
-        oni_bitcoin.Transaction(version: 1, inputs: [], outputs: [], lock_time: 0)
+        oni_bitcoin.Transaction(
+          version: 1,
+          inputs: [],
+          outputs: [],
+          lock_time: 0,
+        )
 
       let add_result =
         process.call(mempool, oni_supervisor.AddTx(empty_tx, _), 5000)
@@ -615,12 +617,7 @@ pub fn block_template_creation_test() {
 
 pub fn merkle_root_single_tx_test() {
   let tx =
-    oni_bitcoin.Transaction(
-      version: 1,
-      inputs: [],
-      outputs: [],
-      lock_time: 0,
-    )
+    oni_bitcoin.Transaction(version: 1, inputs: [], outputs: [], lock_time: 0)
 
   let merkle = regtest_miner.calculate_merkle_root([tx])
 
@@ -631,20 +628,10 @@ pub fn merkle_root_single_tx_test() {
 
 pub fn merkle_root_two_txs_test() {
   let tx1 =
-    oni_bitcoin.Transaction(
-      version: 1,
-      inputs: [],
-      outputs: [],
-      lock_time: 0,
-    )
+    oni_bitcoin.Transaction(version: 1, inputs: [], outputs: [], lock_time: 0)
 
   let tx2 =
-    oni_bitcoin.Transaction(
-      version: 2,
-      inputs: [],
-      outputs: [],
-      lock_time: 0,
-    )
+    oni_bitcoin.Transaction(version: 2, inputs: [], outputs: [], lock_time: 0)
 
   let merkle = regtest_miner.calculate_merkle_root([tx1, tx2])
 
