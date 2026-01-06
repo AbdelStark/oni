@@ -13,8 +13,7 @@
 #include <secp256k1_schnorrsig.h>
 #include <secp256k1_extrakeys.h>
 
-// Thread-local context for secp256k1 operations
-static ErlNifResourceType *CONTEXT_RESOURCE = NULL;
+// Global context for secp256k1 operations
 static secp256k1_context *global_ctx = NULL;
 
 // Initialize the secp256k1 context
