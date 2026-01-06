@@ -15,7 +15,7 @@ import gleam/io
 import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
 import gleam/result
-import http_server.{type ServerMsg}
+import http_server.{type ServerMsg, StartAccepting}
 import node_rpc.{type RpcNodeHandles}
 import oni_bitcoin
 import oni_consensus
@@ -296,7 +296,9 @@ fn start_rpc_server(
     |> result.map_error(fn(_) { "Failed to start HTTP server" }),
   )
 
-  // Server auto-starts accepting after creation
+  // Tell the server to start accepting connections
+  process.send(server, StartAccepting)
+
   Ok(#(rpc_handles, server))
 }
 

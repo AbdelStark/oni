@@ -11,8 +11,17 @@
     decode_recv_result/1,
     decode_send_result/1,
     format_error/1,
-    now_ms/0
+    now_ms/0,
+    controlling_process/2
 ]).
+
+%% Transfer socket control to another process
+-spec controlling_process(port(), pid()) -> ok | {error, term()}.
+controlling_process(Socket, Pid) ->
+    case gen_tcp:controlling_process(Socket, Pid) of
+        ok -> {ok, nil};
+        {error, Reason} -> {error, Reason}
+    end.
 
 %% Build TCP listen options from bind address
 -spec tcp_listen_options(binary()) -> list().

@@ -458,12 +458,17 @@ fn spawn_acceptor(
   listen_socket: ListenSocket,
   parent: Subject(ServerMsg),
 ) -> Nil {
+  // Get the actor's PID so we can transfer socket control to it
+  let actor_pid = process.self()
   // Spawn a linked process to accept
   let _ =
     process.start(
       fn() {
         case gen_tcp_accept(listen_socket) {
           Ok(socket) -> {
+            // Transfer socket control to the actor BEFORE we exit
+            // Otherwise the socket gets closed when this process exits
+            let _ = controlling_process(socket, actor_pid)
             process.send(parent, ConnectionAccepted(socket))
           }
           Error(_) -> Nil
@@ -480,11 +485,18 @@ fn spawn_receiver(
   socket: Socket,
   parent: Subject(ServerMsg),
 ) -> Nil {
-  let _ =
+  // Get actor PID so we can transfer control back after recv
+  let actor_pid = process.self()
+  let pid =
     process.start(
       fn() {
+        // Small delay to allow controlling_process to complete
+        process.sleep(5)
         case gen_tcp_recv(socket, 0) {
           Ok(data) -> {
+            // Transfer control back to actor BEFORE sending message
+            // so the actor can send the response
+            let _ = controlling_process(socket, actor_pid)
             process.send(parent, DataReceived(conn_id, data))
           }
           Error(closed) if closed == "closed" -> {
@@ -497,6 +509,8 @@ fn spawn_receiver(
       },
       True,
     )
+  // Transfer socket control from actor to the receiver process
+  let _ = controlling_process(socket, pid)
   Nil
 }
 
@@ -566,6 +580,9 @@ fn gen_tcp_close(socket: Socket) -> Nil
 
 @external(erlang, "gen_tcp", "close")
 fn gen_tcp_close_listen(socket: ListenSocket) -> Nil
+
+@external(erlang, "http_server_ffi", "controlling_process")
+fn controlling_process(socket: Socket, pid: process.Pid) -> Result(Nil, Dynamic)
 
 // Helpers for Erlang interop
 @external(erlang, "http_server_ffi", "tcp_listen_options")
