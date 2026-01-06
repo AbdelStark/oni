@@ -51,12 +51,7 @@ pub type DbOptions {
 
 /// Default database options
 pub fn default_options() -> DbOptions {
-  DbOptions(
-    create: True,
-    auto_repair: True,
-    max_keys: None,
-    ram_file: False,
-  )
+  DbOptions(create: True, auto_repair: True, max_keys: None, ram_file: False)
 }
 
 /// Database error types
@@ -116,7 +111,11 @@ pub fn db_get(handle: DbHandle, key: BitArray) -> Result(BitArray, DbError) {
 }
 
 /// Put a key-value pair
-pub fn db_put(handle: DbHandle, key: BitArray, value: BitArray) -> Result(Nil, DbError) {
+pub fn db_put(
+  handle: DbHandle,
+  key: BitArray,
+  value: BitArray,
+) -> Result(Nil, DbError) {
   case handle.is_open {
     False -> Error(Closed)
     True -> dets_insert(handle.name, key, value)
@@ -192,13 +191,17 @@ pub fn db_get_schema_version(handle: DbHandle) -> Result(Int, DbError) {
         Error(_) -> Error(Corrupted)
       }
     }
-    Error(KeyNotFound) -> Ok(0)  // No version means version 0
+    Error(KeyNotFound) -> Ok(0)
+    // No version means version 0
     Error(err) -> Error(err)
   }
 }
 
 /// Set schema version
-pub fn db_set_schema_version(handle: DbHandle, version: Int) -> Result(Nil, DbError) {
+pub fn db_set_schema_version(
+  handle: DbHandle,
+  version: Int,
+) -> Result(Nil, DbError) {
   let data = encode_int(version)
   db_put(handle, schema_version_key, data)
 }
@@ -242,7 +245,8 @@ fn execute_batch(name: Atom, ops: List(BatchOp)) -> Result(Nil, DbError) {
 
 fn execute_batch_loop(name: Atom, ops: List(BatchOp)) -> Result(Nil, DbError) {
   case ops {
-    [] -> dets_sync(name)  // Sync after batch
+    [] -> dets_sync(name)
+    // Sync after batch
     [op, ..rest] -> {
       let result = case op {
         BatchPut(key, value) -> dets_insert(name, key, value)
@@ -287,7 +291,11 @@ fn erlang_phash2(term: a) -> Int
 
 /// Open dets table
 @external(erlang, "db_backend_ffi", "dets_open")
-fn dets_open(name: Atom, path: String, options: DbOptions) -> Result(Atom, DbError)
+fn dets_open(
+  name: Atom,
+  path: String,
+  options: DbOptions,
+) -> Result(Atom, DbError)
 
 /// Close dets table
 @external(erlang, "db_backend_ffi", "dets_close")
@@ -299,7 +307,11 @@ fn dets_lookup(name: Atom, key: BitArray) -> Result(BitArray, DbError)
 
 /// Insert key-value in dets
 @external(erlang, "db_backend_ffi", "dets_insert")
-fn dets_insert(name: Atom, key: BitArray, value: BitArray) -> Result(Nil, DbError)
+fn dets_insert(
+  name: Atom,
+  key: BitArray,
+  value: BitArray,
+) -> Result(Nil, DbError)
 
 /// Delete key from dets
 @external(erlang, "db_backend_ffi", "dets_delete")

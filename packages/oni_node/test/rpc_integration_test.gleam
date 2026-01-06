@@ -5,14 +5,17 @@
 // 2. Real node state is returned through RPC calls
 // 3. The adapter layer correctly translates between types
 
-import gleeunit
-import gleeunit/should
 import gleam/erlang/process
 import gleam/option.{None, Some}
+import gleeunit
+import gleeunit/should
+import node_rpc
 import oni_bitcoin
 import oni_supervisor
-import node_rpc
-import rpc_service.{QueryHeight, QueryMempoolSize, QueryMempoolTxids, QueryNetwork, QuerySyncState, QueryTip}
+import rpc_service.{
+  QueryHeight, QueryMempoolSize, QueryMempoolTxids, QueryNetwork, QuerySyncState,
+  QueryTip,
+}
 
 pub fn main() {
   gleeunit.main()
@@ -24,7 +27,8 @@ pub fn main() {
 
 pub fn chainstate_adapter_query_height_test() {
   // Start a chainstate actor
-  let assert Ok(chainstate) = oni_supervisor.start_chainstate(oni_bitcoin.Regtest)
+  let assert Ok(chainstate) =
+    oni_supervisor.start_chainstate(oni_bitcoin.Regtest)
 
   // Start the adapter
   let assert Ok(adapter) = node_rpc.start_chainstate_adapter(chainstate)
@@ -38,7 +42,8 @@ pub fn chainstate_adapter_query_height_test() {
 
 pub fn chainstate_adapter_query_tip_test() {
   // Start a chainstate actor
-  let assert Ok(chainstate) = oni_supervisor.start_chainstate(oni_bitcoin.Regtest)
+  let assert Ok(chainstate) =
+    oni_supervisor.start_chainstate(oni_bitcoin.Regtest)
 
   // Start the adapter
   let assert Ok(adapter) = node_rpc.start_chainstate_adapter(chainstate)
@@ -52,7 +57,8 @@ pub fn chainstate_adapter_query_tip_test() {
 
 pub fn chainstate_adapter_query_network_test() {
   // Start a chainstate actor for testnet
-  let assert Ok(chainstate) = oni_supervisor.start_chainstate(oni_bitcoin.Testnet)
+  let assert Ok(chainstate) =
+    oni_supervisor.start_chainstate(oni_bitcoin.Testnet)
 
   // Start the adapter
   let assert Ok(adapter) = node_rpc.start_chainstate_adapter(chainstate)
@@ -66,7 +72,8 @@ pub fn chainstate_adapter_query_network_test() {
 
 pub fn chainstate_adapter_regtest_network_test() {
   // Start a chainstate actor for regtest
-  let assert Ok(chainstate) = oni_supervisor.start_chainstate(oni_bitcoin.Regtest)
+  let assert Ok(chainstate) =
+    oni_supervisor.start_chainstate(oni_bitcoin.Regtest)
 
   // Start the adapter
   let assert Ok(adapter) = node_rpc.start_chainstate_adapter(chainstate)
@@ -153,15 +160,17 @@ pub fn sync_adapter_shows_syncing_test() {
 
 pub fn create_rpc_handles_test() {
   // Start all actors
-  let assert Ok(chainstate) = oni_supervisor.start_chainstate(oni_bitcoin.Regtest)
+  let assert Ok(chainstate) =
+    oni_supervisor.start_chainstate(oni_bitcoin.Regtest)
   let assert Ok(mempool) = oni_supervisor.start_mempool(1000)
   let assert Ok(sync) = oni_supervisor.start_sync()
 
-  let node_handles = oni_supervisor.NodeHandles(
-    chainstate: chainstate,
-    mempool: mempool,
-    sync: sync,
-  )
+  let node_handles =
+    oni_supervisor.NodeHandles(
+      chainstate: chainstate,
+      mempool: mempool,
+      sync: sync,
+    )
 
   // Create RPC handles
   let result = node_rpc.create_rpc_handles(node_handles)
@@ -175,7 +184,8 @@ pub fn start_node_with_rpc_test() {
   case result {
     Ok(#(node_handles, rpc_handles)) -> {
       // Verify node handles work
-      let height = process.call(node_handles.chainstate, oni_supervisor.GetHeight, 5000)
+      let height =
+        process.call(node_handles.chainstate, oni_supervisor.GetHeight, 5000)
       should.equal(height, 0)
 
       // Verify RPC handles work
@@ -194,7 +204,8 @@ pub fn start_node_with_rpc_test() {
 // ============================================================================
 
 pub fn mainnet_genesis_tip_test() {
-  let assert Ok(chainstate) = oni_supervisor.start_chainstate(oni_bitcoin.Mainnet)
+  let assert Ok(chainstate) =
+    oni_supervisor.start_chainstate(oni_bitcoin.Mainnet)
   let assert Ok(adapter) = node_rpc.start_chainstate_adapter(chainstate)
 
   let tip = process.call(adapter, QueryTip, 5000)
@@ -203,14 +214,18 @@ pub fn mainnet_genesis_tip_test() {
     Some(hash) -> {
       let hex = oni_bitcoin.block_hash_to_hex(hash)
       // Mainnet genesis hash
-      should.equal(hex, "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f")
+      should.equal(
+        hex,
+        "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f",
+      )
     }
     None -> should.fail()
   }
 }
 
 pub fn testnet_genesis_tip_test() {
-  let assert Ok(chainstate) = oni_supervisor.start_chainstate(oni_bitcoin.Testnet)
+  let assert Ok(chainstate) =
+    oni_supervisor.start_chainstate(oni_bitcoin.Testnet)
   let assert Ok(adapter) = node_rpc.start_chainstate_adapter(chainstate)
 
   let tip = process.call(adapter, QueryTip, 5000)
@@ -219,7 +234,10 @@ pub fn testnet_genesis_tip_test() {
     Some(hash) -> {
       let hex = oni_bitcoin.block_hash_to_hex(hash)
       // Testnet genesis hash
-      should.equal(hex, "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943")
+      should.equal(
+        hex,
+        "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943",
+      )
     }
     None -> should.fail()
   }
@@ -230,7 +248,8 @@ pub fn testnet_genesis_tip_test() {
 // ============================================================================
 
 pub fn adapters_handle_multiple_queries_test() {
-  let assert Ok(chainstate) = oni_supervisor.start_chainstate(oni_bitcoin.Regtest)
+  let assert Ok(chainstate) =
+    oni_supervisor.start_chainstate(oni_bitcoin.Regtest)
   let assert Ok(adapter) = node_rpc.start_chainstate_adapter(chainstate)
 
   // Multiple queries should all work
@@ -244,7 +263,8 @@ pub fn adapters_handle_multiple_queries_test() {
 }
 
 pub fn multiple_adapters_same_actor_test() {
-  let assert Ok(chainstate) = oni_supervisor.start_chainstate(oni_bitcoin.Regtest)
+  let assert Ok(chainstate) =
+    oni_supervisor.start_chainstate(oni_bitcoin.Regtest)
 
   // Create multiple adapters for the same chainstate
   let assert Ok(adapter1) = node_rpc.start_chainstate_adapter(chainstate)

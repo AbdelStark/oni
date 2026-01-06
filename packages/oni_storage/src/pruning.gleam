@@ -52,7 +52,8 @@ pub fn default_config() -> PruningConfig {
   PruningConfig(
     enabled: False,
     target_size: 0,
-    min_blocks_to_keep: 288,  // ~2 days of blocks
+    min_blocks_to_keep: 288,
+    // ~2 days of blocks
     prune_undo_data: True,
   )
 }
@@ -136,7 +137,8 @@ pub fn calculate_prune_range(
       let max_prune_height = chainstate.best_height - config.min_blocks_to_keep
 
       case max_prune_height > current_pruned_height {
-        False -> None  // Nothing to prune
+        False -> None
+        // Nothing to prune
         True -> Some(#(current_pruned_height + 1, max_prune_height))
       }
     }
@@ -206,7 +208,8 @@ fn prune_blocks_loop(
         }
         Some(entry) -> {
           // Prune block data
-          let #(new_block_store, block_size) = prune_single_block(block_store, entry.hash)
+          let #(new_block_store, block_size) =
+            prune_single_block(block_store, entry.hash)
 
           // Prune undo data if configured
           let #(new_undo_store, undo_size) = case config.prune_undo_data {
@@ -231,14 +234,12 @@ fn prune_blocks_loop(
 }
 
 /// Prune a single block from storage
-fn prune_single_block(
-  store: BlockStore,
-  hash: BlockHash,
-) -> #(BlockStore, Int) {
+fn prune_single_block(store: BlockStore, hash: BlockHash) -> #(BlockStore, Int) {
   // Estimate block size before removal (simplified - real impl would track sizes)
   let estimated_size = case oni_storage.block_store_has(store, hash) {
     False -> 0
-    True -> 1_000_000  // ~1MB average block size estimate
+    True -> 1_000_000
+    // ~1MB average block size estimate
   }
 
   let new_store = oni_storage.block_store_remove(store, hash)
@@ -246,12 +247,10 @@ fn prune_single_block(
 }
 
 /// Prune undo data for a block
-fn prune_undo_data(
-  store: UndoStore,
-  hash: BlockHash,
-) -> #(UndoStore, Int) {
+fn prune_undo_data(store: UndoStore, hash: BlockHash) -> #(UndoStore, Int) {
   // Estimate undo data size (simplified)
-  let estimated_size = 100_000  // ~100KB average undo data
+  let estimated_size = 100_000
+  // ~100KB average undo data
 
   let new_store = oni_storage.undo_store_remove(store, hash)
   #(new_store, estimated_size)
@@ -262,10 +261,7 @@ fn prune_undo_data(
 // ============================================================================
 
 /// Check if a block is pruned
-pub fn is_block_pruned(
-  chainstate: Chainstate,
-  height: Int,
-) -> Bool {
+pub fn is_block_pruned(chainstate: Chainstate, height: Int) -> Bool {
   case chainstate.pruned_height {
     Some(pruned_h) -> height <= pruned_h
     None -> False
@@ -276,15 +272,13 @@ pub fn is_block_pruned(
 pub fn get_lowest_block_height(chainstate: Chainstate) -> Int {
   case chainstate.pruned_height {
     Some(h) -> h + 1
-    None -> 0  // Genesis
+    None -> 0
+    // Genesis
   }
 }
 
 /// Calculate current disk usage estimate
-pub fn estimate_disk_usage(
-  chainstate: Chainstate,
-  avg_block_size: Int,
-) -> Int {
+pub fn estimate_disk_usage(chainstate: Chainstate, avg_block_size: Int) -> Int {
   let pruned_h = case chainstate.pruned_height {
     Some(h) -> h
     None -> 0
@@ -295,10 +289,7 @@ pub fn estimate_disk_usage(
 }
 
 /// Check if pruning is needed based on disk usage
-pub fn should_prune(
-  config: PruningConfig,
-  current_disk_usage: Int,
-) -> Bool {
+pub fn should_prune(config: PruningConfig, current_disk_usage: Int) -> Bool {
   case config.enabled, config.target_size > 0 {
     True, True -> current_disk_usage > config.target_size
     _, _ -> False
@@ -323,20 +314,33 @@ pub fn auto_prune(
     False -> Ok(#(block_store, undo_store, prune_state))
     True -> {
       // Check if we need to prune
-      case calculate_prune_range(config, chainstate, prune_state.pruned_height) {
+      case
+        calculate_prune_range(config, chainstate, prune_state.pruned_height)
+      {
         None -> Ok(#(block_store, undo_store, prune_state))
         Some(#(start, end)) -> {
           // Perform pruning
-          case prune_block_range(block_store, undo_store, block_index, config, start, end) {
+          case
+            prune_block_range(
+              block_store,
+              undo_store,
+              block_index,
+              config,
+              start,
+              end,
+            )
+          {
             Error(e) -> Error(e)
             Ok(#(new_store, new_undo, result)) -> {
-              let new_state = PruningState(
-                ..prune_state,
-                pruned_height: result.new_pruned_height,
-                bytes_pruned: prune_state.bytes_pruned + result.bytes_freed,
-                blocks_pruned: prune_state.blocks_pruned + result.blocks_pruned,
-                last_prune_time: get_current_time(),
-              )
+              let new_state =
+                PruningState(
+                  ..prune_state,
+                  pruned_height: result.new_pruned_height,
+                  bytes_pruned: prune_state.bytes_pruned + result.bytes_freed,
+                  blocks_pruned: prune_state.blocks_pruned
+                    + result.blocks_pruned,
+                  last_prune_time: get_current_time(),
+                )
               Ok(#(new_store, new_undo, new_state))
             }
           }

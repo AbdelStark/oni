@@ -14,8 +14,8 @@ import gleam/list
 import gleam/result
 import gleam/string
 import oni_p2p.{
-  type AddrEntry, type AddrManager, type IpAddr, type NetAddr,
-  AddrEntry, AddrManager, IPv4, IPv6, NetAddr,
+  type AddrEntry, type AddrManager, type IpAddr, type NetAddr, AddrEntry,
+  AddrManager, IPv4, IPv6, NetAddr,
 }
 
 // ============================================================================
@@ -43,23 +43,26 @@ pub fn serialize(manager: AddrManager) -> BitArray {
   let entries = dict.values(manager.addrs)
 
   // Limit to max persisted addresses, prioritizing recent successful connections
-  let sorted = list.sort(entries, fn(a, b) {
-    // Higher last_success first
-    int.compare(b.last_success, a.last_success)
-  })
+  let sorted =
+    list.sort(entries, fn(a, b) {
+      // Higher last_success first
+      int.compare(b.last_success, a.last_success)
+    })
   let limited = list.take(sorted, max_persisted_addrs)
 
   // Build header
-  let magic = string.to_utf_codepoints(file_magic)
+  let magic =
+    string.to_utf_codepoints(file_magic)
     |> list.map(string.utf_codepoint_to_int)
     |> list.fold(<<>>, fn(acc, cp) { bit_array.append(acc, <<cp:8>>) })
 
   let entry_count = list.length(limited)
 
   // Serialize entries
-  let entries_data = list.fold(limited, <<>>, fn(acc, entry) {
-    bit_array.append(acc, serialize_entry(entry))
-  })
+  let entries_data =
+    list.fold(limited, <<>>, fn(acc, entry) {
+      bit_array.append(acc, serialize_entry(entry))
+    })
 
   bit_array.concat([
     magic,
@@ -96,7 +99,8 @@ fn serialize_ip(ip: IpAddr) -> BitArray {
     IPv6(bytes) -> {
       case bit_array.byte_size(bytes) == 16 {
         True -> bytes
-        False -> <<0:128>>  // Invalid, use zeros
+        False -> <<0:128>>
+        // Invalid, use zeros
       }
     }
   }
@@ -131,7 +135,13 @@ fn do_deserialize(data: BitArray) -> Result(AddrManager, PersistenceError) {
                     False -> {
                       // Parse entries
                       let entries_offset = magic_len + 8
-                      case bit_array.slice(data, entries_offset, bit_array.byte_size(data) - entries_offset) {
+                      case
+                        bit_array.slice(
+                          data,
+                          entries_offset,
+                          bit_array.byte_size(data) - entries_offset,
+                        )
+                      {
                         Error(_) -> Error(InvalidFormat)
                         Ok(entries_data) ->
                           parse_entries(entries_data, count, dict.new())
@@ -150,7 +160,8 @@ fn do_deserialize(data: BitArray) -> Result(AddrManager, PersistenceError) {
 }
 
 fn check_magic(bytes: BitArray) -> Bool {
-  let expected = string.to_utf_codepoints(file_magic)
+  let expected =
+    string.to_utf_codepoints(file_magic)
     |> list.map(string.utf_codepoint_to_int)
     |> list.fold(<<>>, fn(acc, cp) { bit_array.append(acc, <<cp:8>>) })
   bytes == expected
@@ -181,8 +192,10 @@ fn parse_entries(
       case parse_single_entry(data) {
         Error(e) -> Error(e)
         Ok(#(entry, rest)) -> {
-          let key = oni_p2p.ip_to_string(entry.addr.ip) <> ":" <>
-            int.to_string(entry.addr.port)
+          let key =
+            oni_p2p.ip_to_string(entry.addr.ip)
+            <> ":"
+            <> int.to_string(entry.addr.port)
           let new_acc = dict.insert(acc, key, entry)
           parse_entries(rest, remaining - 1, new_acc)
         }
@@ -195,22 +208,31 @@ fn parse_single_entry(
   data: BitArray,
 ) -> Result(#(AddrEntry, BitArray), PersistenceError) {
   case data {
-    <<services:64-little, ip_bytes:128-bits, port:16-big,
-      last_try:64-little, last_success:64-little,
-      attempts:32-little, ref_count:32-little, rest:bits>> -> {
+    <<
+      services:64-little,
+      ip_bytes:128-bits,
+      port:16-big,
+      last_try:64-little,
+      last_success:64-little,
+      attempts:32-little,
+      ref_count:32-little,
+      rest:bits,
+    >> -> {
       let ip = parse_ip(<<ip_bytes:128-bits>>)
-      let entry = AddrEntry(
-        addr: NetAddr(
-          services: oni_p2p.service_flags_from_int(services),
-          ip: ip,
-          port: port,
-        ),
-        source: ip,  // Use same IP as source for persisted entries
-        last_success: last_success,
-        last_try: last_try,
-        attempts: attempts,
-        ref_count: ref_count,
-      )
+      let entry =
+        AddrEntry(
+          addr: NetAddr(
+            services: oni_p2p.service_flags_from_int(services),
+            ip: ip,
+            port: port,
+          ),
+          source: ip,
+          // Use same IP as source for persisted entries
+          last_success: last_success,
+          last_try: last_try,
+          attempts: attempts,
+          ref_count: ref_count,
+        )
       Ok(#(entry, rest))
     }
     _ -> Error(InvalidFormat)
@@ -265,9 +287,10 @@ pub fn export_text(manager: AddrManager) -> String {
 }
 
 fn entry_to_text(entry: AddrEntry) -> String {
-  let addr_str = oni_p2p.ip_to_string(entry.addr.ip) <> ":" <>
-    int.to_string(entry.addr.port)
-  let services = int.to_string(oni_p2p.service_flags_to_int(entry.addr.services))
+  let addr_str =
+    oni_p2p.ip_to_string(entry.addr.ip) <> ":" <> int.to_string(entry.addr.port)
+  let services =
+    int.to_string(oni_p2p.service_flags_to_int(entry.addr.services))
 
   string.concat([
     addr_str,
@@ -284,21 +307,26 @@ fn entry_to_text(entry: AddrEntry) -> String {
 
 /// Import addresses from text format
 pub fn import_text(text: String) -> Result(AddrManager, PersistenceError) {
-  let lines = string.split(text, "\n")
+  let lines =
+    string.split(text, "\n")
     |> list.filter(fn(line) { string.length(string.trim(line)) > 0 })
 
-  let entries = list.filter_map(lines, fn(line) {
-    case parse_text_line(line) {
-      Ok(entry) -> Ok(entry)
-      Error(_) -> Error(Nil)
-    }
-  })
+  let entries =
+    list.filter_map(lines, fn(line) {
+      case parse_text_line(line) {
+        Ok(entry) -> Ok(entry)
+        Error(_) -> Error(Nil)
+      }
+    })
 
-  let addrs = list.fold(entries, dict.new(), fn(acc, entry) {
-    let key = oni_p2p.ip_to_string(entry.addr.ip) <> ":" <>
-      int.to_string(entry.addr.port)
-    dict.insert(acc, key, entry)
-  })
+  let addrs =
+    list.fold(entries, dict.new(), fn(acc, entry) {
+      let key =
+        oni_p2p.ip_to_string(entry.addr.ip)
+        <> ":"
+        <> int.to_string(entry.addr.port)
+      dict.insert(acc, key, entry)
+    })
 
   Ok(AddrManager(
     addrs: addrs,
@@ -367,15 +395,22 @@ fn parse_ip_str(ip: String) -> Result(IpAddr, Nil) {
       use c_int <- result.try(parse_int(c))
       use d_int <- result.try(parse_int(d))
 
-      case a_int >= 0 && a_int <= 255 &&
-           b_int >= 0 && b_int <= 255 &&
-           c_int >= 0 && c_int <= 255 &&
-           d_int >= 0 && d_int <= 255 {
+      case
+        a_int >= 0
+        && a_int <= 255
+        && b_int >= 0
+        && b_int <= 255
+        && c_int >= 0
+        && c_int <= 255
+        && d_int >= 0
+        && d_int <= 255
+      {
         True -> Ok(IPv4(a_int, b_int, c_int, d_int))
         False -> Error(Nil)
       }
     }
-    _ -> Error(Nil)  // IPv6 parsing would go here
+    _ -> Error(Nil)
+    // IPv6 parsing would go here
   }
 }
 
@@ -394,12 +429,13 @@ pub fn filter_for_persistence(manager: AddrManager) -> AddrManager {
   // - Are too old without success
   // - Are private/local addresses
 
-  let filtered = dict.filter(manager.addrs, fn(_key, entry) {
-    let too_many_attempts = entry.attempts > 10
-    let is_private = is_private_ip(entry.addr.ip)
+  let filtered =
+    dict.filter(manager.addrs, fn(_key, entry) {
+      let too_many_attempts = entry.attempts > 10
+      let is_private = is_private_ip(entry.addr.ip)
 
-    !too_many_attempts && !is_private
-  })
+      !too_many_attempts && !is_private
+    })
 
   AddrManager(..manager, addrs: filtered)
 }
@@ -407,13 +443,20 @@ pub fn filter_for_persistence(manager: AddrManager) -> AddrManager {
 /// Check if an IP is private/local
 fn is_private_ip(ip: IpAddr) -> Bool {
   case ip {
-    IPv4(10, _, _, _) -> True  // 10.0.0.0/8
-    IPv4(172, b, _, _) if b >= 16 && b <= 31 -> True  // 172.16.0.0/12
-    IPv4(192, 168, _, _) -> True  // 192.168.0.0/16
-    IPv4(127, _, _, _) -> True  // Loopback
-    IPv4(0, _, _, _) -> True  // 0.0.0.0/8
-    IPv4(169, 254, _, _) -> True  // Link-local
-    IPv4(224, _, _, _) -> True  // Multicast
+    IPv4(10, _, _, _) -> True
+    // 10.0.0.0/8
+    IPv4(172, b, _, _) if b >= 16 && b <= 31 -> True
+    // 172.16.0.0/12
+    IPv4(192, 168, _, _) -> True
+    // 192.168.0.0/16
+    IPv4(127, _, _, _) -> True
+    // Loopback
+    IPv4(0, _, _, _) -> True
+    // 0.0.0.0/8
+    IPv4(169, 254, _, _) -> True
+    // Link-local
+    IPv4(224, _, _, _) -> True
+    // Multicast
     _ -> False
   }
 }
@@ -437,18 +480,23 @@ pub type PersistenceStats {
 /// Calculate persistence statistics
 pub fn get_stats(manager: AddrManager, current_time: Int) -> PersistenceStats {
   let entries = dict.values(manager.addrs)
-  let recent_threshold = current_time - 86_400 * 7  // 7 days
+  let recent_threshold = current_time - 86_400 * 7
+  // 7 days
 
-  let with_success = list.filter(entries, fn(e) { e.last_success > 0 }) |> list.length
-  let with_recent = list.filter(entries, fn(e) { e.last_success > recent_threshold }) |> list.length
+  let with_success =
+    list.filter(entries, fn(e) { e.last_success > 0 }) |> list.length
+  let with_recent =
+    list.filter(entries, fn(e) { e.last_success > recent_threshold })
+    |> list.length
 
-  let #(ipv4, ipv6) = list.fold(entries, #(0, 0), fn(acc, e) {
-    let #(v4, v6) = acc
-    case e.addr.ip {
-      IPv4(_, _, _, _) -> #(v4 + 1, v6)
-      IPv6(_) -> #(v4, v6 + 1)
-    }
-  })
+  let #(ipv4, ipv6) =
+    list.fold(entries, #(0, 0), fn(acc, e) {
+      let #(v4, v6) = acc
+      case e.addr.ip {
+        IPv4(_, _, _, _) -> #(v4 + 1, v6)
+        IPv6(_) -> #(v4, v6 + 1)
+      }
+    })
 
   // Estimate serialized size
   let header_size = string.length(file_magic) + 8

@@ -168,9 +168,10 @@ pub fn estimator_new() -> FeeEstimator {
   // Initialize buckets for common target confirmations
   let targets = [1, 2, 3, 4, 5, 6, 10, 12, 24, 48, 144, 504, 1008]
 
-  let buckets = list.fold(targets, dict.new(), fn(acc, target) {
-    dict.insert(acc, target, create_fee_buckets())
-  })
+  let buckets =
+    list.fold(targets, dict.new(), fn(acc, target) {
+      dict.insert(acc, target, create_fee_buckets())
+    })
 
   FeeEstimator(
     buckets: buckets,
@@ -194,13 +195,14 @@ fn create_buckets_recursive(
     0 -> list.reverse(acc)
     _ -> {
       let end = start *. bucket_multiplier
-      let bucket = FeeBucket(
-        start_range: start,
-        end_range: end,
-        confirmed: 0.0,
-        failed: 0.0,
-        data_points: 0,
-      )
+      let bucket =
+        FeeBucket(
+          start_range: start,
+          end_range: end,
+          confirmed: 0.0,
+          failed: 0.0,
+          data_points: 0,
+        )
       create_buckets_recursive(end, remaining - 1, [bucket, ..acc])
     }
   }
@@ -215,16 +217,17 @@ pub fn record_confirmed(
   let rate = fee_rate.sat_per_vbyte
 
   // Update all applicable target buckets
-  let new_buckets = dict.fold(estimator.buckets, estimator.buckets, fn(acc, target, buckets) {
-    case confirmation_blocks <= target {
-      True -> {
-        // This tx confirmed within target, record success
-        let updated = update_bucket_confirmed(buckets, rate)
-        dict.insert(acc, target, updated)
+  let new_buckets =
+    dict.fold(estimator.buckets, estimator.buckets, fn(acc, target, buckets) {
+      case confirmation_blocks <= target {
+        True -> {
+          // This tx confirmed within target, record success
+          let updated = update_bucket_confirmed(buckets, rate)
+          dict.insert(acc, target, updated)
+        }
+        False -> acc
       }
-      False -> acc
-    }
-  })
+    })
 
   FeeEstimator(..estimator, buckets: new_buckets)
 }
@@ -235,11 +238,12 @@ fn update_bucket_confirmed(
 ) -> List(FeeBucket) {
   list.map(buckets, fn(bucket) {
     case rate >=. bucket.start_range && rate <. bucket.end_range {
-      True -> FeeBucket(
-        ..bucket,
-        confirmed: bucket.confirmed +. 1.0,
-        data_points: bucket.data_points + 1,
-      )
+      True ->
+        FeeBucket(
+          ..bucket,
+          confirmed: bucket.confirmed +. 1.0,
+          data_points: bucket.data_points + 1,
+        )
       False -> bucket
     }
   })
@@ -277,15 +281,16 @@ fn update_bucket_failed(
 
 /// Apply decay to historical data (called on each new block)
 pub fn decay_data(estimator: FeeEstimator) -> FeeEstimator {
-  let new_buckets = dict.map_values(estimator.buckets, fn(_target, buckets) {
-    list.map(buckets, fn(bucket) {
-      FeeBucket(
-        ..bucket,
-        confirmed: bucket.confirmed *. decay_rate,
-        failed: bucket.failed *. decay_rate,
-      )
+  let new_buckets =
+    dict.map_values(estimator.buckets, fn(_target, buckets) {
+      list.map(buckets, fn(bucket) {
+        FeeBucket(
+          ..bucket,
+          confirmed: bucket.confirmed *. decay_rate,
+          failed: bucket.failed *. decay_rate,
+        )
+      })
     })
-  })
 
   FeeEstimator(
     ..estimator,
@@ -321,7 +326,7 @@ pub fn estimate_fee(
       let confidence_threshold = case mode {
         Conservative -> 0.95
         Economical -> 0.85
-        Unset -> 0.90
+        Unset -> 0.9
       }
 
       find_estimate_in_buckets(buckets, confidence_threshold, clamped_target)
@@ -355,17 +360,20 @@ fn find_estimate_in_buckets(
   target: Int,
 ) -> Option(FeeEstimate) {
   // Start from highest fee bucket and work down (descending order)
-  let sorted = list.sort(buckets, fn(a, b) {
-    case a.start_range >. b.start_range {
-      True -> order.Lt  // a comes first (descending)
-      False -> {
-        case a.start_range <. b.start_range {
-          True -> order.Gt  // b comes first (descending)
-          False -> order.Eq
+  let sorted =
+    list.sort(buckets, fn(a, b) {
+      case a.start_range >. b.start_range {
+        True -> order.Lt
+        // a comes first (descending)
+        False -> {
+          case a.start_range <. b.start_range {
+            True -> order.Gt
+            // b comes first (descending)
+            False -> order.Eq
+          }
         }
       }
-    }
-  })
+    })
 
   find_estimate_recursive(sorted, confidence, target)
 }
@@ -428,7 +436,8 @@ pub fn estimate_smart_fee(
 
       FeeEstimate(
         fee_rate: FeeRate(rate),
-        confidence: 0.0,  // No confidence - using defaults
+        confidence: 0.0,
+        // No confidence - using defaults
         data_points: 0,
         target_blocks: target_blocks,
       )
@@ -442,19 +451,27 @@ pub fn estimate_smart_fee(
 
 /// Entry in fee histogram
 pub type HistogramEntry {
-  HistogramEntry(
-    fee_rate: FeeRate,
-    count: Int,
-    total_vsize: Int,
-  )
+  HistogramEntry(fee_rate: FeeRate, count: Int, total_vsize: Int)
 }
 
 /// Build a fee histogram from mempool data
 pub fn build_histogram(
-  tx_fees: List(#(Int, Int)),  // List of (fee_in_sats, vsize)
+  tx_fees: List(#(Int, Int)),
+  // List of (fee_in_sats, vsize)
 ) -> List(HistogramEntry) {
   // Define histogram buckets (sat/vB ranges)
-  let bucket_ranges = [1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0, 500.0, 1000.0]
+  let bucket_ranges = [
+    1.0,
+    2.0,
+    5.0,
+    10.0,
+    20.0,
+    50.0,
+    100.0,
+    200.0,
+    500.0,
+    1000.0,
+  ]
 
   build_histogram_recursive(tx_fees, bucket_ranges, [])
 }
@@ -469,20 +486,18 @@ fn build_histogram_recursive(
     [range, ..rest] -> {
       // Count transactions in this fee range
       let #(count, vsize) = count_in_range(txs, range)
-      let entry = HistogramEntry(
-        fee_rate: FeeRate(range),
-        count: count,
-        total_vsize: vsize,
-      )
+      let entry =
+        HistogramEntry(
+          fee_rate: FeeRate(range),
+          count: count,
+          total_vsize: vsize,
+        )
       build_histogram_recursive(txs, rest, [entry, ..acc])
     }
   }
 }
 
-fn count_in_range(
-  txs: List(#(Int, Int)),
-  min_rate: Float,
-) -> #(Int, Int) {
+fn count_in_range(txs: List(#(Int, Int)), min_rate: Float) -> #(Int, Int) {
   list.fold(txs, #(0, 0), fn(acc, tx) {
     let #(fee, vsize) = tx
     let rate = int.to_float(fee) /. int.to_float(vsize)
@@ -519,24 +534,27 @@ pub type MempoolFeeStats {
 
 /// Calculate fee statistics from mempool transactions
 pub fn calculate_mempool_stats(
-  tx_fees: List(#(Int, Int)),  // (fee, vsize)
+  tx_fees: List(#(Int, Int)),
+  // (fee, vsize)
 ) -> MempoolFeeStats {
   case tx_fees {
-    [] -> MempoolFeeStats(
-      min_fee_rate: FeeRate(0.0),
-      max_fee_rate: FeeRate(0.0),
-      median_fee_rate: FeeRate(0.0),
-      mean_fee_rate: FeeRate(0.0),
-      total_fees: 0,
-      total_vsize: 0,
-      tx_count: 0,
-    )
+    [] ->
+      MempoolFeeStats(
+        min_fee_rate: FeeRate(0.0),
+        max_fee_rate: FeeRate(0.0),
+        median_fee_rate: FeeRate(0.0),
+        mean_fee_rate: FeeRate(0.0),
+        total_fees: 0,
+        total_vsize: 0,
+        tx_count: 0,
+      )
     _ -> {
       // Calculate rates for each tx
-      let rates = list.map(tx_fees, fn(tx) {
-        let #(fee, vsize) = tx
-        int.to_float(fee) /. int.to_float(vsize)
-      })
+      let rates =
+        list.map(tx_fees, fn(tx) {
+          let #(fee, vsize) = tx
+          int.to_float(fee) /. int.to_float(vsize)
+        })
 
       let sorted_rates = list.sort(rates, float.compare)
 

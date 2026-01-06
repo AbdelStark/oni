@@ -17,8 +17,8 @@ import gleam/int
 import gleam/list
 import gleam/result
 import oni_bitcoin.{
-  type Amount, type OutPoint, type Script, type Transaction,
-  type TxIn, type TxOut, Amount,
+  type Amount, type OutPoint, type Script, type Transaction, type TxIn,
+  type TxOut, Amount,
 }
 
 // ============================================================================
@@ -155,7 +155,10 @@ pub fn validate_transaction(
   use inputs_info <- result.try(gather_inputs(tx.inputs, utxo_view, 0, []))
 
   // Step 2: Check coinbase maturity
-  use _ <- result.try(check_coinbase_maturity(inputs_info, utxo_view.chain_height))
+  use _ <- result.try(check_coinbase_maturity(
+    inputs_info,
+    utxo_view.chain_height,
+  ))
 
   // Step 3: Calculate values and fee
   let inputs_value = calculate_total_value(inputs_info)
@@ -184,7 +187,11 @@ pub fn validate_transaction(
           use _ <- result.try(check_locktime(tx, utxo_view))
 
           // Step 8: Check relative locktimes (BIP 68)
-          use _ <- result.try(check_sequence_locks(tx.inputs, inputs_info, utxo_view))
+          use _ <- result.try(check_sequence_locks(
+            tx.inputs,
+            inputs_info,
+            utxo_view,
+          ))
 
           // Count unconfirmed ancestors
           let ancestor_count = count_unconfirmed_ancestors(inputs_info)
@@ -218,11 +225,7 @@ pub fn validate_inputs_exist(
 
 /// Information about a gathered input
 type InputInfo {
-  InputInfo(
-    index: Int,
-    utxo: UtxoInfo,
-    from_mempool: Bool,
-  )
+  InputInfo(index: Int, utxo: UtxoInfo, from_mempool: Bool)
 }
 
 /// Gather all input UTXOs, checking they exist
@@ -240,11 +243,13 @@ fn gather_inputs(
         UtxoNotFound -> Error(MissingInput(index, input.prevout))
         UtxoSpent -> Error(DoubleSpend(index, input.prevout))
         UtxoAvailable(info) -> {
-          let input_info = InputInfo(index: index, utxo: info, from_mempool: False)
+          let input_info =
+            InputInfo(index: index, utxo: info, from_mempool: False)
           gather_inputs(rest, utxo_view, index + 1, [input_info, ..acc])
         }
         UtxoInMempool(info) -> {
-          let input_info = InputInfo(index: index, utxo: info, from_mempool: True)
+          let input_info =
+            InputInfo(index: index, utxo: info, from_mempool: True)
           gather_inputs(rest, utxo_view, index + 1, [input_info, ..acc])
         }
       }
@@ -258,16 +263,12 @@ fn gather_inputs(
 
 /// Calculate total value of gathered inputs
 fn calculate_total_value(inputs: List(InputInfo)) -> Int {
-  list.fold(inputs, 0, fn(acc, input_info) {
-    acc + input_info.utxo.value.sats
-  })
+  list.fold(inputs, 0, fn(acc, input_info) { acc + input_info.utxo.value.sats })
 }
 
 /// Calculate total value of outputs
 fn calculate_outputs_value(outputs: List(TxOut)) -> Int {
-  list.fold(outputs, 0, fn(acc, output) {
-    acc + output.value.sats
-  })
+  list.fold(outputs, 0, fn(acc, output) { acc + output.value.sats })
 }
 
 /// Count inputs from unconfirmed parents (mempool ancestors)
@@ -305,7 +306,12 @@ fn check_coinbase_maturity_loop(
           let age = current_height - input_info.utxo.height
           case age >= coinbase_maturity {
             True -> check_coinbase_maturity_loop(rest, current_height)
-            False -> Error(PrematureCoinbaseSpend(input_info.index, age, coinbase_maturity))
+            False ->
+              Error(PrematureCoinbaseSpend(
+                input_info.index,
+                age,
+                coinbase_maturity,
+              ))
           }
         }
       }
@@ -323,9 +329,8 @@ fn check_locktime(
   utxo_view: UtxoView,
 ) -> Result(Nil, ValidationError) {
   // If all sequences are final, locktime is disabled
-  let all_final = list.all(tx.inputs, fn(input) {
-    input.sequence == sequence_final
-  })
+  let all_final =
+    list.all(tx.inputs, fn(input) { input.sequence == sequence_final })
 
   case all_final {
     True -> Ok(Nil)
@@ -337,14 +342,16 @@ fn check_locktime(
         True -> {
           case locktime <= utxo_view.chain_height {
             True -> Ok(Nil)
-            False -> Error(LocktimeNotSatisfied(locktime, utxo_view.chain_height))
+            False ->
+              Error(LocktimeNotSatisfied(locktime, utxo_view.chain_height))
           }
         }
         // Unix timestamp locktime
         False -> {
           case locktime <= utxo_view.median_time_past {
             True -> Ok(Nil)
-            False -> Error(LocktimeNotSatisfied(locktime, utxo_view.median_time_past))
+            False ->
+              Error(LocktimeNotSatisfied(locktime, utxo_view.median_time_past))
           }
         }
       }
@@ -377,7 +384,8 @@ fn check_sequence_locks_loop(
       use _ <- result.try(check_one_sequence_lock(input, info, utxo_view, index))
       check_sequence_locks_loop(rest_inputs, rest_info, utxo_view, index + 1)
     }
-    _, _ -> Ok(Nil)  // Mismatched lists - shouldn't happen
+    _, _ -> Ok(Nil)
+    // Mismatched lists - shouldn't happen
   }
 }
 
@@ -411,7 +419,12 @@ fn check_one_sequence_lock(
           let required_height = input_height + lock_value
           case utxo_view.chain_height >= required_height {
             True -> Ok(Nil)
-            False -> Error(SequenceNotSatisfied(index, required_height, utxo_view.chain_height))
+            False ->
+              Error(SequenceNotSatisfied(
+                index,
+                required_height,
+                utxo_view.chain_height,
+              ))
           }
         }
       }
@@ -428,11 +441,7 @@ pub fn simple_utxo_view(
   lookup_fn: fn(OutPoint) -> UtxoLookupResult,
   height: Int,
 ) -> UtxoView {
-  UtxoView(
-    lookup: lookup_fn,
-    chain_height: height,
-    median_time_past: 0,
-  )
+  UtxoView(lookup: lookup_fn, chain_height: height, median_time_past: 0)
 }
 
 /// Convert validation error to string
@@ -441,25 +450,40 @@ pub fn error_to_string(error: ValidationError) -> String {
     MissingInput(idx, _) -> "input " <> int.to_string(idx) <> " missing UTXO"
     DoubleSpend(idx, _) -> "input " <> int.to_string(idx) <> " double-spend"
     PrematureCoinbaseSpend(idx, age, req) ->
-      "input " <> int.to_string(idx) <> " coinbase not mature (age " <>
-      int.to_string(age) <> " < " <> int.to_string(req) <> ")"
+      "input "
+      <> int.to_string(idx)
+      <> " coinbase not mature (age "
+      <> int.to_string(age)
+      <> " < "
+      <> int.to_string(req)
+      <> ")"
     NegativeFee(inputs, outputs) ->
-      "negative fee: inputs " <> int.to_string(inputs) <> " < outputs " <>
-      int.to_string(outputs)
+      "negative fee: inputs "
+      <> int.to_string(inputs)
+      <> " < outputs "
+      <> int.to_string(outputs)
     FeeTooLow(fee, min_fee, _) ->
       "fee too low: " <> int.to_string(fee) <> " < " <> int.to_string(min_fee)
     LocktimeNotSatisfied(locktime, current) ->
-      "locktime not satisfied: " <> int.to_string(locktime) <> " > " <>
-      int.to_string(current)
+      "locktime not satisfied: "
+      <> int.to_string(locktime)
+      <> " > "
+      <> int.to_string(current)
     SequenceNotSatisfied(idx, req, actual) ->
-      "sequence lock on input " <> int.to_string(idx) <> " not satisfied: " <>
-      int.to_string(req) <> " > " <> int.to_string(actual)
+      "sequence lock on input "
+      <> int.to_string(idx)
+      <> " not satisfied: "
+      <> int.to_string(req)
+      <> " > "
+      <> int.to_string(actual)
     ScriptFailure(idx, reason) ->
       "script failed on input " <> int.to_string(idx) <> ": " <> reason
     AlreadyInMempool -> "transaction already in mempool"
     MempoolConflict(txid) -> "conflicts with mempool tx " <> txid
     TooManyUnconfirmedAncestors(count, max) ->
-      "too many unconfirmed ancestors: " <> int.to_string(count) <> " > " <>
-      int.to_string(max)
+      "too many unconfirmed ancestors: "
+      <> int.to_string(count)
+      <> " > "
+      <> int.to_string(max)
   }
 }

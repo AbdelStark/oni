@@ -225,8 +225,24 @@ fn init_buckets_recursive(
 
 fn generate_nonce() -> BitArray {
   // In production, use cryptographically secure random
-  <<0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0,
-    0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88>>
+  <<
+    0x12,
+    0x34,
+    0x56,
+    0x78,
+    0x9a,
+    0xbc,
+    0xde,
+    0xf0,
+    0x11,
+    0x22,
+    0x33,
+    0x44,
+    0x55,
+    0x66,
+    0x77,
+    0x88,
+  >>
 }
 
 // ============================================================================
@@ -246,35 +262,33 @@ pub fn add_address(
   case dict.get(manager.all_addresses, key) {
     Ok(existing) -> {
       // Update existing address
-      let updated = NetAddress(
-        ..existing,
-        last_seen: int.max(existing.last_seen, addr.last_seen),
-        ref_count: existing.ref_count + 1,
-        services: int.bitwise_or(existing.services, addr.services),
-      )
+      let updated =
+        NetAddress(
+          ..existing,
+          last_seen: int.max(existing.last_seen, addr.last_seen),
+          ref_count: existing.ref_count + 1,
+          services: int.bitwise_or(existing.services, addr.services),
+        )
       let new_all = dict.insert(manager.all_addresses, key, updated)
       AddressManager(..manager, all_addresses: new_all)
     }
     Error(_) -> {
       // New address - add to new table
-      let addr_with_meta = NetAddress(
-        ..addr,
-        source: source,
-        last_seen: current_time,
-        random_key: hash_for_random(key, manager.nonce),
-        asn: lookup_asn(manager.asmap, addr),
-      )
+      let addr_with_meta =
+        NetAddress(
+          ..addr,
+          source: source,
+          last_seen: current_time,
+          random_key: hash_for_random(key, manager.nonce),
+          asn: lookup_asn(manager.asmap, addr),
+        )
 
       // Calculate bucket for new table
       let bucket = new_bucket(addr_with_meta, source, manager.nonce)
 
       // Add to bucket (with eviction if needed)
-      let #(new_buckets, evicted) = add_to_bucket(
-        manager.new_buckets,
-        bucket,
-        key,
-        addr_with_meta,
-      )
+      let #(new_buckets, evicted) =
+        add_to_bucket(manager.new_buckets, bucket, key, addr_with_meta)
 
       // Update all_addresses
       let new_all = dict.insert(manager.all_addresses, key, addr_with_meta)
@@ -283,15 +297,17 @@ pub fn add_address(
         None -> new_all
       }
 
-      let new_stats = AddressManagerStats(
-        ..manager.stats,
-        new_count: manager.stats.new_count + 1,
-        added_count: manager.stats.added_count + 1,
-        evicted_count: manager.stats.evicted_count + case evicted {
-          Some(_) -> 1
-          None -> 0
-        },
-      )
+      let new_stats =
+        AddressManagerStats(
+          ..manager.stats,
+          new_count: manager.stats.new_count + 1,
+          added_count: manager.stats.added_count + 1,
+          evicted_count: manager.stats.evicted_count
+            + case evicted {
+              Some(_) -> 1
+              None -> 0
+            },
+        )
 
       AddressManager(
         ..manager,
@@ -312,16 +328,18 @@ pub fn mark_good(
   let key = address_key(addr)
 
   case dict.get(manager.all_addresses, key) {
-    Error(_) -> manager  // Unknown address
+    Error(_) -> manager
+    // Unknown address
     Ok(existing) -> {
       // Update address
-      let updated = NetAddress(
-        ..existing,
-        last_seen: current_time,
-        last_attempt: current_time,
-        attempts: 0,
-        is_connected: True,
-      )
+      let updated =
+        NetAddress(
+          ..existing,
+          last_seen: current_time,
+          last_attempt: current_time,
+          attempts: 0,
+          is_connected: True,
+        )
 
       // Move to tried table
       move_to_tried(manager, key, updated)
@@ -340,22 +358,24 @@ pub fn mark_bad(
   case dict.get(manager.all_addresses, key) {
     Error(_) -> manager
     Ok(existing) -> {
-      let updated = NetAddress(
-        ..existing,
-        last_attempt: current_time,
-        attempts: existing.attempts + 1,
-        is_connected: False,
-      )
+      let updated =
+        NetAddress(
+          ..existing,
+          last_attempt: current_time,
+          attempts: existing.attempts + 1,
+          is_connected: False,
+        )
 
       // Remove if too many failures
       case updated.attempts >= max_connection_attempts {
         True -> remove_address(manager, key)
         False -> {
           let new_all = dict.insert(manager.all_addresses, key, updated)
-          let new_stats = AddressManagerStats(
-            ..manager.stats,
-            failed_connections: manager.stats.failed_connections + 1,
-          )
+          let new_stats =
+            AddressManagerStats(
+              ..manager.stats,
+              failed_connections: manager.stats.failed_connections + 1,
+            )
           AddressManager(..manager, all_addresses: new_all, stats: new_stats)
         }
       }
@@ -386,9 +406,7 @@ fn remove_from_all_buckets(
   buckets: Dict(Int, Dict(String, NetAddress)),
   key: String,
 ) -> Dict(Int, Dict(String, NetAddress)) {
-  dict.map_values(buckets, fn(_bucket_id, bucket) {
-    dict.delete(bucket, key)
-  })
+  dict.map_values(buckets, fn(_bucket_id, bucket) { dict.delete(bucket, key) })
 }
 
 /// Move address from new to tried table
@@ -404,23 +422,29 @@ fn move_to_tried(
   let bucket = tried_bucket(addr, manager.nonce)
 
   // Add to tried bucket
-  let #(tried_buckets, evicted) = add_to_bucket(
-    manager.tried_buckets,
-    bucket,
-    key,
-    addr,
-  )
+  let #(tried_buckets, evicted) =
+    add_to_bucket(manager.tried_buckets, bucket, key, addr)
 
   // Handle eviction (move evicted back to new)
   let #(new_buckets, all_addresses) = case evicted {
     None -> #(new_buckets, dict.insert(manager.all_addresses, key, addr))
     Some(evicted_key) -> {
       case dict.get(manager.all_addresses, evicted_key) {
-        Error(_) -> #(new_buckets, dict.insert(manager.all_addresses, key, addr))
+        Error(_) -> #(
+          new_buckets,
+          dict.insert(manager.all_addresses, key, addr),
+        )
         Ok(evicted_addr) -> {
           // Move evicted to new table
-          let evicted_bucket = new_bucket(evicted_addr, evicted_addr.source, manager.nonce)
-          let #(updated_new, _) = add_to_bucket(new_buckets, evicted_bucket, evicted_key, evicted_addr)
+          let evicted_bucket =
+            new_bucket(evicted_addr, evicted_addr.source, manager.nonce)
+          let #(updated_new, _) =
+            add_to_bucket(
+              new_buckets,
+              evicted_bucket,
+              evicted_key,
+              evicted_addr,
+            )
           let updated_all = dict.insert(manager.all_addresses, key, addr)
           #(updated_new, updated_all)
         }
@@ -428,12 +452,13 @@ fn move_to_tried(
     }
   }
 
-  let new_stats = AddressManagerStats(
-    ..manager.stats,
-    tried_count: manager.stats.tried_count + 1,
-    new_count: int.max(0, manager.stats.new_count - 1),
-    successful_connections: manager.stats.successful_connections + 1,
-  )
+  let new_stats =
+    AddressManagerStats(
+      ..manager.stats,
+      tried_count: manager.stats.tried_count + 1,
+      new_count: int.max(0, manager.stats.new_count - 1),
+      successful_connections: manager.stats.successful_connections + 1,
+    )
 
   AddressManager(
     ..manager,
@@ -509,7 +534,8 @@ fn select_from_table(
       case dict.get(buckets, bucket_id) {
         Error(_) -> None
         Ok(bucket) -> {
-          let candidates = dict.values(bucket)
+          let candidates =
+            dict.values(bucket)
             |> list.filter(fn(addr) { is_selectable(addr, current_time) })
 
           case candidates {
@@ -566,7 +592,14 @@ fn select_diverse_impl(
           }
 
           case should_add {
-            False -> select_diverse_impl(manager, remaining, current_time + 1, selected, seen_asns)
+            False ->
+              select_diverse_impl(
+                manager,
+                remaining,
+                current_time + 1,
+                selected,
+                seen_asns,
+              )
             True -> {
               let new_seen = case addr.asn {
                 None -> seen_asns
@@ -575,7 +608,13 @@ fn select_diverse_impl(
                   dict.insert(seen_asns, asn, current_count + 1)
                 }
               }
-              select_diverse_impl(manager, remaining - 1, current_time + 1, [addr, ..selected], new_seen)
+              select_diverse_impl(
+                manager,
+                remaining - 1,
+                current_time + 1,
+                [addr, ..selected],
+                new_seen,
+              )
             }
           }
         }
@@ -631,7 +670,10 @@ fn lookup_asn_impl(asmap: ASMap, addr: BitArray) -> Option(Int) {
   }
 }
 
-fn decode_asn_from_trie(_trie_data: BitArray, _addr: BitArray) -> Result(Int, Nil) {
+fn decode_asn_from_trie(
+  _trie_data: BitArray,
+  _addr: BitArray,
+) -> Result(Int, Nil) {
   // Simplified - in production would walk the compressed trie
   // Return a hash-based ASN for simulation
   Error(Nil)
@@ -740,7 +782,8 @@ fn add_to_bucket(
           // Need to evict
           let evicted = select_for_eviction(bucket)
           case evicted {
-            None -> #(buckets, None)  // Can't evict, don't add
+            None -> #(buckets, None)
+            // Can't evict, don't add
             Some(evicted_key) -> {
               let new_bucket = dict.delete(bucket, evicted_key)
               let new_bucket = dict.insert(new_bucket, key, addr)
@@ -758,11 +801,12 @@ fn select_for_eviction(bucket: Dict(String, NetAddress)) -> Option(String) {
   let entries = dict.to_list(bucket)
 
   // Sort by last_seen (oldest first)
-  let sorted = list.sort(entries, fn(a, b) {
-    let #(_, addr_a) = a
-    let #(_, addr_b) = b
-    int.compare(addr_a.last_seen, addr_b.last_seen)
-  })
+  let sorted =
+    list.sort(entries, fn(a, b) {
+      let #(_, addr_a) = a
+      let #(_, addr_b) = b
+      int.compare(addr_a.last_seen, addr_b.last_seen)
+    })
 
   case sorted {
     [] -> None
@@ -781,9 +825,10 @@ pub fn serialize(manager: AddressManager) -> BitArray {
 
   let header = <<count:32-little>>
 
-  let addr_data = list.fold(addresses, <<>>, fn(acc, addr) {
-    bit_array.concat([acc, serialize_address(addr)])
-  })
+  let addr_data =
+    list.fold(addresses, <<>>, fn(acc, addr) {
+      bit_array.concat([acc, serialize_address(addr)])
+    })
 
   bit_array.concat([header, manager.nonce, addr_data])
 }
@@ -815,9 +860,10 @@ pub fn deserialize(data: BitArray) -> Result(AddressManager, String) {
           let manager = AddressManager(..new(), nonce: nonce)
 
           // Add all addresses
-          let final_manager = list.fold(addresses, manager, fn(mgr, addr) {
-            add_address(mgr, addr, None, addr.last_seen)
-          })
+          let final_manager =
+            list.fold(addresses, manager, fn(mgr, addr) {
+              add_address(mgr, addr, None, addr.last_seen)
+            })
 
           Ok(final_manager)
         }
@@ -845,31 +891,39 @@ fn deserialize_addresses(
   }
 }
 
-fn deserialize_single_address(data: BitArray) -> Result(#(NetAddress, BitArray), String) {
+fn deserialize_single_address(
+  data: BitArray,
+) -> Result(#(NetAddress, BitArray), String) {
   case data {
     <<network_byte:8, addr_len:8, rest:bits>> -> {
       case extract_bytes(rest, addr_len) {
         Error(_) -> Error("Invalid address data")
         Ok(#(addr_bytes, rest2)) -> {
           case rest2 {
-            <<port:16-little, services:64-little,
-              last_seen:64-little, last_attempt:64-little,
-              attempts:32-little, ref_count:32-little,
-              remaining:bits>> -> {
-              let addr = NetAddress(
-                network: byte_to_network(network_byte),
-                addr: addr_bytes,
-                port: port,
-                services: services,
-                last_seen: last_seen,
-                last_attempt: last_attempt,
-                attempts: attempts,
-                source: None,
-                ref_count: ref_count,
-                random_key: 0,
-                is_connected: False,
-                asn: None,
-              )
+            <<
+              port:16-little,
+              services:64-little,
+              last_seen:64-little,
+              last_attempt:64-little,
+              attempts:32-little,
+              ref_count:32-little,
+              remaining:bits,
+            >> -> {
+              let addr =
+                NetAddress(
+                  network: byte_to_network(network_byte),
+                  addr: addr_bytes,
+                  port: port,
+                  services: services,
+                  last_seen: last_seen,
+                  last_attempt: last_attempt,
+                  attempts: attempts,
+                  source: None,
+                  ref_count: ref_count,
+                  random_key: 0,
+                  is_connected: False,
+                  asn: None,
+                )
               Ok(#(addr, remaining))
             }
             _ -> Error("Invalid address metadata")
@@ -919,8 +973,13 @@ fn format_address(addr: NetAddress) -> String {
 fn format_ipv4(addr: BitArray) -> String {
   case addr {
     <<a:8, b:8, c:8, d:8>> ->
-      int.to_string(a) <> "." <> int.to_string(b) <> "." <>
-      int.to_string(c) <> "." <> int.to_string(d)
+      int.to_string(a)
+      <> "."
+      <> int.to_string(b)
+      <> "."
+      <> int.to_string(c)
+      <> "."
+      <> int.to_string(d)
     _ -> "0.0.0.0"
   }
 }

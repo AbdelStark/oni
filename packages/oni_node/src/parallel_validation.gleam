@@ -68,12 +68,7 @@ pub fn default_config() -> PipelineConfig {
 
 /// Block validation job
 pub type ValidationJob {
-  ValidationJob(
-    hash: BlockHash,
-    block: Block,
-    height: Int,
-    priority: Int,
-  )
+  ValidationJob(hash: BlockHash, block: Block, height: Int, priority: Int)
 }
 
 /// Validation result
@@ -101,10 +96,7 @@ pub type WorkerTask {
 
 /// Transaction output reference for validation
 pub type TxOut {
-  TxOut(
-    script_pubkey: BitArray,
-    amount: Int,
-  )
+  TxOut(script_pubkey: BitArray, amount: Int)
 }
 
 /// Worker result
@@ -234,15 +226,16 @@ pub fn start(
   // Create worker pool
   let workers = create_worker_pool(config.num_workers)
 
-  let initial_state = PipelineState(
-    config: config,
-    blocks: dict.new(),
-    height_order: [],
-    next_connect_height: 0,
-    workers: workers,
-    connect_queue: [],
-    stats: empty_stats(),
-  )
+  let initial_state =
+    PipelineState(
+      config: config,
+      blocks: dict.new(),
+      height_order: [],
+      next_connect_height: 0,
+      workers: workers,
+      connect_queue: [],
+      stats: empty_stats(),
+    )
 
   actor.start(initial_state, handle_pipeline_msg)
 }
@@ -333,34 +326,34 @@ fn handle_submit_block(
 
   // Check if already in pipeline
   case dict.get(state.blocks, hash_hex) {
-    Ok(_) -> state  // Already processing
+    Ok(_) -> state
+    // Already processing
     Error(_) -> {
       // Check backpressure
       case dict.size(state.blocks) >= state.config.max_pending_blocks {
-        True -> state  // Pipeline full, drop block (will be re-requested)
+        True -> state
+        // Pipeline full, drop block (will be re-requested)
         False -> {
           // Create pipeline entry
           let tx_count = list.length(block.transactions)
-          let entry = PipelineBlock(
-            hash: hash,
-            block: Some(block),
-            height: height,
-            stage: StagePreValidation,
-            started_at: now_ms(),
-            tx_validation_results: dict.new(),
-            total_txs: tx_count,
-            validated_txs: 0,
-          )
+          let entry =
+            PipelineBlock(
+              hash: hash,
+              block: Some(block),
+              height: height,
+              stage: StagePreValidation,
+              started_at: now_ms(),
+              tx_validation_results: dict.new(),
+              total_txs: tx_count,
+              validated_txs: 0,
+            )
 
           // Add to pipeline
           let new_blocks = dict.insert(state.blocks, hash_hex, entry)
           let new_order = insert_sorted(state.height_order, height)
 
-          let new_state = PipelineState(
-            ..state,
-            blocks: new_blocks,
-            height_order: new_order,
-          )
+          let new_state =
+            PipelineState(..state, blocks: new_blocks, height_order: new_order)
 
           // Start validation
           start_block_validation(hash, block, height, new_state)
@@ -380,18 +373,21 @@ fn start_block_validation(
   let config = state.config
 
   // Check if we can skip script validation (before checkpoint)
-  case config.skip_scripts_before_checkpoint && height <= config.checkpoint_height {
+  case
+    config.skip_scripts_before_checkpoint && height <= config.checkpoint_height
+  {
     True -> {
       // Fast path: skip script validation for checkpointed blocks
       // Just validate header and merkle root
       let hash_hex = oni_bitcoin.block_hash_to_hex(hash)
       case dict.get(state.blocks, hash_hex) {
         Ok(entry) -> {
-          let updated = PipelineBlock(
-            ..entry,
-            stage: StageWaitingConnect,
-            validated_txs: entry.total_txs,
-          )
+          let updated =
+            PipelineBlock(
+              ..entry,
+              stage: StageWaitingConnect,
+              validated_txs: entry.total_txs,
+            )
           let new_blocks = dict.insert(state.blocks, hash_hex, updated)
           let new_queue = add_to_connect_queue(hash, state.connect_queue)
           PipelineState(..state, blocks: new_blocks, connect_queue: new_queue)
@@ -424,11 +420,12 @@ fn start_parallel_tx_validation(
   let hash_hex = oni_bitcoin.block_hash_to_hex(hash)
   case dict.get(state.blocks, hash_hex) {
     Ok(entry) -> {
-      let updated = PipelineBlock(
-        ..entry,
-        stage: StageWaitingConnect,
-        validated_txs: entry.total_txs,
-      )
+      let updated =
+        PipelineBlock(
+          ..entry,
+          stage: StageWaitingConnect,
+          validated_txs: entry.total_txs,
+        )
       let new_blocks = dict.insert(state.blocks, hash_hex, updated)
       let new_queue = add_to_connect_queue(hash, state.connect_queue)
       PipelineState(..state, blocks: new_blocks, connect_queue: new_queue)
@@ -456,19 +453,22 @@ fn handle_worker_complete(
   let hash_hex = oni_bitcoin.block_hash_to_hex(block_hash)
 
   case dict.get(state.blocks, hash_hex) {
-    Error(_) -> state  // Block no longer in pipeline
+    Error(_) -> state
+    // Block no longer in pipeline
     Ok(entry) -> {
       case result {
         TxScriptsValid(tx_index) -> {
           // Mark transaction as validated
-          let new_results = dict.insert(entry.tx_validation_results, tx_index, True)
+          let new_results =
+            dict.insert(entry.tx_validation_results, tx_index, True)
           let new_validated = entry.validated_txs + 1
 
-          let updated = PipelineBlock(
-            ..entry,
-            tx_validation_results: new_results,
-            validated_txs: new_validated,
-          )
+          let updated =
+            PipelineBlock(
+              ..entry,
+              tx_validation_results: new_results,
+              validated_txs: new_validated,
+            )
 
           // Check if all txs validated
           let final_entry = case new_validated >= entry.total_txs {
@@ -481,8 +481,13 @@ fn handle_worker_complete(
           // Add to connect queue if ready
           case final_entry.stage {
             StageWaitingConnect -> {
-              let new_queue = add_to_connect_queue(block_hash, state.connect_queue)
-              PipelineState(..state, blocks: new_blocks, connect_queue: new_queue)
+              let new_queue =
+                add_to_connect_queue(block_hash, state.connect_queue)
+              PipelineState(
+                ..state,
+                blocks: new_blocks,
+                connect_queue: new_queue,
+              )
             }
             _ -> PipelineState(..state, blocks: new_blocks)
           }
@@ -490,28 +495,34 @@ fn handle_worker_complete(
 
         TxScriptsInvalid(tx_index, reason) -> {
           // Mark block as failed
-          let updated = PipelineBlock(
-            ..entry,
-            stage: StageFailed("tx " <> int.to_string(tx_index) <> ": " <> reason),
-          )
+          let updated =
+            PipelineBlock(
+              ..entry,
+              stage: StageFailed(
+                "tx " <> int.to_string(tx_index) <> ": " <> reason,
+              ),
+            )
           let new_blocks = dict.insert(state.blocks, hash_hex, updated)
-          let new_stats = PipelineStats(
-            ..state.stats,
-            blocks_failed: state.stats.blocks_failed + 1,
-          )
+          let new_stats =
+            PipelineStats(
+              ..state.stats,
+              blocks_failed: state.stats.blocks_failed + 1,
+            )
           PipelineState(..state, blocks: new_blocks, stats: new_stats)
         }
 
         MerkleRootValid -> state
         MerkleRootInvalid -> {
-          let updated = PipelineBlock(..entry, stage: StageFailed("invalid merkle root"))
+          let updated =
+            PipelineBlock(..entry, stage: StageFailed("invalid merkle root"))
           let new_blocks = dict.insert(state.blocks, hash_hex, updated)
           PipelineState(..state, blocks: new_blocks)
         }
 
         PoWValid -> state
         PoWInvalid -> {
-          let updated = PipelineBlock(..entry, stage: StageFailed("invalid PoW"))
+          let updated =
+            PipelineBlock(..entry, stage: StageFailed("invalid PoW"))
           let new_blocks = dict.insert(state.blocks, hash_hex, updated)
           PipelineState(..state, blocks: new_blocks)
         }
@@ -572,12 +583,14 @@ fn handle_block_connected(
         True -> {
           // Remove from pipeline, update stats
           let new_blocks = dict.delete(state.blocks, hash_hex)
-          let new_order = list.filter(state.height_order, fn(h) { h != entry.height })
-          let new_stats = PipelineStats(
-            ..state.stats,
-            blocks_connected: state.stats.blocks_connected + 1,
-            txs_validated: state.stats.txs_validated + entry.total_txs,
-          )
+          let new_order =
+            list.filter(state.height_order, fn(h) { h != entry.height })
+          let new_stats =
+            PipelineStats(
+              ..state.stats,
+              blocks_connected: state.stats.blocks_connected + 1,
+              txs_validated: state.stats.txs_validated + entry.total_txs,
+            )
 
           PipelineState(
             ..state,
@@ -589,12 +602,14 @@ fn handle_block_connected(
         }
         False -> {
           // Connection failed
-          let updated = PipelineBlock(..entry, stage: StageFailed("connect failed"))
+          let updated =
+            PipelineBlock(..entry, stage: StageFailed("connect failed"))
           let new_blocks = dict.insert(state.blocks, hash_hex, updated)
-          let new_stats = PipelineStats(
-            ..state.stats,
-            blocks_failed: state.stats.blocks_failed + 1,
-          )
+          let new_stats =
+            PipelineStats(
+              ..state.stats,
+              blocks_failed: state.stats.blocks_failed + 1,
+            )
           PipelineState(..state, blocks: new_blocks, stats: new_stats)
         }
       }
@@ -633,11 +648,7 @@ fn build_status(state: PipelineState) -> PipelineStatus {
 
 /// Stage counts
 type StageCounts {
-  StageCounts(
-    downloading: Int,
-    validating: Int,
-    connecting: Int,
-  )
+  StageCounts(downloading: Int, validating: Int, connecting: Int)
 }
 
 /// Count blocks by stage
@@ -672,7 +683,10 @@ fn insert_sorted(heights: List(Int), height: Int) -> List(Int) {
 }
 
 /// Add hash to connect queue (maintain order)
-fn add_to_connect_queue(hash: BlockHash, queue: List(BlockHash)) -> List(BlockHash) {
+fn add_to_connect_queue(
+  hash: BlockHash,
+  queue: List(BlockHash),
+) -> List(BlockHash) {
   list.append(queue, [hash])
 }
 
@@ -722,81 +736,75 @@ pub type UtxoBatch {
 
 /// UTXO to add
 pub type UtxoAdd {
-  UtxoAdd(
-    outpoint: OutPoint,
-    output: TxOut,
-    is_coinbase: Bool,
-  )
+  UtxoAdd(outpoint: OutPoint, output: TxOut, is_coinbase: Bool)
 }
 
 /// UTXO to spend
 pub type UtxoSpend {
-  UtxoSpend(
-    outpoint: OutPoint,
-  )
+  UtxoSpend(outpoint: OutPoint)
 }
 
 /// Transaction outpoint
 pub type OutPoint {
-  OutPoint(
-    txid: BitArray,
-    vout: Int,
-  )
+  OutPoint(txid: BitArray, vout: Int)
 }
 
 /// Create a UTXO batch from a block
 pub fn create_utxo_batch(block: Block, height: Int) -> UtxoBatch {
-  let #(adds, spends) = list.fold(
-    list.index_map(block.transactions, fn(tx: oni_bitcoin.Transaction, idx) { #(tx, idx) }),
-    #([], []),
-    fn(acc, indexed_tx: #(oni_bitcoin.Transaction, Int)) {
-      let #(tx, tx_idx) = indexed_tx
-      let #(all_adds, all_spends) = acc
-      let is_coinbase = tx_idx == 0
-      let tx_txid = oni_bitcoin.txid_from_tx(tx)
+  let #(adds, spends) =
+    list.fold(
+      list.index_map(block.transactions, fn(tx: oni_bitcoin.Transaction, idx) {
+        #(tx, idx)
+      }),
+      #([], []),
+      fn(acc, indexed_tx: #(oni_bitcoin.Transaction, Int)) {
+        let #(tx, tx_idx) = indexed_tx
+        let #(all_adds, all_spends) = acc
+        let is_coinbase = tx_idx == 0
+        let tx_txid = oni_bitcoin.txid_from_tx(tx)
 
-      // Add outputs
-      let new_adds = list.index_map(tx.outputs, fn(output: oni_bitcoin.TxOut, vout) {
-        UtxoAdd(
-          outpoint: OutPoint(txid: tx_txid.hash.bytes, vout: vout),
-          output: TxOut(
-            script_pubkey: output.script_pubkey.bytes,
-            amount: output.value.sats,
-          ),
-          is_coinbase: is_coinbase,
-        )
-      })
+        // Add outputs
+        let new_adds =
+          list.index_map(tx.outputs, fn(output: oni_bitcoin.TxOut, vout) {
+            UtxoAdd(
+              outpoint: OutPoint(txid: tx_txid.hash.bytes, vout: vout),
+              output: TxOut(
+                script_pubkey: output.script_pubkey.bytes,
+                amount: output.value.sats,
+              ),
+              is_coinbase: is_coinbase,
+            )
+          })
 
-      // Spend inputs (skip coinbase)
-      let new_spends = case is_coinbase {
-        True -> []
-        False -> list.map(tx.inputs, fn(input: oni_bitcoin.TxIn) {
-          UtxoSpend(
-            outpoint: OutPoint(
-              txid: input.prevout.txid.hash.bytes,
-              vout: input.prevout.vout,
-            ),
-          )
-        })
-      }
+        // Spend inputs (skip coinbase)
+        let new_spends = case is_coinbase {
+          True -> []
+          False ->
+            list.map(tx.inputs, fn(input: oni_bitcoin.TxIn) {
+              UtxoSpend(outpoint: OutPoint(
+                txid: input.prevout.txid.hash.bytes,
+                vout: input.prevout.vout,
+              ))
+            })
+        }
 
-      #(list.append(all_adds, new_adds), list.append(all_spends, new_spends))
-    }
-  )
+        #(list.append(all_adds, new_adds), list.append(all_spends, new_spends))
+      },
+    )
 
   UtxoBatch(adds: adds, spends: spends, height: height)
 }
 
 /// Merge multiple UTXO batches for efficient bulk updates
 pub fn merge_batches(batches: List(UtxoBatch)) -> UtxoBatch {
-  let #(all_adds, all_spends) = list.fold(batches, #([], []), fn(acc, batch) {
-    let #(adds, spends) = acc
-    #(list.append(adds, batch.adds), list.append(spends, batch.spends))
-  })
+  let #(all_adds, all_spends) =
+    list.fold(batches, #([], []), fn(acc, batch) {
+      let #(adds, spends) = acc
+      #(list.append(adds, batch.adds), list.append(spends, batch.spends))
+    })
 
-  let max_height = list.fold(batches, 0, fn(acc, batch) {
-    int.max(acc, batch.height)
-  })
+  let max_height =
+    list.fold(batches, 0, fn(acc, batch) { int.max(acc, batch.height) })
 
   UtxoBatch(adds: all_adds, spends: all_spends, height: max_height)
 }

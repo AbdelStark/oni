@@ -2,14 +2,13 @@
 //
 // These tests verify the dets-based persistent storage layer.
 
+import db_backend.{
+  BatchDelete, BatchPut, Closed, KeyNotFound, db_batch, db_close, db_count,
+  db_delete, db_get, db_get_schema_version, db_has, db_keys, db_open, db_put,
+  db_set_schema_version, db_sync, default_options,
+}
 import gleeunit
 import gleeunit/should
-import db_backend.{
-  BatchDelete, BatchPut, Closed, KeyNotFound,
-  db_batch, db_close, db_count, db_delete, db_get, db_get_schema_version,
-  db_has, db_keys, db_open, db_put, db_set_schema_version, db_sync,
-  default_options,
-}
 
 pub fn main() {
   gleeunit.main()
@@ -236,9 +235,12 @@ pub fn db_batch_mixed_test() {
 
   // Batch with mixed operations
   let ops = [
-    BatchPut(<<"c">>, <<"3">>),    // Add new
-    BatchDelete(<<"a">>),          // Delete existing
-    BatchPut(<<"b">>, <<"22">>),   // Update existing
+    BatchPut(<<"c">>, <<"3">>),
+    // Add new
+    BatchDelete(<<"a">>),
+    // Delete existing
+    BatchPut(<<"b">>, <<"22">>),
+    // Update existing
   ]
 
   let assert Ok(_) = db_batch(handle, ops)
@@ -367,7 +369,8 @@ pub fn db_data_persists_test() {
 
   // Write data
   let assert Ok(handle1) = db_open(path, default_options())
-  let assert Ok(_) = db_put(handle1, <<"persistent_key">>, <<"persistent_value">>)
+  let assert Ok(_) =
+    db_put(handle1, <<"persistent_key">>, <<"persistent_value">>)
   let assert Ok(_) = db_sync(handle1)
   let assert Ok(_) = db_close(handle1)
 
@@ -392,11 +395,8 @@ pub fn db_operations_fail_on_closed_test() {
   let assert Ok(_) = db_close(handle)
 
   // Create a closed handle manually (is_open = False)
-  let closed_handle = db_backend.DbHandle(
-    name: handle.name,
-    path: handle.path,
-    is_open: False,
-  )
+  let closed_handle =
+    db_backend.DbHandle(name: handle.name, path: handle.path, is_open: False)
 
   // Operations should fail
   should.equal(db_get(closed_handle, <<"key">>), Error(Closed))
@@ -441,11 +441,11 @@ pub fn db_large_value_test() {
 
   // Create a larger value (simulating a serialized block)
   let key = <<"large_block">>
-  let value = create_large_value(10000)
+  let value = create_large_value(10_000)
 
   let assert Ok(_) = db_put(handle, key, value)
   let assert Ok(result) = db_get(handle, key)
-  should.equal(bit_array_size(result), 10000)
+  should.equal(bit_array_size(result), 10_000)
 
   let assert Ok(_) = db_close(handle)
   cleanup_db(path)

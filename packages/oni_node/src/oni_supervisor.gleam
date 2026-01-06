@@ -14,9 +14,9 @@ import gleam/dict.{type Dict}
 import gleam/erlang/process.{type Subject}
 import gleam/int
 import gleam/list
+import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
 import gleam/otp/supervisor
-import gleam/option.{type Option, None, Some}
 import oni_bitcoin
 import oni_storage.{type Storage}
 
@@ -90,12 +90,13 @@ pub fn start_chainstate(
   // Initialize storage with genesis
   let storage = oni_storage.storage_new(params.genesis_hash)
 
-  let initial_state = ChainstateState(
-    tip_hash: Some(params.genesis_hash),
-    tip_height: 0,
-    network: network,
-    storage: storage,
-  )
+  let initial_state =
+    ChainstateState(
+      tip_hash: Some(params.genesis_hash),
+      tip_height: 0,
+      network: network,
+      storage: storage,
+    )
 
   actor.start(initial_state, handle_chainstate_msg)
 }
@@ -126,14 +127,22 @@ fn handle_chainstate_msg(
       let new_height = state.tip_height + 1
 
       // Connect block using storage layer
-      case oni_storage.storage_connect_block(state.storage, block, block_hash, new_height) {
+      case
+        oni_storage.storage_connect_block(
+          state.storage,
+          block,
+          block_hash,
+          new_height,
+        )
+      {
         Ok(#(new_storage, _undo)) -> {
-          let new_state = ChainstateState(
-            ..state,
-            tip_hash: Some(block_hash),
-            tip_height: new_height,
-            storage: new_storage,
-          )
+          let new_state =
+            ChainstateState(
+              ..state,
+              tip_hash: Some(block_hash),
+              tip_height: new_height,
+              storage: new_storage,
+            )
           process.send(reply, Ok(Nil))
           actor.continue(new_state)
         }
@@ -153,12 +162,13 @@ fn handle_chainstate_msg(
             Ok(new_storage) -> {
               let new_tip = oni_storage.storage_get_tip(new_storage)
               let new_height = oni_storage.storage_get_height(new_storage)
-              let new_state = ChainstateState(
-                ..state,
-                tip_hash: Some(new_tip),
-                tip_height: new_height,
-                storage: new_storage,
-              )
+              let new_state =
+                ChainstateState(
+                  ..state,
+                  tip_hash: Some(new_tip),
+                  tip_height: new_height,
+                  storage: new_storage,
+                )
               process.send(reply, Ok(Nil))
               actor.continue(new_state)
             }
@@ -181,12 +191,13 @@ fn handle_chainstate_msg(
       case oni_storage.storage_get_utxo(state.storage, outpoint) {
         Some(coin) -> {
           // Convert storage Coin to CoinInfo
-          let coin_info = CoinInfo(
-            value: coin.output.value,
-            script_pubkey: coin.output.script_pubkey,
-            height: coin.height,
-            is_coinbase: coin.is_coinbase,
-          )
+          let coin_info =
+            CoinInfo(
+              value: coin.output.value,
+              script_pubkey: coin.output.script_pubkey,
+              height: coin.height,
+              is_coinbase: coin.is_coinbase,
+            )
           process.send(reply, Some(coin_info))
         }
         None -> {
@@ -281,11 +292,7 @@ pub type MempoolState {
 pub fn start_mempool(
   max_size: Int,
 ) -> Result(Subject(MempoolMsg), actor.StartError) {
-  let initial_state = MempoolState(
-    txs: dict.new(),
-    size: 0,
-    max_size: max_size,
-  )
+  let initial_state = MempoolState(txs: dict.new(), size: 0, max_size: max_size)
 
   actor.start(initial_state, handle_mempool_msg)
 }
@@ -322,11 +329,8 @@ fn handle_mempool_msg(
                 }
                 False -> {
                   let new_txs = dict.insert(state.txs, txid_hex, tx)
-                  let new_state = MempoolState(
-                    ..state,
-                    txs: new_txs,
-                    size: state.size + 1,
-                  )
+                  let new_state =
+                    MempoolState(..state, txs: new_txs, size: state.size + 1)
                   process.send(reply, Ok(Nil))
                   actor.continue(new_state)
                 }
@@ -343,11 +347,8 @@ fn handle_mempool_msg(
         False -> actor.continue(state)
         True -> {
           let new_txs = dict.delete(state.txs, txid_hex)
-          let new_state = MempoolState(
-            ..state,
-            txs: new_txs,
-            size: state.size - 1,
-          )
+          let new_state =
+            MempoolState(..state, txs: new_txs, size: state.size - 1)
           actor.continue(new_state)
         }
       }
@@ -360,28 +361,26 @@ fn handle_mempool_msg(
 
     GetTxids(reply) -> {
       // Extract txids from the dict keys
-      let txids = dict.fold(state.txs, [], fn(acc, txid_hex, _tx) {
-        case oni_bitcoin.txid_from_hex(txid_hex) {
-          Ok(txid) -> [txid, ..acc]
-          Error(_) -> acc
-        }
-      })
+      let txids =
+        dict.fold(state.txs, [], fn(acc, txid_hex, _tx) {
+          case oni_bitcoin.txid_from_hex(txid_hex) {
+            Ok(txid) -> [txid, ..acc]
+            Error(_) -> acc
+          }
+        })
       process.send(reply, txids)
       actor.continue(state)
     }
 
     ClearConfirmed(txids) -> {
       // Remove all confirmed transactions from mempool
-      let new_txs = list.fold(txids, state.txs, fn(txs, txid) {
-        let txid_hex = oni_bitcoin.txid_to_hex(txid)
-        dict.delete(txs, txid_hex)
-      })
+      let new_txs =
+        list.fold(txids, state.txs, fn(txs, txid) {
+          let txid_hex = oni_bitcoin.txid_to_hex(txid)
+          dict.delete(txs, txid_hex)
+        })
       let new_size = dict.size(new_txs)
-      let new_state = MempoolState(
-        ..state,
-        txs: new_txs,
-        size: new_size,
-      )
+      let new_state = MempoolState(..state, txs: new_txs, size: new_size)
       actor.continue(new_state)
     }
 
@@ -415,13 +414,18 @@ fn validate_tx_basic(tx: oni_bitcoin.Transaction) -> Result(Nil, String) {
 }
 
 /// Build template data from mempool state
-fn build_template_data(state: MempoolState, height: Int, _bits: Int) -> MempoolTemplateData {
+fn build_template_data(
+  state: MempoolState,
+  height: Int,
+  _bits: Int,
+) -> MempoolTemplateData {
   // Get transactions sorted by some fee metric (simplified)
   let txs = dict.values(state.txs)
 
   // Calculate subsidy
   let halving_interval = 210_000
-  let initial_subsidy = 5_000_000_000  // 50 BTC
+  let initial_subsidy = 5_000_000_000
+  // 50 BTC
   let halvings = height / halving_interval
   let _subsidy = case halvings >= 64 {
     True -> 0
@@ -457,7 +461,8 @@ fn build_template_txs(
       // Estimate tx weight and sigops
       let tx_weight = oni_bitcoin.tx_weight(tx)
       let tx_sigops = list.length(tx.inputs) + list.length(tx.outputs)
-      let tx_fee = 1000  // Placeholder fee (would come from mempool entry)
+      let tx_fee = 1000
+      // Placeholder fee (would come from mempool entry)
 
       // Check if fits
       case weight + tx_weight <= max_weight {
@@ -468,15 +473,17 @@ fn build_template_txs(
           let wtxid = oni_bitcoin.wtxid_from_tx(tx)
           let tx_data = oni_bitcoin.encode_tx(tx)
 
-          let info = TemplateTxInfo(
-            data_hex: oni_bitcoin.hex_encode(tx_data),
-            txid_hex: oni_bitcoin.txid_to_hex(txid),
-            hash_hex: oni_bitcoin.hash256_to_hex(wtxid.hash),
-            fee: tx_fee,
-            sigops: tx_sigops,
-            weight: tx_weight,
-            depends: [],  // Simplified - no dependency tracking
-          )
+          let info =
+            TemplateTxInfo(
+              data_hex: oni_bitcoin.hex_encode(tx_data),
+              txid_hex: oni_bitcoin.txid_to_hex(txid),
+              hash_hex: oni_bitcoin.hash256_to_hex(wtxid.hash),
+              fee: tx_fee,
+              sigops: tx_sigops,
+              weight: tx_weight,
+              depends: [],
+              // Simplified - no dependency tracking
+            )
 
           build_template_txs(
             rest,
@@ -533,14 +540,14 @@ pub type SyncState {
 }
 
 /// Start the sync coordinator actor
-pub fn start_sync(
-) -> Result(Subject(SyncMsg), actor.StartError) {
-  let initial_state = SyncState(
-    state: "idle",
-    headers_height: 0,
-    blocks_height: 0,
-    syncing_from: None,
-  )
+pub fn start_sync() -> Result(Subject(SyncMsg), actor.StartError) {
+  let initial_state =
+    SyncState(
+      state: "idle",
+      headers_height: 0,
+      blocks_height: 0,
+      syncing_from: None,
+    )
 
   actor.start(initial_state, handle_sync_msg)
 }
@@ -551,27 +558,23 @@ fn handle_sync_msg(
 ) -> actor.Next(SyncMsg, SyncState) {
   case msg {
     StartSync(peer_id) -> {
-      let new_state = SyncState(
-        ..state,
-        state: "syncing_headers",
-        syncing_from: Some(peer_id),
-      )
+      let new_state =
+        SyncState(
+          ..state,
+          state: "syncing_headers",
+          syncing_from: Some(peer_id),
+        )
       actor.continue(new_state)
     }
 
     OnHeaders(_peer_id, count) -> {
-      let new_state = SyncState(
-        ..state,
-        headers_height: state.headers_height + count,
-      )
+      let new_state =
+        SyncState(..state, headers_height: state.headers_height + count)
       actor.continue(new_state)
     }
 
     OnBlock(_hash) -> {
-      let new_state = SyncState(
-        ..state,
-        blocks_height: state.blocks_height + 1,
-      )
+      let new_state = SyncState(..state, blocks_height: state.blocks_height + 1)
       actor.continue(new_state)
     }
 
@@ -580,12 +583,13 @@ fn handle_sync_msg(
         Some(_) -> 1
         None -> 0
       }
-      let status = SyncStatus(
-        state: state.state,
-        headers_height: state.headers_height,
-        blocks_height: state.blocks_height,
-        peers_syncing: peers,
-      )
+      let status =
+        SyncStatus(
+          state: state.state,
+          headers_height: state.headers_height,
+          blocks_height: state.blocks_height,
+          peers_syncing: peers,
+        )
       process.send(reply, status)
       actor.continue(state)
     }
@@ -610,23 +614,22 @@ pub fn start_node(
   network: oni_bitcoin.Network,
 ) -> Result(Subject(supervisor.Message), actor.StartError) {
   // Define the supervisor specification
-  let spec = supervisor.Spec(
-    argument: network,
-    max_frequency: 5,
-    frequency_period: 1,
-    init: fn(children) {
-      // Start chainstate
-      children
-      |> supervisor.add(supervisor.worker(fn(net) {
-        start_chainstate(net)
-      }))
-      // Note: In a full implementation, we would add more children here:
-      // - Mempool
-      // - Sync coordinator
-      // - P2P manager
-      // - RPC server
-    },
-  )
+  let spec =
+    supervisor.Spec(
+      argument: network,
+      max_frequency: 5,
+      frequency_period: 1,
+      init: fn(children) {
+        // Start chainstate
+        children
+        |> supervisor.add(supervisor.worker(fn(net) { start_chainstate(net) }))
+        // Note: In a full implementation, we would add more children here:
+        // - Mempool
+        // - Sync coordinator
+        // - P2P manager
+        // - RPC server
+      },
+    )
 
   supervisor.start_spec(spec)
 }
@@ -651,6 +654,7 @@ pub fn default_start_config() -> NodeStartConfig {
     p2p_port: 8333,
     rpc_port: 8332,
     max_connections: 125,
-    mempool_max_size: 300_000_000,  // 300 MB
+    mempool_max_size: 300_000_000,
+    // 300 MB
   )
 }

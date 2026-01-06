@@ -1,9 +1,7 @@
 // assumeutxo_test.gleam - Tests for AssumeUTXO snapshot support
 
+import assumeutxo.{Mainnet, Regtest, Testnet}
 import gleam/option.{None, Some}
-import assumeutxo.{
-  Mainnet, Regtest, Testnet,
-}
 
 // ============================================================================
 // Known Snapshot Tests
@@ -53,7 +51,8 @@ pub fn find_snapshot_at_height_test() {
 
   case snapshots {
     [first, ..] -> {
-      let result = assumeutxo.find_snapshot_at_height(Mainnet, first.metadata.height)
+      let result =
+        assumeutxo.find_snapshot_at_height(Mainnet, first.metadata.height)
       case result {
         Some(found) -> {
           let assert True = found.metadata.height == first.metadata.height
@@ -67,7 +66,7 @@ pub fn find_snapshot_at_height_test() {
 
 pub fn find_snapshot_at_invalid_height_test() {
   // Height 12345 is unlikely to have a snapshot
-  let result = assumeutxo.find_snapshot_at_height(Mainnet, 12345)
+  let result = assumeutxo.find_snapshot_at_height(Mainnet, 12_345)
 
   let assert True = result == None
 }
@@ -77,15 +76,16 @@ pub fn find_snapshot_at_invalid_height_test() {
 // ============================================================================
 
 pub fn create_new_loader_test() {
-  let metadata = assumeutxo.SnapshotMetadata(
-    block_hash: create_dummy_block_hash(),
-    height: 820_000,
-    num_utxos: 1000,
-    num_txs: 500,
-    total_amount: 1_000_000_000,
-    muhash: <<0:256>>,
-    snapshot_hash: <<0:256>>,
-  )
+  let metadata =
+    assumeutxo.SnapshotMetadata(
+      block_hash: create_dummy_block_hash(),
+      height: 820_000,
+      num_utxos: 1000,
+      num_txs: 500,
+      total_amount: 1_000_000_000,
+      muhash: <<0:256>>,
+      snapshot_hash: <<0:256>>,
+    )
 
   let loader = assumeutxo.new_loader(metadata)
 
@@ -94,15 +94,16 @@ pub fn create_new_loader_test() {
 }
 
 pub fn load_coin_increments_counter_test() {
-  let metadata = assumeutxo.SnapshotMetadata(
-    block_hash: create_dummy_block_hash(),
-    height: 100,
-    num_utxos: 10,
-    num_txs: 5,
-    total_amount: 1_000_000,
-    muhash: <<0:256>>,
-    snapshot_hash: <<0:256>>,
-  )
+  let metadata =
+    assumeutxo.SnapshotMetadata(
+      block_hash: create_dummy_block_hash(),
+      height: 100,
+      num_utxos: 10,
+      num_txs: 5,
+      total_amount: 1_000_000,
+      muhash: <<0:256>>,
+      snapshot_hash: <<0:256>>,
+    )
 
   let loader = assumeutxo.new_loader(metadata)
 
@@ -116,15 +117,16 @@ pub fn load_coin_increments_counter_test() {
 }
 
 pub fn get_load_progress_test() {
-  let metadata = assumeutxo.SnapshotMetadata(
-    block_hash: create_dummy_block_hash(),
-    height: 100,
-    num_utxos: 100,
-    num_txs: 50,
-    total_amount: 1_000_000,
-    muhash: <<0:256>>,
-    snapshot_hash: <<0:256>>,
-  )
+  let metadata =
+    assumeutxo.SnapshotMetadata(
+      block_hash: create_dummy_block_hash(),
+      height: 100,
+      num_utxos: 100,
+      num_txs: 50,
+      total_amount: 1_000_000,
+      muhash: <<0:256>>,
+      snapshot_hash: <<0:256>>,
+    )
 
   let loader = assumeutxo.new_loader(metadata)
   let progress = assumeutxo.get_load_progress(loader, 1000)
@@ -139,15 +141,16 @@ pub fn get_load_progress_test() {
 // ============================================================================
 
 pub fn create_new_validator_test() {
-  let metadata = assumeutxo.SnapshotMetadata(
-    block_hash: create_dummy_block_hash(),
-    height: 820_000,
-    num_utxos: 1000,
-    num_txs: 500,
-    total_amount: 1_000_000_000,
-    muhash: <<0:256>>,
-    snapshot_hash: <<0:256>>,
-  )
+  let metadata =
+    assumeutxo.SnapshotMetadata(
+      block_hash: create_dummy_block_hash(),
+      height: 820_000,
+      num_utxos: 1000,
+      num_txs: 500,
+      total_amount: 1_000_000_000,
+      muhash: <<0:256>>,
+      snapshot_hash: <<0:256>>,
+    )
 
   let validator = assumeutxo.new_validator(metadata)
 
@@ -156,37 +159,36 @@ pub fn create_new_validator_test() {
 }
 
 pub fn record_validated_block_test() {
-  let metadata = assumeutxo.SnapshotMetadata(
-    block_hash: create_dummy_block_hash(),
-    height: 100,
-    num_utxos: 10,
-    num_txs: 5,
-    total_amount: 1_000_000,
-    muhash: <<0:256>>,
-    snapshot_hash: <<0:256>>,
-  )
+  let metadata =
+    assumeutxo.SnapshotMetadata(
+      block_hash: create_dummy_block_hash(),
+      height: 100,
+      num_utxos: 10,
+      num_txs: 5,
+      total_amount: 1_000_000,
+      muhash: <<0:256>>,
+      snapshot_hash: <<0:256>>,
+    )
 
   let validator = assumeutxo.new_validator(metadata)
-  let validator2 = assumeutxo.record_validated_block(
-    validator,
-    1,
-    create_dummy_block_hash(),
-  )
+  let validator2 =
+    assumeutxo.record_validated_block(validator, 1, create_dummy_block_hash())
 
   let assert True = validator2.current_height == 1
   let assert True = validator2.blocks_validated == 1
 }
 
 pub fn is_caught_up_false_initially_test() {
-  let metadata = assumeutxo.SnapshotMetadata(
-    block_hash: create_dummy_block_hash(),
-    height: 100,
-    num_utxos: 10,
-    num_txs: 5,
-    total_amount: 1_000_000,
-    muhash: <<0:256>>,
-    snapshot_hash: <<0:256>>,
-  )
+  let metadata =
+    assumeutxo.SnapshotMetadata(
+      block_hash: create_dummy_block_hash(),
+      height: 100,
+      num_utxos: 10,
+      num_txs: 5,
+      total_amount: 1_000_000,
+      muhash: <<0:256>>,
+      snapshot_hash: <<0:256>>,
+    )
 
   let validator = assumeutxo.new_validator(metadata)
 
@@ -194,15 +196,16 @@ pub fn is_caught_up_false_initially_test() {
 }
 
 pub fn is_caught_up_true_when_synced_test() {
-  let metadata = assumeutxo.SnapshotMetadata(
-    block_hash: create_dummy_block_hash(),
-    height: 10,
-    num_utxos: 10,
-    num_txs: 5,
-    total_amount: 1_000_000,
-    muhash: <<0:256>>,
-    snapshot_hash: <<0:256>>,
-  )
+  let metadata =
+    assumeutxo.SnapshotMetadata(
+      block_hash: create_dummy_block_hash(),
+      height: 10,
+      num_utxos: 10,
+      num_txs: 5,
+      total_amount: 1_000_000,
+      muhash: <<0:256>>,
+      snapshot_hash: <<0:256>>,
+    )
 
   let validator = assumeutxo.new_validator(metadata)
 
@@ -219,33 +222,32 @@ fn validate_n_blocks(
   case n <= 0 {
     True -> validator
     False -> {
-      let new = assumeutxo.record_validated_block(
-        validator,
-        validator.current_height + 1,
-        create_dummy_block_hash(),
-      )
+      let new =
+        assumeutxo.record_validated_block(
+          validator,
+          validator.current_height + 1,
+          create_dummy_block_hash(),
+        )
       validate_n_blocks(new, n - 1)
     }
   }
 }
 
 pub fn get_validation_progress_test() {
-  let metadata = assumeutxo.SnapshotMetadata(
-    block_hash: create_dummy_block_hash(),
-    height: 100,
-    num_utxos: 10,
-    num_txs: 5,
-    total_amount: 1_000_000,
-    muhash: <<0:256>>,
-    snapshot_hash: <<0:256>>,
-  )
+  let metadata =
+    assumeutxo.SnapshotMetadata(
+      block_hash: create_dummy_block_hash(),
+      height: 100,
+      num_utxos: 10,
+      num_txs: 5,
+      total_amount: 1_000_000,
+      muhash: <<0:256>>,
+      snapshot_hash: <<0:256>>,
+    )
 
   let validator = assumeutxo.new_validator(metadata)
-  let validator2 = assumeutxo.record_validated_block(
-    validator,
-    50,
-    create_dummy_block_hash(),
-  )
+  let validator2 =
+    assumeutxo.record_validated_block(validator, 50, create_dummy_block_hash())
 
   let progress = assumeutxo.get_validation_progress(validator2)
 
@@ -260,19 +262,22 @@ pub fn get_validation_progress_test() {
 
 pub fn snapshot_header_constants_test() {
   // Verify magic bytes
-  let assert True = assumeutxo.snapshot_magic == 0x55_54_58_4F  // "UTXO"
+  let assert True = assumeutxo.snapshot_magic == 0x55_54_58_4F
+  // "UTXO"
   let assert True = assumeutxo.snapshot_version == 1
 }
 
 pub fn serialize_header_test() {
-  let header = assumeutxo.SnapshotHeader(
-    magic: assumeutxo.snapshot_magic,
-    version: assumeutxo.snapshot_version,
-    network: 0,  // Mainnet
-    block_hash: create_dummy_block_hash(),
-    height: 100,
-    num_utxos: 1000,
-  )
+  let header =
+    assumeutxo.SnapshotHeader(
+      magic: assumeutxo.snapshot_magic,
+      version: assumeutxo.snapshot_version,
+      network: 0,
+      // Mainnet
+      block_hash: create_dummy_block_hash(),
+      height: 100,
+      num_utxos: 1000,
+    )
 
   let serialized = assumeutxo.serialize_header(header)
 
@@ -286,14 +291,15 @@ pub fn serialize_header_test() {
 }
 
 pub fn parse_header_test() {
-  let header = assumeutxo.SnapshotHeader(
-    magic: assumeutxo.snapshot_magic,
-    version: assumeutxo.snapshot_version,
-    network: 0,
-    block_hash: create_dummy_block_hash(),
-    height: 100,
-    num_utxos: 1000,
-  )
+  let header =
+    assumeutxo.SnapshotHeader(
+      magic: assumeutxo.snapshot_magic,
+      version: assumeutxo.snapshot_version,
+      network: 0,
+      block_hash: create_dummy_block_hash(),
+      height: 100,
+      num_utxos: 1000,
+    )
 
   let serialized = assumeutxo.serialize_header(header)
   let result = assumeutxo.parse_header(serialized)
@@ -311,7 +317,14 @@ pub fn parse_header_test() {
 
 pub fn parse_invalid_magic_fails_test() {
   // Wrong magic
-  let data = <<0x12_34_56_78:32-big, 1:16-little, 0:8, 0:256, 100:32-little, 1000:64-little>>
+  let data = <<
+    0x12_34_56_78:32-big,
+    1:16-little,
+    0:8,
+    0:256,
+    100:32-little,
+    1000:64-little,
+  >>
 
   let result = assumeutxo.parse_header(data)
 
@@ -323,7 +336,14 @@ pub fn parse_invalid_magic_fails_test() {
 
 pub fn parse_unsupported_version_fails_test() {
   // Wrong version
-  let data = <<0x55_54_58_4F:32-big, 99:16-little, 0:8, 0:256, 100:32-little, 1000:64-little>>
+  let data = <<
+    0x55_54_58_4F:32-big,
+    99:16-little,
+    0:8,
+    0:256,
+    100:32-little,
+    1000:64-little,
+  >>
 
   let result = assumeutxo.parse_header(data)
 
@@ -338,8 +358,40 @@ pub fn parse_unsupported_version_fails_test() {
 // ============================================================================
 
 pub fn new_download_test() {
-  let expected_hash = <<1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
-                        17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32>>
+  let expected_hash = <<
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+  >>
   let state = assumeutxo.new_download(expected_hash, 1_000_000)
 
   let assert True = state.total_bytes == 1_000_000
@@ -379,7 +431,11 @@ pub fn is_download_complete_true_when_done_test() {
 // ============================================================================
 
 fn create_dummy_block_hash() -> oni_bitcoin.BlockHash {
-  case oni_bitcoin.block_hash_from_hex("0000000000000000000000000000000000000000000000000000000000000000") {
+  case
+    oni_bitcoin.block_hash_from_hex(
+      "0000000000000000000000000000000000000000000000000000000000000000",
+    )
+  {
     Ok(h) -> h
     Error(_) -> oni_bitcoin.BlockHash(oni_bitcoin.Hash256(<<0:256>>))
   }

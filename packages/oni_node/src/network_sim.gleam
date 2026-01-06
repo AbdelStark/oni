@@ -277,15 +277,16 @@ fn create_nodes(config: SimConfig) -> Dict(Int, SimNode) {
   list.range(0, total - 1)
   |> list.fold(dict.new(), fn(acc, id) {
     let is_adversary = id >= config.honest_nodes
-    let node = SimNode(
-      id: id,
-      is_adversary: is_adversary,
-      connections: [],
-      state: initial_node_state(),
-      inbox: [],
-      outbox: [],
-      metrics: initial_metrics(),
-    )
+    let node =
+      SimNode(
+        id: id,
+        is_adversary: is_adversary,
+        connections: [],
+        state: initial_node_state(),
+        inbox: [],
+        outbox: [],
+        metrics: initial_metrics(),
+      )
     dict.insert(acc, id, node)
   })
 }
@@ -330,12 +331,10 @@ fn connect_nodes(
   case topology {
     BitcoinLike(outbound, _max_inbound) ->
       connect_bitcoin_like(nodes, outbound, seed)
-    RandomGraph(prob) ->
-      connect_random(nodes, prob, seed)
-    FullMesh ->
-      connect_full_mesh(nodes)
-    _ ->
-      connect_bitcoin_like(nodes, 8, seed)  // Default to Bitcoin-like
+    RandomGraph(prob) -> connect_random(nodes, prob, seed)
+    FullMesh -> connect_full_mesh(nodes)
+    _ -> connect_bitcoin_like(nodes, 8, seed)
+    // Default to Bitcoin-like
   }
 }
 
@@ -362,9 +361,10 @@ fn connect_random(
   let node_ids = dict.keys(nodes)
 
   dict.map_values(nodes, fn(id, node) {
-    let peers = list.filter(node_ids, fn(other) {
-      other != id && random_bool(seed + id + other, probability)
-    })
+    let peers =
+      list.filter(node_ids, fn(other) {
+        other != id && random_bool(seed + id + other, probability)
+      })
     SimNode(..node, connections: peers)
   })
 }
@@ -410,7 +410,8 @@ pub fn run_until(state: SimState, target_tick: Int) -> SimState {
 
 /// Execute one simulation tick
 pub fn tick(state: SimState) -> SimState {
-  let state = state
+  let state =
+    state
     |> deliver_messages()
     |> process_node_actions()
     |> simulate_mining()
@@ -427,42 +428,42 @@ fn advance_tick(state: SimState) -> SimState {
 
 /// Deliver pending messages with delay
 fn deliver_messages(state: SimState) -> SimState {
-  let #(ready, pending) = list.partition(state.pending_messages, fn(msg) {
-    msg.delay_ticks <= 0
-  })
+  let #(ready, pending) =
+    list.partition(state.pending_messages, fn(msg) { msg.delay_ticks <= 0 })
 
   // Deliver ready messages to nodes
-  let nodes = list.fold(ready, state.nodes, fn(nodes, msg) {
-    case dict.get(nodes, msg.to) {
-      Error(_) -> nodes
-      Ok(node) -> {
-        let updated = SimNode(
-          ..node,
-          inbox: [msg, ..node.inbox],
-          metrics: NodeMetrics(
-            ..node.metrics,
-            messages_received: node.metrics.messages_received + 1,
-          ),
-        )
-        dict.insert(nodes, msg.to, updated)
+  let nodes =
+    list.fold(ready, state.nodes, fn(nodes, msg) {
+      case dict.get(nodes, msg.to) {
+        Error(_) -> nodes
+        Ok(node) -> {
+          let updated =
+            SimNode(
+              ..node,
+              inbox: [msg, ..node.inbox],
+              metrics: NodeMetrics(
+                ..node.metrics,
+                messages_received: node.metrics.messages_received + 1,
+              ),
+            )
+          dict.insert(nodes, msg.to, updated)
+        }
       }
-    }
-  })
+    })
 
   // Decrement delay on pending messages
-  let pending = list.map(pending, fn(msg) {
-    SimMessage(..msg, delay_ticks: msg.delay_ticks - 1)
-  })
+  let pending =
+    list.map(pending, fn(msg) {
+      SimMessage(..msg, delay_ticks: msg.delay_ticks - 1)
+    })
 
   SimState(..state, nodes: nodes, pending_messages: pending)
 }
 
 /// Process actions for all nodes
 fn process_node_actions(state: SimState) -> SimState {
-  let #(nodes, new_messages, events) = dict.fold(
-    state.nodes,
-    #(dict.new(), [], state.events),
-    fn(acc, id, node) {
+  let #(nodes, new_messages, events) =
+    dict.fold(state.nodes, #(dict.new(), [], state.events), fn(acc, id, node) {
       let #(nodes_acc, msgs_acc, events_acc) = acc
       let #(updated_node, node_msgs, node_events) = process_node(node, state)
       #(
@@ -470,8 +471,7 @@ fn process_node_actions(state: SimState) -> SimState {
         list.append(msgs_acc, node_msgs),
         list.append(events_acc, node_events),
       )
-    },
-  )
+    })
 
   SimState(
     ..state,
@@ -486,26 +486,29 @@ fn process_node(
   state: SimState,
 ) -> #(SimNode, List(SimMessage), List(SimEvent)) {
   // Process inbox messages
-  let #(new_state, msgs, events) = list.fold(
-    node.inbox,
-    #(node.state, [], []),
-    fn(acc, msg) {
+  let #(new_state, msgs, events) =
+    list.fold(node.inbox, #(node.state, [], []), fn(acc, msg) {
       let #(node_state, msgs_acc, events_acc) = acc
       let #(new_node_state, response_msgs, new_events) =
         handle_message(node, node_state, msg, state)
-      #(new_node_state, list.append(msgs_acc, response_msgs), list.append(events_acc, new_events))
-    },
-  )
+      #(
+        new_node_state,
+        list.append(msgs_acc, response_msgs),
+        list.append(events_acc, new_events),
+      )
+    })
 
-  let updated_node = SimNode(
-    ..node,
-    state: new_state,
-    inbox: [],  // Clear processed inbox
-    metrics: NodeMetrics(
-      ..node.metrics,
-      messages_sent: node.metrics.messages_sent + list.length(msgs),
-    ),
-  )
+  let updated_node =
+    SimNode(
+      ..node,
+      state: new_state,
+      inbox: [],
+      // Clear processed inbox
+      metrics: NodeMetrics(
+        ..node.metrics,
+        messages_sent: node.metrics.messages_sent + list.length(msgs),
+      ),
+    )
 
   #(updated_node, msgs, events)
 }
@@ -540,18 +543,20 @@ fn handle_block(
       case block.prev_hash == node_state.best_block {
         True -> {
           // Extend chain
-          let new_state = NodeState(
-            ..node_state,
-            height: block.height,
-            best_block: block_hash,
-            blocks_received: node_state.blocks_received + 1,
-            is_synced: True,
-          )
+          let new_state =
+            NodeState(
+              ..node_state,
+              height: block.height,
+              best_block: block_hash,
+              blocks_received: node_state.blocks_received + 1,
+              is_synced: True,
+            )
 
           let event = BlockReceived(sim_state.current_tick, node.id, block_hash)
 
           // Relay to peers
-          let relay_msgs = relay_to_peers(node, MsgBlock, msg.payload, sim_state.config)
+          let relay_msgs =
+            relay_to_peers(node, MsgBlock, msg.payload, sim_state.config)
 
           #(new_state, relay_msgs, [event])
         }
@@ -576,19 +581,22 @@ fn handle_tx(
   case dict.has_key(node_state.mempool, txid) {
     True -> #(node_state, [], [])
     False -> {
-      let tx = SimTx(
-        txid: txid,
-        fee: 1000,  // Placeholder
-        size: 250,
-        created_tick: sim_state.current_tick,
-        confirmed_tick: None,
-      )
+      let tx =
+        SimTx(
+          txid: txid,
+          fee: 1000,
+          // Placeholder
+          size: 250,
+          created_tick: sim_state.current_tick,
+          confirmed_tick: None,
+        )
 
       let new_mempool = dict.insert(node_state.mempool, txid, tx)
       let new_state = NodeState(..node_state, mempool: new_mempool)
 
       // Relay to peers
-      let relay_msgs = relay_to_peers(node, MsgTx, msg.payload, sim_state.config)
+      let relay_msgs =
+        relay_to_peers(node, MsgTx, msg.payload, sim_state.config)
 
       let event = TxBroadcast(sim_state.current_tick, node.id, txid)
 
@@ -627,9 +635,12 @@ fn relay_to_peers(
 
 fn calculate_delay(config: SimConfig) -> Int {
   let base = config.base_latency_ms / tick_interval_ms
-  let variance = float.truncate(
-    int.to_float(base) *. config.latency_variance *. config.conditions.latency_multiplier
-  )
+  let variance =
+    float.truncate(
+      int.to_float(base)
+      *. config.latency_variance
+      *. config.conditions.latency_multiplier,
+    )
   int.max(1, base + variance)
 }
 
@@ -642,7 +653,10 @@ fn simulate_mining(state: SimState) -> SimState {
     Error(_) -> state
     Ok(node) -> {
       // Only mine occasionally and if node is synced
-      case node.state.is_synced && random_bool(state.rng_state + state.current_tick, 0.01) {
+      case
+        node.state.is_synced
+        && random_bool(state.rng_state + state.current_tick, 0.01)
+      {
         False -> state
         True -> mine_block(state, node)
       }
@@ -653,42 +667,49 @@ fn simulate_mining(state: SimState) -> SimState {
 fn mine_block(state: SimState, miner: SimNode) -> SimState {
   let block_hash = generate_block_hash(state.current_tick, miner.id)
 
-  let block = SimBlock(
-    hash: block_hash,
-    prev_hash: miner.state.best_block,
-    height: miner.state.height + 1,
-    miner: miner.id,
-    txids: [],  // Would include mempool txs
-    timestamp: state.current_tick,
-  )
+  let block =
+    SimBlock(
+      hash: block_hash,
+      prev_hash: miner.state.best_block,
+      height: miner.state.height + 1,
+      miner: miner.id,
+      txids: [],
+      // Would include mempool txs
+      timestamp: state.current_tick,
+    )
 
   // Add block to global state
   let blocks = dict.insert(state.blocks, block_hash, block)
-  let events = [BlockMined(state.current_tick, miner.id, block_hash, block.height), ..state.events]
+  let events = [
+    BlockMined(state.current_tick, miner.id, block_hash, block.height),
+    ..state.events
+  ]
 
   // Update miner's state
-  let miner_state = NodeState(
-    ..miner.state,
-    height: block.height,
-    best_block: block_hash,
-  )
-  let updated_miner = SimNode(
-    ..miner,
-    state: miner_state,
-    metrics: NodeMetrics(..miner.metrics, blocks_mined: miner.metrics.blocks_mined + 1),
-  )
+  let miner_state =
+    NodeState(..miner.state, height: block.height, best_block: block_hash)
+  let updated_miner =
+    SimNode(
+      ..miner,
+      state: miner_state,
+      metrics: NodeMetrics(
+        ..miner.metrics,
+        blocks_mined: miner.metrics.blocks_mined + 1,
+      ),
+    )
   let nodes = dict.insert(state.nodes, miner.id, updated_miner)
 
   // Broadcast block
-  let broadcast_msgs = list.map(miner.connections, fn(peer_id) {
-    SimMessage(
-      from: miner.id,
-      to: peer_id,
-      msg_type: MsgBlock,
-      payload: string_to_bit_array(block_hash),
-      delay_ticks: calculate_delay(state.config),
-    )
-  })
+  let broadcast_msgs =
+    list.map(miner.connections, fn(peer_id) {
+      SimMessage(
+        from: miner.id,
+        to: peer_id,
+        msg_type: MsgBlock,
+        payload: string_to_bit_array(block_hash),
+        delay_ticks: calculate_delay(state.config),
+      )
+    })
 
   SimState(
     ..state,
@@ -715,46 +736,53 @@ fn apply_adversary_actions(state: SimState) -> SimState {
 
 fn apply_eclipse(state: SimState, targets: List(Int)) -> SimState {
   // Disconnect targets from honest nodes
-  let nodes = dict.map_values(state.nodes, fn(id, node) {
-    case list.contains(targets, id) {
-      True -> {
-        // Target: only connected to adversary nodes
-        let adversary_connections = list.filter(node.connections, fn(peer) {
-          case dict.get(state.nodes, peer) {
-            Ok(peer_node) -> peer_node.is_adversary
-            Error(_) -> False
-          }
-        })
-        let metrics = NodeMetrics(
-          ..node.metrics,
-          eclipse_duration_ticks: node.metrics.eclipse_duration_ticks + 1,
-        )
-        SimNode(..node, connections: adversary_connections, metrics: metrics)
+  let nodes =
+    dict.map_values(state.nodes, fn(id, node) {
+      case list.contains(targets, id) {
+        True -> {
+          // Target: only connected to adversary nodes
+          let adversary_connections =
+            list.filter(node.connections, fn(peer) {
+              case dict.get(state.nodes, peer) {
+                Ok(peer_node) -> peer_node.is_adversary
+                Error(_) -> False
+              }
+            })
+          let metrics =
+            NodeMetrics(
+              ..node.metrics,
+              eclipse_duration_ticks: node.metrics.eclipse_duration_ticks + 1,
+            )
+          SimNode(..node, connections: adversary_connections, metrics: metrics)
+        }
+        False -> node
       }
-      False -> node
-    }
-  })
+    })
 
-  let events = list.map(targets, fn(target) {
-    EclipseEvent(state.current_tick, target, True)
-  })
+  let events =
+    list.map(targets, fn(target) {
+      EclipseEvent(state.current_tick, target, True)
+    })
 
   SimState(..state, nodes: nodes, events: list.append(state.events, events))
 }
 
 fn apply_selfish_mining(state: SimState, _hashpower: Float) -> SimState {
   // Adversary nodes withhold mined blocks
-  state  // Placeholder
+  state
+  // Placeholder
 }
 
 fn apply_double_spend(state: SimState, _confirmations: Int) -> SimState {
   // Attempt double spend after confirmations
-  state  // Placeholder
+  state
+  // Placeholder
 }
 
 fn apply_tx_censorship(state: SimState, _txids: List(String)) -> SimState {
   // Adversary nodes drop specified transactions
-  state  // Placeholder
+  state
+  // Placeholder
 }
 
 // ============================================================================
@@ -763,12 +791,16 @@ fn apply_tx_censorship(state: SimState, _txids: List(String)) -> SimState {
 
 /// Check simulation invariants
 fn check_invariants(state: SimState) -> SimState {
-  let violations = []
+  let violations =
+    []
     |> check_chain_consistency(state)
     |> check_no_permanent_partitions(state)
     |> check_liveness(state)
 
-  SimState(..state, invariant_violations: list.append(state.invariant_violations, violations))
+  SimState(
+    ..state,
+    invariant_violations: list.append(state.invariant_violations, violations),
+  )
 }
 
 fn check_chain_consistency(
@@ -776,19 +808,21 @@ fn check_chain_consistency(
   state: SimState,
 ) -> List(InvariantViolation) {
   // All synced nodes should be on the same chain tip (eventually)
-  let tips = dict.values(state.nodes)
+  let tips =
+    dict.values(state.nodes)
     |> list.filter(fn(n) { n.state.is_synced })
     |> list.map(fn(n) { n.state.best_block })
     |> list.unique
 
   case list.length(tips) > 1 {
     True -> {
-      let violation = InvariantViolation(
-        tick: state.current_tick,
-        invariant: "chain_consistency",
-        details: "Multiple chain tips: " <> int.to_string(list.length(tips)),
-        severity: Medium,
-      )
+      let violation =
+        InvariantViolation(
+          tick: state.current_tick,
+          invariant: "chain_consistency",
+          details: "Multiple chain tips: " <> int.to_string(list.length(tips)),
+          severity: Medium,
+        )
       [violation, ..violations]
     }
     False -> violations
@@ -800,18 +834,20 @@ fn check_no_permanent_partitions(
   state: SimState,
 ) -> List(InvariantViolation) {
   // Check if any node has been eclipsed for too long
-  let eclipsed = dict.values(state.nodes)
+  let eclipsed =
+    dict.values(state.nodes)
     |> list.filter(fn(n) { n.metrics.eclipse_duration_ticks > 100 })
 
   case eclipsed {
     [] -> violations
     _ -> {
-      let violation = InvariantViolation(
-        tick: state.current_tick,
-        invariant: "no_permanent_eclipse",
-        details: int.to_string(list.length(eclipsed)) <> " nodes eclipsed",
-        severity: High,
-      )
+      let violation =
+        InvariantViolation(
+          tick: state.current_tick,
+          invariant: "no_permanent_eclipse",
+          details: int.to_string(list.length(eclipsed)) <> " nodes eclipsed",
+          severity: High,
+        )
       [violation, ..violations]
     }
   }
@@ -822,21 +858,23 @@ fn check_liveness(
   state: SimState,
 ) -> List(InvariantViolation) {
   // Check if blocks are being produced
-  let recent_blocks = list.filter(state.events, fn(e) {
-    case e {
-      BlockMined(tick, _, _, _) -> tick > state.current_tick - 100
-      _ -> False
-    }
-  })
+  let recent_blocks =
+    list.filter(state.events, fn(e) {
+      case e {
+        BlockMined(tick, _, _, _) -> tick > state.current_tick - 100
+        _ -> False
+      }
+    })
 
   case state.current_tick > 100 && list.is_empty(recent_blocks) {
     True -> {
-      let violation = InvariantViolation(
-        tick: state.current_tick,
-        invariant: "liveness",
-        details: "No blocks mined in last 100 ticks",
-        severity: Critical,
-      )
+      let violation =
+        InvariantViolation(
+          tick: state.current_tick,
+          invariant: "liveness",
+          details: "No blocks mined in last 100 ticks",
+          severity: Critical,
+        )
       [violation, ..violations]
     }
     False -> violations
@@ -865,21 +903,34 @@ pub type SimResults {
 
 /// Analyze simulation results
 pub fn analyze(state: SimState) -> SimResults {
-  let block_events = list.filter(state.events, fn(e) {
-    case e { BlockMined(_, _, _, _) -> True _ -> False }
-  })
+  let block_events =
+    list.filter(state.events, fn(e) {
+      case e {
+        BlockMined(_, _, _, _) -> True
+        _ -> False
+      }
+    })
 
-  let reorg_events = list.filter(state.events, fn(e) {
-    case e { Reorg(_, _, _, _, _) -> True _ -> False }
-  })
+  let reorg_events =
+    list.filter(state.events, fn(e) {
+      case e {
+        Reorg(_, _, _, _, _) -> True
+        _ -> False
+      }
+    })
 
-  let eclipse_events = list.filter(state.events, fn(e) {
-    case e { EclipseEvent(_, _, _) -> True _ -> False }
-  })
+  let eclipse_events =
+    list.filter(state.events, fn(e) {
+      case e {
+        EclipseEvent(_, _, _) -> True
+        _ -> False
+      }
+    })
 
   let node_metrics = dict.values(state.nodes) |> list.map(fn(n) { n.metrics })
 
-  let max_height = dict.values(state.nodes)
+  let max_height =
+    dict.values(state.nodes)
     |> list.map(fn(n) { n.state.height })
     |> list.fold(0, int.max)
 
@@ -889,7 +940,8 @@ pub fn analyze(state: SimState) -> SimResults {
     transactions_processed: count_processed_txs(state),
     reorgs: list.length(reorg_events),
     max_reorg_depth: max_reorg_depth(reorg_events),
-    average_propagation_ticks: 0.0,  // Would calculate from events
+    average_propagation_ticks: 0.0,
+    // Would calculate from events
     eclipse_events: list.length(eclipse_events),
     invariant_violations: state.invariant_violations,
     final_chain_height: max_height,
@@ -899,7 +951,10 @@ pub fn analyze(state: SimState) -> SimResults {
 
 fn count_processed_txs(state: SimState) -> Int {
   list.filter(state.events, fn(e) {
-    case e { TxConfirmed(_, _, _) -> True _ -> False }
+    case e {
+      TxConfirmed(_, _, _) -> True
+      _ -> False
+    }
   })
   |> list.length
 }
@@ -915,16 +970,32 @@ fn max_reorg_depth(reorgs: List(SimEvent)) -> Int {
 
 /// Generate text report
 pub fn generate_report(results: SimResults) -> String {
-  "Network Simulation Report\n" <>
-  "========================\n\n" <>
-  "Duration: " <> int.to_string(results.total_ticks) <> " ticks\n" <>
-  "Blocks mined: " <> int.to_string(results.blocks_mined) <> "\n" <>
-  "Final chain height: " <> int.to_string(results.final_chain_height) <> "\n" <>
-  "Transactions: " <> int.to_string(results.transactions_processed) <> "\n" <>
-  "Reorgs: " <> int.to_string(results.reorgs) <> "\n" <>
-  "Max reorg depth: " <> int.to_string(results.max_reorg_depth) <> "\n" <>
-  "Eclipse events: " <> int.to_string(results.eclipse_events) <> "\n" <>
-  "Invariant violations: " <> int.to_string(list.length(results.invariant_violations)) <> "\n"
+  "Network Simulation Report\n"
+  <> "========================\n\n"
+  <> "Duration: "
+  <> int.to_string(results.total_ticks)
+  <> " ticks\n"
+  <> "Blocks mined: "
+  <> int.to_string(results.blocks_mined)
+  <> "\n"
+  <> "Final chain height: "
+  <> int.to_string(results.final_chain_height)
+  <> "\n"
+  <> "Transactions: "
+  <> int.to_string(results.transactions_processed)
+  <> "\n"
+  <> "Reorgs: "
+  <> int.to_string(results.reorgs)
+  <> "\n"
+  <> "Max reorg depth: "
+  <> int.to_string(results.max_reorg_depth)
+  <> "\n"
+  <> "Eclipse events: "
+  <> int.to_string(results.eclipse_events)
+  <> "\n"
+  <> "Invariant violations: "
+  <> int.to_string(list.length(results.invariant_violations))
+  <> "\n"
 }
 
 // ============================================================================
@@ -934,7 +1005,7 @@ pub fn generate_report(results: SimResults) -> String {
 fn random_int(seed: Int, max: Int) -> Int {
   case max <= 0 {
     True -> 0
-    False -> int.modulo(seed * 1103515245 + 12345, max) |> result.unwrap(0)
+    False -> int.modulo(seed * 1_103_515_245 + 12_345, max) |> result.unwrap(0)
   }
 }
 
@@ -946,11 +1017,12 @@ fn random_bool(seed: Int, probability: Float) -> Bool {
 fn shuffle_and_take(list: List(a), n: Int, seed: Int) -> List(a) {
   // Simple shuffle simulation
   let indexed = list.index_map(list, fn(item, i) { #(item, i) })
-  let sorted = list.sort(indexed, fn(a, b) {
-    let #(_, ia) = a
-    let #(_, ib) = b
-    int.compare(random_int(seed + ia, 1000), random_int(seed + ib, 1000))
-  })
+  let sorted =
+    list.sort(indexed, fn(a, b) {
+      let #(_, ia) = a
+      let #(_, ib) = b
+      int.compare(random_int(seed + ia, 1000), random_int(seed + ib, 1000))
+    })
   sorted
   |> list.take(n)
   |> list.map(fn(pair) { pair.0 })
@@ -991,7 +1063,11 @@ pub fn scenario_normal(num_nodes: Int) -> SimConfig {
 }
 
 /// Preset: Eclipse attack scenario
-pub fn scenario_eclipse(num_honest: Int, num_adversary: Int, targets: List(Int)) -> SimConfig {
+pub fn scenario_eclipse(
+  num_honest: Int,
+  num_adversary: Int,
+  targets: List(Int),
+) -> SimConfig {
   SimConfig(
     honest_nodes: num_honest,
     adversary_nodes: num_adversary,

@@ -5,10 +5,10 @@
 // - Mempool actor operations (add, remove, validation)
 // - Integration between supervisor and storage/consensus
 
-import gleeunit
-import gleeunit/should
 import gleam/erlang/process
 import gleam/option.{None}
+import gleeunit
+import gleeunit/should
 import oni_bitcoin
 import oni_supervisor
 
@@ -82,17 +82,19 @@ pub fn mempool_add_invalid_tx_test() {
   let assert Ok(subject) = oni_supervisor.start_mempool(1000)
 
   // Create an invalid transaction (no inputs)
-  let invalid_tx = oni_bitcoin.Transaction(
-    version: 1,
-    inputs: [],  // No inputs - invalid
-    outputs: [
-      oni_bitcoin.TxOut(
-        value: oni_bitcoin.sats(1000),
-        script_pubkey: oni_bitcoin.script_from_bytes(<<>>),
-      ),
-    ],
-    lock_time: 0,
-  )
+  let invalid_tx =
+    oni_bitcoin.Transaction(
+      version: 1,
+      inputs: [],
+      // No inputs - invalid
+      outputs: [
+        oni_bitcoin.TxOut(
+          value: oni_bitcoin.sats(1000),
+          script_pubkey: oni_bitcoin.script_from_bytes(<<>>),
+        ),
+      ],
+      lock_time: 0,
+    )
 
   let result = process.call(subject, oni_supervisor.AddTx(invalid_tx, _), 1000)
   should.be_error(result)
@@ -103,24 +105,33 @@ pub fn mempool_add_no_outputs_tx_test() {
   let assert Ok(subject) = oni_supervisor.start_mempool(1000)
 
   // Create a coinbase-like input (for testing structure only)
-  let null_outpoint = oni_bitcoin.OutPoint(
-    txid: oni_bitcoin.Txid(hash: oni_bitcoin.Hash256(<<0:256>>)),
-    vout: 0xFFFFFFFF,
-  )
+  let null_outpoint =
+    oni_bitcoin.OutPoint(
+      txid: oni_bitcoin.Txid(hash: oni_bitcoin.Hash256(<<0:256>>)),
+      vout: 0xFFFFFFFF,
+    )
 
-  let invalid_tx = oni_bitcoin.Transaction(
-    version: 1,
-    inputs: [
-      oni_bitcoin.TxIn(
-        prevout: null_outpoint,
-        script_sig: oni_bitcoin.script_from_bytes(<<0x04, 0x00, 0x00, 0x00, 0x00>>),
-        sequence: 0xFFFFFFFF,
-        witness: [],
-      ),
-    ],
-    outputs: [],  // No outputs - invalid
-    lock_time: 0,
-  )
+  let invalid_tx =
+    oni_bitcoin.Transaction(
+      version: 1,
+      inputs: [
+        oni_bitcoin.TxIn(
+          prevout: null_outpoint,
+          script_sig: oni_bitcoin.script_from_bytes(<<
+            0x04,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+          >>),
+          sequence: 0xFFFFFFFF,
+          witness: [],
+        ),
+      ],
+      outputs: [],
+      // No outputs - invalid
+      lock_time: 0,
+    )
 
   let result = process.call(subject, oni_supervisor.AddTx(invalid_tx, _), 1000)
   should.be_error(result)
@@ -128,35 +139,39 @@ pub fn mempool_add_no_outputs_tx_test() {
 
 pub fn mempool_size_limit_test() {
   // Test that mempool respects size limits
-  let assert Ok(subject) = oni_supervisor.start_mempool(0)  // Zero size limit
+  let assert Ok(subject) = oni_supervisor.start_mempool(0)
+  // Zero size limit
 
   // Create a minimal valid-structured transaction
-  let null_outpoint = oni_bitcoin.OutPoint(
-    txid: oni_bitcoin.Txid(hash: oni_bitcoin.Hash256(<<1:256>>)),
-    vout: 0,
-  )
+  let null_outpoint =
+    oni_bitcoin.OutPoint(
+      txid: oni_bitcoin.Txid(hash: oni_bitcoin.Hash256(<<1:256>>)),
+      vout: 0,
+    )
 
-  let tx = oni_bitcoin.Transaction(
-    version: 1,
-    inputs: [
-      oni_bitcoin.TxIn(
-        prevout: null_outpoint,
-        script_sig: oni_bitcoin.script_from_bytes(<<>>),
-        sequence: 0xFFFFFFFF,
-        witness: [],
-      ),
-    ],
-    outputs: [
-      oni_bitcoin.TxOut(
-        value: oni_bitcoin.sats(1000),
-        script_pubkey: oni_bitcoin.script_from_bytes(<<>>),
-      ),
-    ],
-    lock_time: 0,
-  )
+  let tx =
+    oni_bitcoin.Transaction(
+      version: 1,
+      inputs: [
+        oni_bitcoin.TxIn(
+          prevout: null_outpoint,
+          script_sig: oni_bitcoin.script_from_bytes(<<>>),
+          sequence: 0xFFFFFFFF,
+          witness: [],
+        ),
+      ],
+      outputs: [
+        oni_bitcoin.TxOut(
+          value: oni_bitcoin.sats(1000),
+          script_pubkey: oni_bitcoin.script_from_bytes(<<>>),
+        ),
+      ],
+      lock_time: 0,
+    )
 
   let result = process.call(subject, oni_supervisor.AddTx(tx, _), 1000)
-  should.be_error(result)  // Should fail - mempool full
+  should.be_error(result)
+  // Should fail - mempool full
 }
 
 // ============================================================================
@@ -183,15 +198,17 @@ pub fn sync_initial_state_test() {
 
 pub fn node_handles_creation_test() {
   // Test that all actors can be created and bundled
-  let assert Ok(chainstate) = oni_supervisor.start_chainstate(oni_bitcoin.Regtest)
+  let assert Ok(chainstate) =
+    oni_supervisor.start_chainstate(oni_bitcoin.Regtest)
   let assert Ok(mempool) = oni_supervisor.start_mempool(10_000)
   let assert Ok(sync) = oni_supervisor.start_sync()
 
-  let handles = oni_supervisor.NodeHandles(
-    chainstate: chainstate,
-    mempool: mempool,
-    sync: sync,
-  )
+  let handles =
+    oni_supervisor.NodeHandles(
+      chainstate: chainstate,
+      mempool: mempool,
+      sync: sync,
+    )
 
   // Verify handles are valid by querying each
   let height = process.call(handles.chainstate, oni_supervisor.GetHeight, 1000)
@@ -207,10 +224,11 @@ pub fn utxo_not_found_test() {
   // Test that non-existent UTXOs return None
   let assert Ok(subject) = oni_supervisor.start_chainstate(oni_bitcoin.Regtest)
 
-  let outpoint = oni_bitcoin.OutPoint(
-    txid: oni_bitcoin.Txid(hash: oni_bitcoin.Hash256(<<1:256>>)),
-    vout: 0,
-  )
+  let outpoint =
+    oni_bitcoin.OutPoint(
+      txid: oni_bitcoin.Txid(hash: oni_bitcoin.Hash256(<<1:256>>)),
+      vout: 0,
+    )
 
   let result = process.call(subject, oni_supervisor.GetUtxo(outpoint, _), 1000)
   should.equal(result, None)

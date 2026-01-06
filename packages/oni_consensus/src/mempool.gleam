@@ -15,19 +15,21 @@ import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/set.{type Set}
-import oni_bitcoin.{
-  type Amount, type OutPoint, type Transaction, type Txid,
-}
+import oni_bitcoin.{type Amount, type OutPoint, type Transaction, type Txid}
 
 // ============================================================================
 // Constants
 // ============================================================================
 
 /// Maximum mempool size in bytes
-pub const max_mempool_size = 300_000_000  // 300 MB
+pub const max_mempool_size = 300_000_000
+
+// 300 MB
 
 /// Maximum transaction size (policy limit, not consensus)
-pub const max_tx_size = 400_000  // 400 KB
+pub const max_tx_size = 400_000
+
+// 400 KB
 
 /// Minimum relay fee rate in sat/vB
 pub const min_relay_fee_rate = 1
@@ -42,19 +44,27 @@ pub const max_ancestors = 25
 pub const max_descendants = 25
 
 /// Maximum ancestor/descendant size in bytes
-pub const max_ancestor_size = 101_000  // ~101 KB
+pub const max_ancestor_size = 101_000
+
+// ~101 KB
 
 /// Maximum descendant size in bytes
-pub const max_descendant_size = 101_000  // ~101 KB
+pub const max_descendant_size = 101_000
+
+// ~101 KB
 
 /// Maximum orphan transactions to keep
 pub const max_orphan_txs = 100
 
 /// Maximum size of a single orphan transaction
-pub const max_orphan_tx_size = 100_000  // 100 KB
+pub const max_orphan_tx_size = 100_000
+
+// 100 KB
 
 /// Orphan transaction expiry time in seconds
-pub const orphan_expiry_secs = 1200  // 20 minutes
+pub const orphan_expiry_secs = 1200
+
+// 20 minutes
 
 /// Mempool expiry time in seconds (default 2 weeks)
 pub const mempool_expiry_secs = 1_209_600
@@ -130,23 +140,27 @@ pub fn entry_new(
 /// Estimate virtual size of a transaction
 fn estimate_vsize(tx: Transaction) -> Int {
   // Simplified estimate: count inputs and outputs
-  let base_size = 10  // Version + locktime overhead
-  let input_size = list.length(tx.inputs) * 41  // Per-input average
-  let output_size = list.length(tx.outputs) * 34  // Per-output average
+  let base_size = 10
+  // Version + locktime overhead
+  let input_size = list.length(tx.inputs) * 41
+  // Per-input average
+  let output_size = list.length(tx.outputs) * 34
+  // Per-output average
 
   // Check if segwit
-  let has_witness = list.any(tx.inputs, fn(input) {
-    !list.is_empty(input.witness)
-  })
+  let has_witness =
+    list.any(tx.inputs, fn(input) { !list.is_empty(input.witness) })
 
   case has_witness {
     True -> {
       // SegWit: weight = base * 3 + total, vsize = weight / 4
-      let witness_size = list.fold(tx.inputs, 0, fn(acc, input) {
-        acc + list.fold(input.witness, 0, fn(w_acc, elem) {
-          w_acc + get_bit_array_size(elem)
+      let witness_size =
+        list.fold(tx.inputs, 0, fn(acc, input) {
+          acc
+          + list.fold(input.witness, 0, fn(w_acc, elem) {
+            w_acc + get_bit_array_size(elem)
+          })
         })
-      })
       let base = base_size + input_size + output_size
       let weight = base * 3 + base + witness_size
       weight / 4
@@ -299,7 +313,8 @@ pub fn mempool_add(
               case list.is_empty(missing) {
                 False -> {
                   // Add to orphan pool
-                  let new_orphans = orphan_pool_add(pool.orphans, tx, txid, time)
+                  let new_orphans =
+                    orphan_pool_add(pool.orphans, tx, txid, time)
                   AddOrphan(Mempool(..pool, orphans: new_orphans))
                 }
                 True -> {
@@ -339,19 +354,21 @@ fn do_add(pool: Mempool, entry: MempoolEntry, key: String) -> AddResult {
 
   // Update totals
   let new_size = pool.total_size + entry.vsize
-  let new_fees = oni_bitcoin.sats(
-    oni_bitcoin.amount_to_sats(pool.total_fees) +
-    oni_bitcoin.amount_to_sats(entry.fee)
-  )
+  let new_fees =
+    oni_bitcoin.sats(
+      oni_bitcoin.amount_to_sats(pool.total_fees)
+      + oni_bitcoin.amount_to_sats(entry.fee),
+    )
 
   // Update ancestors and descendants
-  let updated_pool = Mempool(
-    ..pool,
-    txs: new_txs,
-    by_outpoint: new_by_outpoint,
-    total_size: new_size,
-    total_fees: new_fees,
-  )
+  let updated_pool =
+    Mempool(
+      ..pool,
+      txs: new_txs,
+      by_outpoint: new_by_outpoint,
+      total_size: new_size,
+      total_fees: new_fees,
+    )
 
   // Update ancestor/descendant tracking
   let final_pool = update_ancestors_descendants(updated_pool, entry)
@@ -365,9 +382,8 @@ fn add_to_outpoint_index(
   txid_key: String,
 ) -> Dict(String, String) {
   // For each output, add an entry
-  let outputs_with_idx = list.index_map(tx.outputs, fn(output, idx) {
-    #(output, idx)
-  })
+  let outputs_with_idx =
+    list.index_map(tx.outputs, fn(output, idx) { #(output, idx) })
 
   list.fold(outputs_with_idx, index, fn(acc, pair) {
     let #(_, idx) = pair
@@ -378,11 +394,15 @@ fn add_to_outpoint_index(
 
 fn find_missing_inputs(pool: Mempool, tx: Transaction) -> List(OutPoint) {
   list.filter_map(tx.inputs, fn(input) {
-    let outpoint_key = oni_bitcoin.hash256_to_hex(input.prevout.txid.hash) <>
-      ":" <> int.to_string(input.prevout.vout)
+    let outpoint_key =
+      oni_bitcoin.hash256_to_hex(input.prevout.txid.hash)
+      <> ":"
+      <> int.to_string(input.prevout.vout)
     case dict.has_key(pool.by_outpoint, outpoint_key) {
-      True -> Error(Nil)  // Found in mempool
-      False -> Ok(input.prevout)  // Missing (could be in UTXO set)
+      True -> Error(Nil)
+      // Found in mempool
+      False -> Ok(input.prevout)
+      // Missing (could be in UTXO set)
     }
   })
 }
@@ -391,8 +411,8 @@ fn check_package_limits(pool: Mempool, entry: MempoolEntry) -> Bool {
   // Calculate ancestor count and size
   let ancestor_info = get_ancestor_info(pool, entry.tx)
 
-  ancestor_info.count <= max_ancestors &&
-  ancestor_info.size <= max_ancestor_size
+  ancestor_info.count <= max_ancestors
+  && ancestor_info.size <= max_ancestor_size
 }
 
 type AncestorInfo {
@@ -437,7 +457,14 @@ fn count_ancestors(
               let new_fees = fees + oni_bitcoin.amount_to_sats(entry.fee)
               let more_ancestors = get_direct_ancestors(pool, entry.tx)
               let new_to_check = list.append(rest, more_ancestors)
-              count_ancestors(pool, new_to_check, new_visited, new_count, new_size, new_fees)
+              count_ancestors(
+                pool,
+                new_to_check,
+                new_visited,
+                new_count,
+                new_size,
+                new_fees,
+              )
             }
           }
         }
@@ -458,9 +485,10 @@ fn try_evict_for_entry(
   // Find lowest feerate transactions to evict
   let needed_space = entry.vsize
   let entries = dict.values(pool.txs)
-  let sorted = list.sort(entries, fn(a, b) {
-    float.compare(entry_ancestor_score(a), entry_ancestor_score(b))
-  })
+  let sorted =
+    list.sort(entries, fn(a, b) {
+      float.compare(entry_ancestor_score(a), entry_ancestor_score(b))
+    })
 
   evict_until_space(pool, sorted, needed_space, entry.fee_rate)
 }
@@ -479,7 +507,8 @@ fn evict_until_space(
         [candidate, ..rest] -> {
           // Only evict if lower fee rate
           case entry_ancestor_score(candidate) <. min_rate {
-            False -> Error(Nil)  // Would evict higher fee tx
+            False -> Error(Nil)
+            // Would evict higher fee tx
             True -> {
               let new_pool = mempool_remove(pool, candidate.txid)
               let new_needed = needed - candidate.vsize
@@ -503,14 +532,17 @@ pub fn mempool_remove(pool: Mempool, txid: Txid) -> Mempool {
       let new_txs = dict.delete(pool.txs, key)
 
       // Remove from outpoint index
-      let new_by_outpoint = remove_from_outpoint_index(pool.by_outpoint, entry.tx, key)
+      let new_by_outpoint =
+        remove_from_outpoint_index(pool.by_outpoint, entry.tx, key)
 
       // Update totals
       let new_size = int.max(0, pool.total_size - entry.vsize)
-      let new_fees = oni_bitcoin.sats(int.max(0,
-        oni_bitcoin.amount_to_sats(pool.total_fees) -
-        oni_bitcoin.amount_to_sats(entry.fee)
-      ))
+      let new_fees =
+        oni_bitcoin.sats(int.max(
+          0,
+          oni_bitcoin.amount_to_sats(pool.total_fees)
+            - oni_bitcoin.amount_to_sats(entry.fee),
+        ))
 
       Mempool(
         ..pool,
@@ -555,9 +587,8 @@ pub fn mempool_remove_for_block(
   spent_outpoints: List(OutPoint),
 ) -> Mempool {
   // Remove transactions included in block
-  let after_included = list.fold(txids, pool, fn(acc, txid) {
-    mempool_remove(acc, txid)
-  })
+  let after_included =
+    list.fold(txids, pool, fn(acc, txid) { mempool_remove(acc, txid) })
 
   // Remove transactions that spend same inputs (conflicts)
   remove_conflicts(after_included, spent_outpoints)
@@ -565,8 +596,10 @@ pub fn mempool_remove_for_block(
 
 fn remove_conflicts(pool: Mempool, spent: List(OutPoint)) -> Mempool {
   list.fold(spent, pool, fn(acc, outpoint) {
-    let key = oni_bitcoin.hash256_to_hex(outpoint.txid.hash) <>
-      ":" <> int.to_string(outpoint.vout)
+    let key =
+      oni_bitcoin.hash256_to_hex(outpoint.txid.hash)
+      <> ":"
+      <> int.to_string(outpoint.vout)
     case dict.get(acc.by_outpoint, key) {
       Error(_) -> acc
       Ok(txid_key) -> {
@@ -586,12 +619,7 @@ fn remove_conflicts(pool: Mempool, spent: List(OutPoint)) -> Mempool {
 
 /// Orphan transaction entry
 pub type OrphanEntry {
-  OrphanEntry(
-    tx: Transaction,
-    txid: Txid,
-    time: Int,
-    from_peer: Option(String),
-  )
+  OrphanEntry(tx: Transaction, txid: Txid, time: Int, from_peer: Option(String))
 }
 
 /// Pool of orphan transactions
@@ -604,10 +632,7 @@ pub type OrphanPool {
 
 /// Create a new orphan pool
 pub fn orphan_pool_new() -> OrphanPool {
-  OrphanPool(
-    orphans: dict.new(),
-    by_prev: dict.new(),
-  )
+  OrphanPool(orphans: dict.new(), by_prev: dict.new())
 }
 
 /// Add an orphan transaction
@@ -621,25 +646,22 @@ pub fn orphan_pool_add(
 
   // Check limits
   case dict.size(pool.orphans) >= max_orphan_txs {
-    True -> pool  // Don't add, pool is full
+    True -> pool
+    // Don't add, pool is full
     False -> {
-      let entry = OrphanEntry(
-        tx: tx,
-        txid: txid,
-        time: time,
-        from_peer: None,
-      )
+      let entry = OrphanEntry(tx: tx, txid: txid, time: time, from_peer: None)
 
       let new_orphans = dict.insert(pool.orphans, key, entry)
 
       // Index by previous outpoint for quick lookup
-      let new_by_prev = list.fold(tx.inputs, pool.by_prev, fn(acc, input) {
-        let prev_key = oni_bitcoin.hash256_to_hex(input.prevout.txid.hash)
-        case dict.get(acc, prev_key) {
-          Ok(existing) -> dict.insert(acc, prev_key, [key, ..existing])
-          Error(_) -> dict.insert(acc, prev_key, [key])
-        }
-      })
+      let new_by_prev =
+        list.fold(tx.inputs, pool.by_prev, fn(acc, input) {
+          let prev_key = oni_bitcoin.hash256_to_hex(input.prevout.txid.hash)
+          case dict.get(acc, prev_key) {
+            Ok(existing) -> dict.insert(acc, prev_key, [key, ..existing])
+            Error(_) -> dict.insert(acc, prev_key, [key])
+          }
+        })
 
       OrphanPool(orphans: new_orphans, by_prev: new_by_prev)
     }
@@ -647,7 +669,10 @@ pub fn orphan_pool_add(
 }
 
 /// Get orphans that depend on a given transaction
-pub fn orphan_pool_get_children(pool: OrphanPool, txid: Txid) -> List(OrphanEntry) {
+pub fn orphan_pool_get_children(
+  pool: OrphanPool,
+  txid: Txid,
+) -> List(OrphanEntry) {
   let key = oni_bitcoin.hash256_to_hex(txid.hash)
   case dict.get(pool.by_prev, key) {
     Error(_) -> []
@@ -671,19 +696,20 @@ pub fn orphan_pool_remove(pool: OrphanPool, txid: Txid) -> OrphanPool {
       let new_orphans = dict.delete(pool.orphans, key)
 
       // Remove from by_prev index
-      let new_by_prev = list.fold(entry.tx.inputs, pool.by_prev, fn(acc, input) {
-        let prev_key = oni_bitcoin.hash256_to_hex(input.prevout.txid.hash)
-        case dict.get(acc, prev_key) {
-          Error(_) -> acc
-          Ok(children) -> {
-            let filtered = list.filter(children, fn(k) { k != key })
-            case list.is_empty(filtered) {
-              True -> dict.delete(acc, prev_key)
-              False -> dict.insert(acc, prev_key, filtered)
+      let new_by_prev =
+        list.fold(entry.tx.inputs, pool.by_prev, fn(acc, input) {
+          let prev_key = oni_bitcoin.hash256_to_hex(input.prevout.txid.hash)
+          case dict.get(acc, prev_key) {
+            Error(_) -> acc
+            Ok(children) -> {
+              let filtered = list.filter(children, fn(k) { k != key })
+              case list.is_empty(filtered) {
+                True -> dict.delete(acc, prev_key)
+                False -> dict.insert(acc, prev_key, filtered)
+              }
             }
           }
-        }
-      })
+        })
 
       OrphanPool(orphans: new_orphans, by_prev: new_by_prev)
     }
@@ -718,11 +744,7 @@ pub type FeeTarget {
 
 /// Fee estimation result
 pub type FeeEstimate {
-  FeeEstimate(
-    fee_rate: Float,
-    target_blocks: Int,
-    confidence: Float,
-  )
+  FeeEstimate(fee_rate: Float, target_blocks: Int, confidence: Float)
 }
 
 /// Fee estimator state
@@ -739,11 +761,7 @@ pub type FeeEstimator {
 
 /// Create a new fee estimator
 pub fn fee_estimator_new() -> FeeEstimator {
-  FeeEstimator(
-    history: dict.new(),
-    block_rates: [],
-    blocks_tracked: 0,
-  )
+  FeeEstimator(history: dict.new(), block_rates: [], blocks_tracked: 0)
 }
 
 /// Record a transaction that was included in a block
@@ -753,7 +771,8 @@ pub fn fee_estimator_record_tx(
   blocks_to_confirm: Int,
 ) -> FeeEstimator {
   // Update history for this confirmation target
-  let target = int.min(blocks_to_confirm, 144)  // Cap at 144 blocks
+  let target = int.min(blocks_to_confirm, 144)
+  // Cap at 144 blocks
 
   let new_history = case dict.get(est.history, target) {
     Error(_) -> dict.insert(est.history, target, [fee_rate])
@@ -814,7 +833,10 @@ pub fn fee_estimator_estimate(
 }
 
 /// Fallback fee estimation using recent block median
-fn fallback_estimate(est: FeeEstimator, target_blocks: Int) -> Option(FeeEstimate) {
+fn fallback_estimate(
+  est: FeeEstimator,
+  target_blocks: Int,
+) -> Option(FeeEstimate) {
   case list.is_empty(est.block_rates) {
     True -> None
     False -> {
@@ -822,7 +844,8 @@ fn fallback_estimate(est: FeeEstimator, target_blocks: Int) -> Option(FeeEstimat
       Some(FeeEstimate(
         fee_rate: fee_rate,
         target_blocks: target_blocks,
-        confidence: 0.5,  // Lower confidence
+        confidence: 0.5,
+        // Lower confidence
       ))
     }
   }
@@ -895,10 +918,11 @@ pub fn mempool_get_for_block(
 ) -> List(MempoolEntry) {
   // Get all entries and sort by descendant score (ancestor-aware mining)
   let entries = dict.values(pool.txs)
-  let sorted = list.sort(entries, fn(a, b) {
-    // Higher score first
-    float.compare(entry_descendant_score(b), entry_descendant_score(a))
-  })
+  let sorted =
+    list.sort(entries, fn(a, b) {
+      // Higher score first
+      float.compare(entry_descendant_score(b), entry_descendant_score(a))
+    })
 
   // Take transactions up to weight limit
   select_for_block(sorted, max_weight, [])
@@ -912,12 +936,12 @@ fn select_for_block(
   case candidates {
     [] -> list.reverse(acc)
     [entry, ..rest] -> {
-      let weight = entry.vsize * 4  // vsize to weight
+      let weight = entry.vsize * 4
+      // vsize to weight
       case weight <= remaining_weight {
         True ->
           select_for_block(rest, remaining_weight - weight, [entry, ..acc])
-        False ->
-          select_for_block(rest, remaining_weight, acc)
+        False -> select_for_block(rest, remaining_weight, acc)
       }
     }
   }

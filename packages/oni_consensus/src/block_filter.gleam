@@ -16,8 +16,7 @@ import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/order
 import oni_bitcoin.{
-  type Block, type BlockHash, type Hash256, type OutPoint,
-  type Transaction,
+  type Block, type BlockHash, type Hash256, type OutPoint, type Transaction,
 }
 
 // ============================================================================
@@ -69,23 +68,13 @@ pub type FilterHeader {
 
 /// GCS (Golomb-Coded Set) parameters
 pub type GcsParams {
-  GcsParams(
-    p: Int,
-    m: Int,
-    n: Int,
-    modulus: Int,
-  )
+  GcsParams(p: Int, m: Int, n: Int, modulus: Int)
 }
 
 /// Create default GCS params for basic filter
 pub fn basic_gcs_params(n_elements: Int) -> GcsParams {
   let modulus = n_elements * filter_m
-  GcsParams(
-    p: filter_p,
-    m: filter_m,
-    n: n_elements,
-    modulus: modulus,
-  )
+  GcsParams(p: filter_p, m: filter_m, n: n_elements, modulus: modulus)
 }
 
 // ============================================================================
@@ -105,21 +94,23 @@ pub fn construct_basic_filter(
   let n = list.length(unique_elements)
 
   case n {
-    0 -> BlockFilter(
-      filter_type: filter_type_basic,
-      block_hash: block_hash,
-      n_elements: 0,
-      filter_data: <<>>,
-    )
+    0 ->
+      BlockFilter(
+        filter_type: filter_type_basic,
+        block_hash: block_hash,
+        n_elements: 0,
+        filter_data: <<>>,
+      )
     _ -> {
       // Get SipHash key from block hash
       let key = siphash_key_from_block_hash(block_hash)
 
       // Hash elements to integers
       let params = basic_gcs_params(n)
-      let hashed = list.map(unique_elements, fn(elem) {
-        hash_to_range(elem, key, params.modulus)
-      })
+      let hashed =
+        list.map(unique_elements, fn(elem) {
+          hash_to_range(elem, key, params.modulus)
+        })
 
       // Sort hashed values
       let sorted = list.sort(hashed, int.compare)
@@ -142,33 +133,32 @@ pub fn construct_basic_filter(
 
 /// Collect filter elements from a block
 fn collect_filter_elements(block: Block) -> List(BitArray) {
-  list.flat_map(block.transactions, fn(tx) {
-    collect_tx_elements(tx)
-  })
+  list.flat_map(block.transactions, fn(tx) { collect_tx_elements(tx) })
 }
 
 /// Collect filter elements from a transaction
 fn collect_tx_elements(tx: Transaction) -> List(BitArray) {
   // Collect output scripts (for matching receiving addresses)
-  let output_scripts = list.filter_map(tx.outputs, fn(output) {
-    let script_bytes = oni_bitcoin.script_to_bytes(output.script_pubkey)
-    // Skip empty scripts and OP_RETURN outputs
-    case bit_array.byte_size(script_bytes) {
-      0 -> Error(Nil)
-      _ -> case is_op_return(script_bytes) {
-        True -> Error(Nil)
-        False -> Ok(script_bytes)
+  let output_scripts =
+    list.filter_map(tx.outputs, fn(output) {
+      let script_bytes = oni_bitcoin.script_to_bytes(output.script_pubkey)
+      // Skip empty scripts and OP_RETURN outputs
+      case bit_array.byte_size(script_bytes) {
+        0 -> Error(Nil)
+        _ ->
+          case is_op_return(script_bytes) {
+            True -> Error(Nil)
+            False -> Ok(script_bytes)
+          }
       }
-    }
-  })
+    })
 
   // Collect input prevout scripts (for matching spent outputs)
   // Note: For the coinbase tx, skip inputs as they don't have prevouts
   let input_outpoints = case is_coinbase(tx) {
     True -> []
-    False -> list.map(tx.inputs, fn(input) {
-      serialize_outpoint(input.prevout)
-    })
+    False ->
+      list.map(tx.inputs, fn(input) { serialize_outpoint(input.prevout) })
   }
 
   list.append(output_scripts, input_outpoints)
@@ -237,15 +227,19 @@ fn siphash_2_4(data: BitArray, key: BitArray) -> Int {
   let last_block = siphash_last_block(data, b)
 
   let v3_2 = int.bitwise_exclusive_or(v3, last_block)
-  let #(v0_2, v1_2, v2_2, v3_2) = siphash_round(siphash_round(#(v0, v1, v2, v3_2)))
+  let #(v0_2, v1_2, v2_2, v3_2) =
+    siphash_round(siphash_round(#(v0, v1, v2, v3_2)))
   let v0_3 = int.bitwise_exclusive_or(v0_2, last_block)
 
   let v2_3 = int.bitwise_exclusive_or(v2_2, 0xff)
-  let #(v0_4, v1_4, v2_4, v3_4) = siphash_round(siphash_round(siphash_round(siphash_round(#(v0_3, v1_2, v2_3, v3_2)))))
+  let #(v0_4, v1_4, v2_4, v3_4) =
+    siphash_round(
+      siphash_round(siphash_round(siphash_round(#(v0_3, v1_2, v2_3, v3_2)))),
+    )
 
   int.bitwise_exclusive_or(
     int.bitwise_exclusive_or(v0_4, v1_4),
-    int.bitwise_exclusive_or(v2_4, v3_4)
+    int.bitwise_exclusive_or(v2_4, v3_4),
   )
   |> int.bitwise_and(0xFFFFFFFFFFFFFFFF)
 }
@@ -311,9 +305,9 @@ fn rotl64(x: Int, n: Int) -> Int {
   int.bitwise_and(
     int.bitwise_or(
       int.bitwise_shift_left(masked, n),
-      int.bitwise_shift_right(masked, 64 - n)
+      int.bitwise_shift_right(masked, 64 - n),
     ),
-    0xFFFFFFFFFFFFFFFF
+    0xFFFFFFFFFFFFFFFF,
   )
 }
 
@@ -370,9 +364,7 @@ fn compute_deltas_acc(sorted: List(Int), prev: Int, acc: List(Int)) -> List(Int)
 
 /// Encode deltas using Golomb-Rice coding
 pub fn golomb_rice_encode(deltas: List(Int), p: Int) -> BitArray {
-  let bits = list.flat_map(deltas, fn(delta) {
-    encode_single_gr(delta, p)
-  })
+  let bits = list.flat_map(deltas, fn(delta) { encode_single_gr(delta, p) })
   bits_to_bytes(bits)
 }
 
@@ -395,10 +387,7 @@ fn encode_binary(value: Int, bits: Int, acc: List(Int)) -> List(Int) {
   case bits {
     0 -> list.reverse(acc)
     _ -> {
-      let bit = int.bitwise_and(
-        int.bitwise_shift_right(value, bits - 1),
-        1
-      )
+      let bit = int.bitwise_and(int.bitwise_shift_right(value, bits - 1), 1)
       encode_binary(value, bits - 1, [bit, ..acc])
     }
   }
@@ -427,10 +416,8 @@ fn bits_to_bytes_acc(
       }
     }
     [bit, ..rest] -> {
-      let new_byte = int.bitwise_or(
-        int.bitwise_shift_left(current_byte, 1),
-        bit
-      )
+      let new_byte =
+        int.bitwise_or(int.bitwise_shift_left(current_byte, 1), bit)
       let new_pos = bit_pos + 1
       case new_pos >= 8 {
         True -> {
@@ -444,11 +431,7 @@ fn bits_to_bytes_acc(
 }
 
 /// Decode Golomb-Rice encoded data
-pub fn golomb_rice_decode(
-  data: BitArray,
-  n_elements: Int,
-  p: Int,
-) -> List(Int) {
+pub fn golomb_rice_decode(data: BitArray, n_elements: Int, p: Int) -> List(Int) {
   let bits = bytes_to_bits(data)
   decode_gr_values(bits, n_elements, p, 0, [])
 }
@@ -553,10 +536,7 @@ fn decode_binary_acc(
 // ============================================================================
 
 /// Check if any element matches the filter
-pub fn filter_match(
-  filter: BlockFilter,
-  elements: List(BitArray),
-) -> Bool {
+pub fn filter_match(filter: BlockFilter, elements: List(BitArray)) -> Bool {
   case filter.n_elements {
     0 -> False
     n -> {
@@ -564,10 +544,9 @@ pub fn filter_match(
       let params = basic_gcs_params(n)
 
       // Hash query elements
-      let query_hashes = list.map(elements, fn(elem) {
-        hash_to_range(elem, key, params.modulus)
-      })
-      |> list.sort(int.compare)
+      let query_hashes =
+        list.map(elements, fn(elem) { hash_to_range(elem, key, params.modulus) })
+        |> list.sort(int.compare)
 
       // Decode filter values
       let filter_values = golomb_rice_decode(filter.filter_data, n, params.p)
@@ -579,10 +558,7 @@ pub fn filter_match(
 }
 
 /// Check if any element matches the filter (single element convenience)
-pub fn filter_match_single(
-  filter: BlockFilter,
-  element: BitArray,
-) -> Bool {
+pub fn filter_match_single(filter: BlockFilter, element: BitArray) -> Bool {
   filter_match(filter, [element])
 }
 

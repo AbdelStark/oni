@@ -76,19 +76,26 @@ pub type Misbehavior {
 /// Get the penalty score for a misbehavior type
 pub fn misbehavior_penalty(misbehavior: Misbehavior) -> Int {
   case misbehavior {
-    InvalidBlockHeader -> 100  // Immediate ban
-    InvalidBlock -> 100  // Immediate ban
+    InvalidBlockHeader -> 100
+    // Immediate ban
+    InvalidBlock -> 100
+    // Immediate ban
     InvalidTransaction -> 10
     MalformedMessage -> 20
     UnexpectedMessage -> 10
-    VersionMismatch -> 100  // Immediate ban
+    VersionMismatch -> 100
+    // Immediate ban
     TooManyInventory -> 20
     UnrequestedData -> 5
     DisconnectedHeaders -> 20
-    InvalidPoW -> 100  // Immediate ban
-    InvalidMerkleRoot -> 100  // Immediate ban
-    InvalidSignature -> 100  // Immediate ban
-    DoubleSpend -> 100  // Immediate ban
+    InvalidPoW -> 100
+    // Immediate ban
+    InvalidMerkleRoot -> 100
+    // Immediate ban
+    InvalidSignature -> 100
+    // Immediate ban
+    DoubleSpend -> 100
+    // Immediate ban
     MessageRateExceeded -> 25
     DuplicateMessage -> 1
     InvalidAddress -> 5
@@ -132,12 +139,7 @@ pub type PeerScore {
 
 /// Create a new peer score entry
 pub fn peer_score_new() -> PeerScore {
-  PeerScore(
-    score: 0,
-    last_update: 0,
-    incident_count: 0,
-    recent_incidents: [],
-  )
+  PeerScore(score: 0, last_update: 0, incident_count: 0, recent_incidents: [])
 }
 
 /// Add misbehavior to a peer's score
@@ -331,10 +333,11 @@ pub fn record_misbehavior(
   let new_scores = dict.insert(manager.scores, peer_id, new_score)
 
   // Update stats
-  let new_stats = BanStats(
-    ..manager.stats,
-    total_incidents: manager.stats.total_incidents + 1,
-  )
+  let new_stats =
+    BanStats(
+      ..manager.stats,
+      total_incidents: manager.stats.total_incidents + 1,
+    )
 
   // Check if should ban
   case peer_score_should_ban(new_score) {
@@ -356,11 +359,12 @@ pub fn record_misbehavior(
       let ban_entry = ban_entry_auto(new_score, misbehavior, current_time)
       let new_peer_bans = dict.insert(manager.peer_bans, peer_id, ban_entry)
 
-      let final_stats = BanStats(
-        ..new_stats,
-        auto_bans: new_stats.auto_bans + 1,
-        active_bans: new_stats.active_bans + 1,
-      )
+      let final_stats =
+        BanStats(
+          ..new_stats,
+          auto_bans: new_stats.auto_bans + 1,
+          active_bans: new_stats.active_bans + 1,
+        )
 
       #(
         BanManager(
@@ -398,11 +402,7 @@ pub fn is_peer_banned(
 }
 
 /// Check if an IP is banned
-pub fn is_ip_banned(
-  manager: BanManager,
-  ip: String,
-  current_time: Int,
-) -> Bool {
+pub fn is_ip_banned(manager: BanManager, ip: String, current_time: Int) -> Bool {
   case dict.get(manager.ip_bans, ip) {
     Error(_) -> check_subnet_bans(manager, ip, current_time)
     Ok(entry) -> !ban_entry_expired(entry, current_time)
@@ -429,11 +429,12 @@ pub fn ban_peer(
 ) -> BanManager {
   let entry = ban_entry_manual(description, current_time, duration)
   let new_bans = dict.insert(manager.peer_bans, peer_id, entry)
-  let new_stats = BanStats(
-    ..manager.stats,
-    manual_bans: manager.stats.manual_bans + 1,
-    active_bans: manager.stats.active_bans + 1,
-  )
+  let new_stats =
+    BanStats(
+      ..manager.stats,
+      manual_bans: manager.stats.manual_bans + 1,
+      active_bans: manager.stats.active_bans + 1,
+    )
 
   BanManager(..manager, peer_bans: new_bans, stats: new_stats)
 }
@@ -448,11 +449,12 @@ pub fn ban_ip(
 ) -> BanManager {
   let entry = ban_entry_manual(description, current_time, duration)
   let new_bans = dict.insert(manager.ip_bans, ip, entry)
-  let new_stats = BanStats(
-    ..manager.stats,
-    manual_bans: manager.stats.manual_bans + 1,
-    active_bans: manager.stats.active_bans + 1,
-  )
+  let new_stats =
+    BanStats(
+      ..manager.stats,
+      manual_bans: manager.stats.manual_bans + 1,
+      active_bans: manager.stats.active_bans + 1,
+    )
 
   BanManager(..manager, ip_bans: new_bans, stats: new_stats)
 }
@@ -463,10 +465,11 @@ pub fn unban_peer(manager: BanManager, peer_id: String) -> BanManager {
     False -> manager
     True -> {
       let new_bans = dict.delete(manager.peer_bans, peer_id)
-      let new_stats = BanStats(
-        ..manager.stats,
-        active_bans: int.max(0, manager.stats.active_bans - 1),
-      )
+      let new_stats =
+        BanStats(
+          ..manager.stats,
+          active_bans: int.max(0, manager.stats.active_bans - 1),
+        )
       BanManager(..manager, peer_bans: new_bans, stats: new_stats)
     }
   }
@@ -478,10 +481,11 @@ pub fn unban_ip(manager: BanManager, ip: String) -> BanManager {
     False -> manager
     True -> {
       let new_bans = dict.delete(manager.ip_bans, ip)
-      let new_stats = BanStats(
-        ..manager.stats,
-        active_bans: int.max(0, manager.stats.active_bans - 1),
-      )
+      let new_stats =
+        BanStats(
+          ..manager.stats,
+          active_bans: int.max(0, manager.stats.active_bans - 1),
+        )
       BanManager(..manager, ip_bans: new_bans, stats: new_stats)
     }
   }
@@ -504,13 +508,15 @@ pub fn cleanup_expired_bans(
   let #(active_subnet_bans, expired_subnet_count) =
     cleanup_ban_dict(manager.subnet_bans, current_time)
 
-  let total_expired = expired_peer_count + expired_ip_count + expired_subnet_count
+  let total_expired =
+    expired_peer_count + expired_ip_count + expired_subnet_count
 
-  let new_stats = BanStats(
-    ..manager.stats,
-    active_bans: manager.stats.active_bans - total_expired,
-    expired_bans: manager.stats.expired_bans + total_expired,
-  )
+  let new_stats =
+    BanStats(
+      ..manager.stats,
+      active_bans: manager.stats.active_bans - total_expired,
+      expired_bans: manager.stats.expired_bans + total_expired,
+    )
 
   BanManager(
     ..manager,
@@ -551,13 +557,15 @@ pub fn get_active_bans(
   manager: BanManager,
   current_time: Int,
 ) -> List(#(String, BanEntry)) {
-  let peer_bans = dict.to_list(manager.peer_bans)
+  let peer_bans =
+    dict.to_list(manager.peer_bans)
     |> list.filter(fn(pair) {
       let #(_key, entry) = pair
       !ban_entry_expired(entry, current_time)
     })
 
-  let ip_bans = dict.to_list(manager.ip_bans)
+  let ip_bans =
+    dict.to_list(manager.ip_bans)
     |> list.filter(fn(pair) {
       let #(_key, entry) = pair
       !ban_entry_expired(entry, current_time)
@@ -594,39 +602,40 @@ pub type BanExportType {
 }
 
 /// Export all active bans
-pub fn export_bans(
-  manager: BanManager,
-  current_time: Int,
-) -> List(BanExport) {
-  let peer_exports = dict.to_list(manager.peer_bans)
+pub fn export_bans(manager: BanManager, current_time: Int) -> List(BanExport) {
+  let peer_exports =
+    dict.to_list(manager.peer_bans)
     |> list.filter_map(fn(pair) {
       let #(peer_id, entry) = pair
       case ban_entry_expired(entry, current_time) {
         True -> Error(Nil)
-        False -> Ok(BanExport(
-          identifier: peer_id,
-          ban_type: PeerBan,
-          ban_time: entry.ban_time,
-          duration: entry.duration,
-          reason: ban_reason_to_string(entry.reason),
-          manual: entry.manual,
-        ))
+        False ->
+          Ok(BanExport(
+            identifier: peer_id,
+            ban_type: PeerBan,
+            ban_time: entry.ban_time,
+            duration: entry.duration,
+            reason: ban_reason_to_string(entry.reason),
+            manual: entry.manual,
+          ))
       }
     })
 
-  let ip_exports = dict.to_list(manager.ip_bans)
+  let ip_exports =
+    dict.to_list(manager.ip_bans)
     |> list.filter_map(fn(pair) {
       let #(ip, entry) = pair
       case ban_entry_expired(entry, current_time) {
         True -> Error(Nil)
-        False -> Ok(BanExport(
-          identifier: ip,
-          ban_type: IpBan,
-          ban_time: entry.ban_time,
-          duration: entry.duration,
-          reason: ban_reason_to_string(entry.reason),
-          manual: entry.manual,
-        ))
+        False ->
+          Ok(BanExport(
+            identifier: ip,
+            ban_type: IpBan,
+            ban_time: entry.ban_time,
+            duration: entry.duration,
+            reason: ban_reason_to_string(entry.reason),
+            manual: entry.manual,
+          ))
       }
     })
 
@@ -653,25 +662,33 @@ pub fn import_bans(
     case current_time >= export.ban_time + export.duration {
       True -> mgr
       False -> {
-        let entry = BanEntry(
-          reason: ImportedBan,
-          ban_time: export.ban_time,
-          duration: export.duration,
-          manual: export.manual,
-        )
+        let entry =
+          BanEntry(
+            reason: ImportedBan,
+            ban_time: export.ban_time,
+            duration: export.duration,
+            manual: export.manual,
+          )
         case export.ban_type {
-          PeerBan -> BanManager(
-            ..mgr,
-            peer_bans: dict.insert(mgr.peer_bans, export.identifier, entry),
-          )
-          IpBan -> BanManager(
-            ..mgr,
-            ip_bans: dict.insert(mgr.ip_bans, export.identifier, entry),
-          )
-          SubnetBan -> BanManager(
-            ..mgr,
-            subnet_bans: dict.insert(mgr.subnet_bans, export.identifier, entry),
-          )
+          PeerBan ->
+            BanManager(
+              ..mgr,
+              peer_bans: dict.insert(mgr.peer_bans, export.identifier, entry),
+            )
+          IpBan ->
+            BanManager(
+              ..mgr,
+              ip_bans: dict.insert(mgr.ip_bans, export.identifier, entry),
+            )
+          SubnetBan ->
+            BanManager(
+              ..mgr,
+              subnet_bans: dict.insert(
+                mgr.subnet_bans,
+                export.identifier,
+                entry,
+              ),
+            )
         }
       }
     }

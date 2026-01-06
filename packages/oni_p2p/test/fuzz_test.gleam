@@ -58,32 +58,43 @@ pub fn partial_header_returns_error_test() {
 pub fn wrong_network_magic_returns_error_test() {
   // Mainnet magic is 0xD9B4BEF9, use wrong magic
   let wrong_magic = <<0xDE, 0xAD, 0xBE, 0xEF>>
-  let command = <<"ping", 0, 0, 0, 0, 0, 0, 0, 0>>  // 12 bytes
-  let length = <<8:32-little>>  // 8 bytes payload
-  let checksum = <<0, 0, 0, 0>>  // Will fail anyway
-  let payload = <<12345:64-little>>  // nonce
+  let command = <<"ping", 0, 0, 0, 0, 0, 0, 0, 0>>
+  // 12 bytes
+  let length = <<8:32-little>>
+  // 8 bytes payload
+  let checksum = <<0, 0, 0, 0>>
+  // Will fail anyway
+  let payload = <<12_345:64-little>>
+  // nonce
 
   let msg = bit_array.concat([wrong_magic, command, length, checksum, payload])
 
   case oni_p2p.decode_message(msg, oni_bitcoin.Mainnet) {
-    Error(oni_p2p.InvalidMessage("Wrong network magic")) -> should.be_ok(Ok(Nil))
-    Error(_) -> should.be_ok(Ok(Nil))  // Any error is acceptable
+    Error(oni_p2p.InvalidMessage("Wrong network magic")) ->
+      should.be_ok(Ok(Nil))
+    Error(_) -> should.be_ok(Ok(Nil))
+    // Any error is acceptable
     Ok(_) -> should.fail()
   }
 }
 
 pub fn invalid_checksum_returns_error_test() {
   // Valid magic but wrong checksum
-  let magic = <<0xF9, 0xBE, 0xB4, 0xD9>>  // Mainnet
-  let command = <<"verack", 0, 0, 0, 0, 0, 0>>  // 12 bytes
-  let length = <<0:32-little>>  // 0 bytes payload
-  let checksum = <<0xFF, 0xFF, 0xFF, 0xFF>>  // Wrong checksum
+  let magic = <<0xF9, 0xBE, 0xB4, 0xD9>>
+  // Mainnet
+  let command = <<"verack", 0, 0, 0, 0, 0, 0>>
+  // 12 bytes
+  let length = <<0:32-little>>
+  // 0 bytes payload
+  let checksum = <<0xFF, 0xFF, 0xFF, 0xFF>>
+  // Wrong checksum
 
   let msg = bit_array.concat([magic, command, length, checksum])
 
   case oni_p2p.decode_message(msg, oni_bitcoin.Mainnet) {
     Error(oni_p2p.InvalidChecksum) -> should.be_ok(Ok(Nil))
-    Error(_) -> should.be_ok(Ok(Nil))  // Any error is acceptable
+    Error(_) -> should.be_ok(Ok(Nil))
+    // Any error is acceptable
     Ok(_) -> should.fail()
   }
 }
@@ -100,7 +111,8 @@ pub fn message_too_large_returns_error_test() {
 
   case oni_p2p.decode_message(msg, oni_bitcoin.Mainnet) {
     Error(oni_p2p.MessageTooLarge) -> should.be_ok(Ok(Nil))
-    Error(_) -> should.be_ok(Ok(Nil))  // Other errors acceptable too
+    Error(_) -> should.be_ok(Ok(Nil))
+    // Other errors acceptable too
     Ok(_) -> should.fail()
   }
 }
@@ -109,9 +121,11 @@ pub fn truncated_payload_returns_error_test() {
   // Header claims 100 bytes payload but only 10 bytes provided
   let magic = <<0xF9, 0xBE, 0xB4, 0xD9>>
   let command = <<"ping", 0, 0, 0, 0, 0, 0, 0, 0>>
-  let length = <<100:32-little>>  // Claim 100 bytes
+  let length = <<100:32-little>>
+  // Claim 100 bytes
   let checksum = <<0, 0, 0, 0>>
-  let payload = <<1, 2, 3, 4, 5, 6, 7, 8, 9, 10>>  // Only 10 bytes
+  let payload = <<1, 2, 3, 4, 5, 6, 7, 8, 9, 10>>
+  // Only 10 bytes
 
   let msg = bit_array.concat([magic, command, length, checksum, payload])
 
@@ -128,7 +142,8 @@ pub fn truncated_payload_returns_error_test() {
 
 pub fn inv_zero_items_test() {
   // Zero inventory items should be valid
-  let payload = <<0>>  // CompactSize 0
+  let payload = <<0>>
+  // CompactSize 0
   let encoded = encode_with_header("inv", payload)
 
   case oni_p2p.decode_message(encoded, oni_bitcoin.Mainnet) {
@@ -150,7 +165,8 @@ pub fn inv_max_items_boundary_test() {
   let encoded = encode_with_header("inv", payload)
 
   case oni_p2p.decode_message(encoded, oni_bitcoin.Mainnet) {
-    Error(oni_p2p.InvalidMessage("Too many inventory items")) -> should.be_ok(Ok(Nil))
+    Error(oni_p2p.InvalidMessage("Too many inventory items")) ->
+      should.be_ok(Ok(Nil))
     Error(_) -> should.be_ok(Ok(Nil))
     Ok(_) -> should.fail()
   }
@@ -158,10 +174,13 @@ pub fn inv_max_items_boundary_test() {
 
 pub fn inv_truncated_item_test() {
   // One item claimed but not enough bytes
-  let payload = bit_array.concat([
-    <<1>>,  // 1 item
-    <<0, 0, 0, 0>>,  // Only 4 bytes, need 36 (4 type + 32 hash)
-  ])
+  let payload =
+    bit_array.concat([
+      <<1>>,
+      // 1 item
+      <<0, 0, 0, 0>>,
+      // Only 4 bytes, need 36 (4 type + 32 hash)
+    ])
 
   let encoded = encode_with_header("inv", payload)
 
@@ -234,10 +253,13 @@ pub fn addr_max_addresses_boundary_test() {
 
 pub fn addr_truncated_address_test() {
   // One address claimed but not enough bytes
-  let payload = bit_array.concat([
-    <<1>>,  // 1 address
-    <<0, 0, 0, 0>>,  // Only 4 bytes, need 30 (4 time + 8 services + 16 ip + 2 port)
-  ])
+  let payload =
+    bit_array.concat([
+      <<1>>,
+      // 1 address
+      <<0, 0, 0, 0>>,
+      // Only 4 bytes, need 30 (4 time + 8 services + 16 ip + 2 port)
+    ])
 
   let encoded = encode_with_header("addr", payload)
 
@@ -278,10 +300,13 @@ pub fn headers_max_boundary_test() {
 
 pub fn headers_truncated_header_test() {
   // One header claimed but truncated
-  let payload = bit_array.concat([
-    <<1>>,  // 1 header
-    <<0:64>>,  // Only 8 bytes, need 81 (80 header + 1 tx count)
-  ])
+  let payload =
+    bit_array.concat([
+      <<1>>,
+      // 1 header
+      <<0:64>>,
+      // Only 8 bytes, need 81 (80 header + 1 tx count)
+    ])
 
   let encoded = encode_with_header("headers", payload)
 
@@ -297,7 +322,8 @@ pub fn headers_truncated_header_test() {
 
 pub fn version_truncated_test() {
   // Version message with truncated payload
-  let payload = <<70016:32-little, 0:64-little>>  // Only version and services
+  let payload = <<70_016:32-little, 0:64-little>>
+  // Only version and services
 
   let encoded = encode_with_header("version", payload)
 
@@ -310,28 +336,49 @@ pub fn version_truncated_test() {
 pub fn version_invalid_user_agent_length_test() {
   // Version with user agent length larger than remaining bytes
   // Build a minimal valid version up to user_agent
-  let version = 70016
+  let version = 70_016
   let services = 1
-  let timestamp = 1234567890
+  let timestamp = 1_234_567_890
   // addr_recv: services(8) + ip(16) + port(2) = 26 bytes
-  let addr_recv = <<1:64-little, 0:80, 0xFF:8, 0xFF:8, 127:8, 0:8, 0:8, 1:8, 8333:16-big>>
+  let addr_recv = <<
+    1:64-little,
+    0:80,
+    0xFF:8,
+    0xFF:8,
+    127:8,
+    0:8,
+    0:8,
+    1:8,
+    8333:16-big,
+  >>
   // addr_from: same
-  let addr_from = <<1:64-little, 0:80, 0xFF:8, 0xFF:8, 127:8, 0:8, 0:8, 1:8, 0:16-big>>
-  let nonce = 12345
+  let addr_from = <<
+    1:64-little,
+    0:80,
+    0xFF:8,
+    0xFF:8,
+    127:8,
+    0:8,
+    0:8,
+    1:8,
+    0:16-big,
+  >>
+  let nonce = 12_345
   // User agent with length claiming 255 bytes but only 5 provided
   let user_agent_len = <<255>>
   let user_agent_data = <<"hello">>
 
-  let payload = bit_array.concat([
-    <<version:32-little>>,
-    <<services:64-little>>,
-    <<timestamp:64-little>>,
-    addr_recv,
-    addr_from,
-    <<nonce:64-little>>,
-    user_agent_len,
-    user_agent_data,
-  ])
+  let payload =
+    bit_array.concat([
+      <<version:32-little>>,
+      <<services:64-little>>,
+      <<timestamp:64-little>>,
+      addr_recv,
+      addr_from,
+      <<nonce:64-little>>,
+      user_agent_len,
+      user_agent_data,
+    ])
 
   let encoded = encode_with_header("version", payload)
 
@@ -383,7 +430,7 @@ pub fn pong_truncated_test() {
 
 pub fn getblocks_max_locators_test() {
   // Test above max_locator_size
-  let version = <<70016:32-little>>
+  let version = <<70_016:32-little>>
   let count = max_locator_size + 1
   let count_bytes = encode_compact_size(count)
 
@@ -399,7 +446,7 @@ pub fn getblocks_max_locators_test() {
 
 pub fn getheaders_max_locators_test() {
   // Test above max_locator_size
-  let version = <<70016:32-little>>
+  let version = <<70_016:32-little>>
   let count = max_locator_size + 1
   let count_bytes = encode_compact_size(count)
 
@@ -415,8 +462,9 @@ pub fn getheaders_max_locators_test() {
 
 pub fn getblocks_missing_stop_hash_test() {
   // Valid count but no stop hash
-  let version = <<70016:32-little>>
-  let count = <<0>>  // 0 locators
+  let version = <<70_016:32-little>>
+  let count = <<0>>
+  // 0 locators
   // No stop hash follows
 
   let payload = bit_array.concat([version, count])
@@ -434,7 +482,8 @@ pub fn getblocks_missing_stop_hash_test() {
 // ============================================================================
 
 pub fn sendcmpct_valid_test() {
-  let payload = <<1:8, 1:64-little>>  // announce=true, version=1
+  let payload = <<1:8, 1:64-little>>
+  // announce=true, version=1
   let encoded = encode_with_header("sendcmpct", payload)
 
   case oni_p2p.decode_message(encoded, oni_bitcoin.Mainnet) {
@@ -444,7 +493,8 @@ pub fn sendcmpct_valid_test() {
 }
 
 pub fn sendcmpct_truncated_test() {
-  let payload = <<1>>  // Only 1 byte, need 9
+  let payload = <<1>>
+  // Only 1 byte, need 9
   let encoded = encode_with_header("sendcmpct", payload)
 
   case oni_p2p.decode_message(encoded, oni_bitcoin.Mainnet) {
@@ -469,7 +519,8 @@ pub fn feefilter_valid_test() {
 }
 
 pub fn feefilter_truncated_test() {
-  let payload = <<1, 2, 3, 4>>  // Only 4 bytes, need 8
+  let payload = <<1, 2, 3, 4>>
+  // Only 4 bytes, need 8
   let encoded = encode_with_header("feefilter", payload)
 
   case oni_p2p.decode_message(encoded, oni_bitcoin.Mainnet) {
@@ -558,8 +609,10 @@ pub fn command_with_null_bytes_test() {
   // Should decode as "ver" (stopping at null)
   case oni_p2p.decode_message(encoded, oni_bitcoin.Mainnet) {
     Ok(#(oni_p2p.MsgUnknown("ver", _), _)) -> should.be_ok(Ok(Nil))
-    Ok(_) -> should.be_ok(Ok(Nil))  // Any valid parse is ok
-    Error(_) -> should.be_ok(Ok(Nil))  // Error is also acceptable
+    Ok(_) -> should.be_ok(Ok(Nil))
+    // Any valid parse is ok
+    Error(_) -> should.be_ok(Ok(Nil))
+    // Error is also acceptable
   }
 }
 
@@ -589,12 +642,29 @@ pub fn ipv4_mapped_roundtrip_test() {
 
 pub fn ipv6_roundtrip_test() {
   // Create a non-mapped IPv6 address (first 10 bytes not all zero + ffff)
-  let ipv6_bytes = <<0x20, 0x01, 0x0D, 0xB8, 0x00, 0x00, 0x00, 0x00,
-                     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01>>
+  let ipv6_bytes = <<
+    0x20,
+    0x01,
+    0x0D,
+    0xB8,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x01,
+  >>
 
   case oni_p2p.decode_ip(ipv6_bytes) {
     Ok(oni_p2p.IPv6(_)) -> should.be_ok(Ok(Nil))
-    Ok(oni_p2p.IPv4(_, _, _, _)) -> should.be_ok(Ok(Nil))  // May decode as IPv4 depending on pattern
+    Ok(oni_p2p.IPv4(_, _, _, _)) -> should.be_ok(Ok(Nil))
+    // May decode as IPv4 depending on pattern
     Error(_) -> should.fail()
   }
 }
@@ -612,11 +682,12 @@ pub fn netaddr_truncated_test() {
 }
 
 pub fn netaddr_roundtrip_test() {
-  let addr = oni_p2p.NetAddr(
-    services: oni_p2p.default_services(),
-    ip: oni_p2p.ipv4(8, 8, 8, 8),
-    port: 8333,
-  )
+  let addr =
+    oni_p2p.NetAddr(
+      services: oni_p2p.default_services(),
+      ip: oni_p2p.ipv4(8, 8, 8, 8),
+      port: 8333,
+    )
 
   let encoded = oni_p2p.encode_netaddr(addr)
   case oni_p2p.decode_netaddr(encoded) {
@@ -671,7 +742,8 @@ pub fn ping_roundtrip_test() {
   let encoded = oni_p2p.encode_message(msg, oni_bitcoin.Mainnet)
 
   case oni_p2p.decode_message(encoded, oni_bitcoin.Mainnet) {
-    Ok(#(oni_p2p.MsgPing(nonce), _)) -> nonce |> should.equal(0xDEADBEEF12345678)
+    Ok(#(oni_p2p.MsgPing(nonce), _)) ->
+      nonce |> should.equal(0xDEADBEEF12345678)
     _ -> should.fail()
   }
 }
@@ -681,7 +753,8 @@ pub fn pong_roundtrip_test() {
   let encoded = oni_p2p.encode_message(msg, oni_bitcoin.Mainnet)
 
   case oni_p2p.decode_message(encoded, oni_bitcoin.Mainnet) {
-    Ok(#(oni_p2p.MsgPong(nonce), _)) -> nonce |> should.equal(0x123456789ABCDEF0)
+    Ok(#(oni_p2p.MsgPong(nonce), _)) ->
+      nonce |> should.equal(0x123456789ABCDEF0)
     _ -> should.fail()
   }
 }
@@ -814,7 +887,8 @@ pub fn multiple_messages_in_buffer_test() {
 
 /// Encode a message with proper header (for testing payload parsing)
 fn encode_with_header(command: String, payload: BitArray) -> BitArray {
-  let magic = <<0xF9, 0xBE, 0xB4, 0xD9>>  // Mainnet
+  let magic = <<0xF9, 0xBE, 0xB4, 0xD9>>
+  // Mainnet
   let cmd_bytes = pad_command(command)
   let length = <<bit_array.byte_size(payload):32-little>>
   let checksum = compute_checksum(payload)
@@ -851,7 +925,7 @@ fn compute_checksum(payload: BitArray) -> BitArray {
 fn encode_compact_size(n: Int) -> BitArray {
   case n {
     _ if n < 253 -> <<n:8>>
-    _ if n < 65536 -> <<0xFD, n:16-little>>
+    _ if n < 65_536 -> <<0xFD, n:16-little>>
     _ if n < 4_294_967_296 -> <<0xFE, n:32-little>>
     _ -> <<0xFF, n:64-little>>
   }

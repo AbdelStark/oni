@@ -1,9 +1,9 @@
 // Tests for HTTP transport layer
 
+import gleam/bit_array
+import gleam/dict
 import gleeunit
 import gleeunit/should
-import gleam/dict
-import gleam/bit_array
 import rpc_http
 
 pub fn main() {
@@ -54,7 +54,8 @@ pub fn parse_simple_request_test() {
 }
 
 pub fn parse_post_request_test() {
-  let request_text = "POST /rpc HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: 2\r\n\r\n{}"
+  let request_text =
+    "POST /rpc HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: 2\r\n\r\n{}"
   let bytes = bit_array.from_string(request_text)
 
   case rpc_http.parse_request(bytes) {
@@ -68,7 +69,11 @@ pub fn parse_post_request_test() {
 
 pub fn parse_request_with_body_test() {
   let body = "{\"method\":\"getblockcount\"}"
-  let request_text = "POST / HTTP/1.1\r\nContent-Length: " <> int_to_string(string_length(body)) <> "\r\n\r\n" <> body
+  let request_text =
+    "POST / HTTP/1.1\r\nContent-Length: "
+    <> int_to_string(string_length(body))
+    <> "\r\n\r\n"
+    <> body
   let bytes = bit_array.from_string(request_text)
 
   case rpc_http.parse_request(bytes) {
@@ -95,7 +100,8 @@ pub fn parse_empty_request_fails_test() {
 // ============================================================================
 
 pub fn get_header_test() {
-  let request_text = "GET / HTTP/1.1\r\nHost: example.com\r\nContent-Type: application/json\r\n\r\n"
+  let request_text =
+    "GET / HTTP/1.1\r\nHost: example.com\r\nContent-Type: application/json\r\n\r\n"
   let bytes = bit_array.from_string(request_text)
 
   case rpc_http.parse_request(bytes) {
@@ -277,7 +283,8 @@ pub fn stats_connection_opened_test() {
 }
 
 pub fn stats_connection_closed_test() {
-  let stats = rpc_http.stats_new()
+  let stats =
+    rpc_http.stats_new()
     |> rpc_http.stats_connection_opened
 
   let updated = rpc_http.stats_connection_closed(stats)

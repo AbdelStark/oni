@@ -133,40 +133,28 @@ fn parse_single_arg(
 ) -> Result(#(CliArgs, List(String)), CliError) {
   case arg {
     // Help and version
-    "--help" | "-h" | "-?" ->
-      Ok(#(CliArgs(..acc, command: ShowHelp), rest))
-    "--version" | "-v" ->
-      Ok(#(CliArgs(..acc, command: ShowVersion), rest))
+    "--help" | "-h" | "-?" -> Ok(#(CliArgs(..acc, command: ShowHelp), rest))
+    "--version" | "-v" -> Ok(#(CliArgs(..acc, command: ShowVersion), rest))
 
     // Network selection
-    "--mainnet" ->
-      Ok(#(CliArgs(..acc, network: oni_bitcoin.Mainnet), rest))
+    "--mainnet" -> Ok(#(CliArgs(..acc, network: oni_bitcoin.Mainnet), rest))
     "--testnet" | "--testnet3" ->
       Ok(#(CliArgs(..acc, network: oni_bitcoin.Testnet), rest))
-    "--signet" ->
-      Ok(#(CliArgs(..acc, network: oni_bitcoin.Signet), rest))
-    "--regtest" ->
-      Ok(#(CliArgs(..acc, network: oni_bitcoin.Regtest), rest))
+    "--signet" -> Ok(#(CliArgs(..acc, network: oni_bitcoin.Signet), rest))
+    "--regtest" -> Ok(#(CliArgs(..acc, network: oni_bitcoin.Regtest), rest))
 
     // Boolean flags
-    "--daemon" | "-daemon" ->
-      Ok(#(CliArgs(..acc, daemon: True), rest))
-    "--debug" ->
-      Ok(#(CliArgs(..acc, debug: True), rest))
-    "--txindex" ->
-      Ok(#(CliArgs(..acc, txindex: True), rest))
-    "--nolisten" | "--listen=0" ->
-      Ok(#(CliArgs(..acc, listen: False), rest))
-    "--listen" | "--listen=1" ->
-      Ok(#(CliArgs(..acc, listen: True), rest))
+    "--daemon" | "-daemon" -> Ok(#(CliArgs(..acc, daemon: True), rest))
+    "--debug" -> Ok(#(CliArgs(..acc, debug: True), rest))
+    "--txindex" -> Ok(#(CliArgs(..acc, txindex: True), rest))
+    "--nolisten" | "--listen=0" -> Ok(#(CliArgs(..acc, listen: False), rest))
+    "--listen" | "--listen=1" -> Ok(#(CliArgs(..acc, listen: True), rest))
     "--nodiscover" | "--discover=0" ->
       Ok(#(CliArgs(..acc, discover: False), rest))
-    "--discover" | "--discover=1" ->
-      Ok(#(CliArgs(..acc, discover: True), rest))
+    "--discover" | "--discover=1" -> Ok(#(CliArgs(..acc, discover: True), rest))
 
     // Commands
-    "stop" ->
-      Ok(#(CliArgs(..acc, command: StopDaemon), rest))
+    "stop" -> Ok(#(CliArgs(..acc, command: StopDaemon), rest))
     "getinfo" | "getblockchaininfo" ->
       Ok(#(CliArgs(..acc, command: GetInfo), rest))
 
@@ -236,8 +224,7 @@ fn parse_valued_option(
         Error(_) -> Error(InvalidValue(option: opt, value: value))
       }
     }
-    "--bind" | "-bind" ->
-      Ok(#(CliArgs(..acc, p2p_bind: Some(value)), rest))
+    "--bind" | "-bind" -> Ok(#(CliArgs(..acc, p2p_bind: Some(value)), rest))
     "--maxconnections" | "-maxconnections" -> {
       case int.parse(value) {
         Ok(n) -> Ok(#(CliArgs(..acc, max_connections: Some(n)), rest))
@@ -262,7 +249,8 @@ fn parse_valued_option(
     // Generate blocks (regtest)
     "--generate" | "generate" -> {
       case int.parse(value) {
-        Ok(count) -> Ok(#(CliArgs(..acc, command: GenerateBlock(count, None)), rest))
+        Ok(count) ->
+          Ok(#(CliArgs(..acc, command: GenerateBlock(count, None)), rest))
         Error(_) -> Error(InvalidValue(option: opt, value: value))
       }
     }
@@ -281,7 +269,8 @@ pub fn build_config(args: CliArgs) -> oni_node.NodeConfig {
   let base = case args.network {
     oni_bitcoin.Mainnet -> oni_node.default_config()
     oni_bitcoin.Testnet -> oni_node.testnet_config()
-    oni_bitcoin.Signet -> oni_node.testnet_config()  // Use testnet config for signet
+    oni_bitcoin.Signet -> oni_node.testnet_config()
+    // Use testnet config for signet
     oni_bitcoin.Regtest -> oni_node.regtest_config()
   }
 
@@ -394,14 +383,14 @@ fn generate_blocks(args: CliArgs, count: Int, _address: Option(String)) -> Nil {
 
 fn print_error(err: CliError) -> Nil {
   case err {
-    UnknownOption(opt) ->
-      io.println("Error: Unknown option '" <> opt <> "'")
+    UnknownOption(opt) -> io.println("Error: Unknown option '" <> opt <> "'")
     InvalidValue(opt, val) ->
-      io.println("Error: Invalid value '" <> val <> "' for option '" <> opt <> "'")
+      io.println(
+        "Error: Invalid value '" <> val <> "' for option '" <> opt <> "'",
+      )
     MissingValue(opt) ->
       io.println("Error: Missing value for option '" <> opt <> "'")
-    InvalidCommand(cmd) ->
-      io.println("Error: Unknown command '" <> cmd <> "'")
+    InvalidCommand(cmd) -> io.println("Error: Unknown command '" <> cmd <> "'")
   }
 }
 
@@ -436,7 +425,9 @@ fn print_help() -> Nil {
   io.println("  --debug             Enable debug output")
   io.println("")
   io.println("Connection Options:")
-  io.println("  --port=<port>       Listen for connections on <port> (default: 8333)")
+  io.println(
+    "  --port=<port>       Listen for connections on <port> (default: 8333)",
+  )
   io.println("  --bind=<addr>       Bind to given address (default: 0.0.0.0)")
   io.println("  --maxconnections=<n>  Maximum number of connections")
   io.println("  --addnode=<ip>      Add a node to connect to")
@@ -446,7 +437,9 @@ fn print_help() -> Nil {
   io.println("")
   io.println("RPC Server Options:")
   io.println("  --rpcport=<port>    Listen for RPC on <port> (default: 8332)")
-  io.println("  --rpcbind=<addr>    Bind RPC to given address (default: 127.0.0.1)")
+  io.println(
+    "  --rpcbind=<addr>    Bind RPC to given address (default: 127.0.0.1)",
+  )
   io.println("  --rpcuser=<user>    Username for RPC authentication")
   io.println("  --rpcpassword=<pw>  Password for RPC authentication")
   io.println("")
@@ -475,18 +468,44 @@ fn print_version() -> Nil {
 
 fn print_startup_banner() -> Nil {
   io.println("")
-  io.println("╔═══════════════════════════════════════════════════════════════╗")
-  io.println("║                                                               ║")
-  io.println("║    ██████╗ ███╗   ██╗██╗                                      ║")
-  io.println("║   ██╔═══██╗████╗  ██║██║                                      ║")
-  io.println("║   ██║   ██║██╔██╗ ██║██║                                      ║")
-  io.println("║   ██║   ██║██║╚██╗██║██║                                      ║")
-  io.println("║   ╚██████╔╝██║ ╚████║██║                                      ║")
-  io.println("║    ╚═════╝ ╚═╝  ╚═══╝╚═╝                                      ║")
-  io.println("║                                                               ║")
-  io.println("║   Bitcoin Full Node - Version " <> oni_node.version <> "                          ║")
-  io.println("║                                                               ║")
-  io.println("╚═══════════════════════════════════════════════════════════════╝")
+  io.println(
+    "╔═══════════════════════════════════════════════════════════════╗",
+  )
+  io.println(
+    "║                                                               ║",
+  )
+  io.println(
+    "║    ██████╗ ███╗   ██╗██╗                                      ║",
+  )
+  io.println(
+    "║   ██╔═══██╗████╗  ██║██║                                      ║",
+  )
+  io.println(
+    "║   ██║   ██║██╔██╗ ██║██║                                      ║",
+  )
+  io.println(
+    "║   ██║   ██║██║╚██╗██║██║                                      ║",
+  )
+  io.println(
+    "║   ╚██████╔╝██║ ╚████║██║                                      ║",
+  )
+  io.println(
+    "║    ╚═════╝ ╚═╝  ╚═══╝╚═╝                                      ║",
+  )
+  io.println(
+    "║                                                               ║",
+  )
+  io.println(
+    "║   Bitcoin Full Node - Version "
+    <> oni_node.version
+    <> "                          ║",
+  )
+  io.println(
+    "║                                                               ║",
+  )
+  io.println(
+    "╚═══════════════════════════════════════════════════════════════╝",
+  )
   io.println("")
 }
 
@@ -511,19 +530,35 @@ fn print_network_info(config: oni_node.NodeConfig) -> Nil {
   io.println("  Data Dir:     " <> config.data_dir)
   io.println("  P2P Port:     " <> int.to_string(config.p2p_port))
   io.println("  RPC Port:     " <> int.to_string(config.rpc_port))
-  io.println("  Genesis:      " <> oni_bitcoin.block_hash_to_hex(params.genesis_hash))
+  io.println(
+    "  Genesis:      " <> oni_bitcoin.block_hash_to_hex(params.genesis_hash),
+  )
   io.println("")
 }
 
 fn print_rpc_info(config: oni_node.NodeConfig) -> Nil {
   io.println("RPC interface available at:")
-  io.println("  http://" <> config.rpc_bind <> ":" <> int.to_string(config.rpc_port) <> "/")
+  io.println(
+    "  http://"
+    <> config.rpc_bind
+    <> ":"
+    <> int.to_string(config.rpc_port)
+    <> "/",
+  )
   io.println("")
   io.println("Example commands:")
   io.println("  curl -s --user user:pass -X POST \\")
   io.println("    -H 'Content-Type: application/json' \\")
-  io.println("    -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getblockchaininfo\"}' \\")
-  io.println("    http://" <> config.rpc_bind <> ":" <> int.to_string(config.rpc_port) <> "/")
+  io.println(
+    "    -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getblockchaininfo\"}' \\",
+  )
+  io.println(
+    "    http://"
+    <> config.rpc_bind
+    <> ":"
+    <> int.to_string(config.rpc_port)
+    <> "/",
+  )
 }
 
 // ============================================================================

@@ -48,12 +48,7 @@ pub type BenchResult {
 
 /// Percentile breakdown
 pub type Percentiles {
-  Percentiles(
-    p50: Int,
-    p90: Int,
-    p95: Int,
-    p99: Int,
-  )
+  Percentiles(p50: Int, p90: Int, p95: Int, p99: Int)
 }
 
 /// Benchmark suite containing multiple benchmarks
@@ -87,7 +82,8 @@ pub fn default_config() -> BenchConfig {
   BenchConfig(
     warmup_iterations: 100,
     iterations: 1000,
-    min_time_us: 1_000_000,  // 1 second minimum
+    min_time_us: 1_000_000,
+    // 1 second minimum
   )
 }
 
@@ -96,7 +92,8 @@ pub fn quick_config() -> BenchConfig {
   BenchConfig(
     warmup_iterations: 10,
     iterations: 100,
-    min_time_us: 100_000,  // 100ms minimum
+    min_time_us: 100_000,
+    // 100ms minimum
   )
 }
 
@@ -155,10 +152,7 @@ pub fn run_bench(
 }
 
 /// Run multiple iterations and collect timings
-fn measure_iterations(
-  operation: fn() -> a,
-  count: Int,
-) -> List(Int) {
+fn measure_iterations(operation: fn() -> a, count: Int) -> List(Int) {
   measure_iterations_loop(operation, count, [])
 }
 
@@ -213,10 +207,11 @@ fn calculate_stats(name: String, timings: List(Int)) -> BenchResult {
 
   let variance = case count > 1 {
     True -> {
-      let sum_sq = list.fold(timings, 0.0, fn(acc, t) {
-        let diff = int.to_float(t) -. mean
-        acc +. diff *. diff
-      })
+      let sum_sq =
+        list.fold(timings, 0.0, fn(acc, t) {
+          let diff = int.to_float(t) -. mean
+          acc +. diff *. diff
+        })
       sum_sq /. int.to_float(count - 1)
     }
     False -> 0.0
@@ -288,10 +283,11 @@ pub fn run_suite(
 ) -> BenchSuite {
   let start = monotonic_time_us()
 
-  let results = list.map(benchmarks, fn(bench) {
-    let #(bench_name, operation) = bench
-    run_bench(bench_name, config, operation)
-  })
+  let results =
+    list.map(benchmarks, fn(bench) {
+      let #(bench_name, operation) = bench
+      run_bench(bench_name, config, operation)
+    })
 
   let end = monotonic_time_us()
 
@@ -340,12 +336,13 @@ pub fn throughput_sample(tracker: ThroughputTracker) -> ThroughputTracker {
   case elapsed_us > 0 {
     False -> tracker
     True -> {
-      let ops_per_sec = int.to_float(tracker.operations) /. { int.to_float(elapsed_us) /. 1_000_000.0 }
-      ThroughputTracker(
-        ..tracker,
-        last_sample_us: now,
-        samples: [ops_per_sec, ..tracker.samples],
-      )
+      let ops_per_sec =
+        int.to_float(tracker.operations)
+        /. { int.to_float(elapsed_us) /. 1_000_000.0 }
+      ThroughputTracker(..tracker, last_sample_us: now, samples: [
+        ops_per_sec,
+        ..tracker.samples
+      ])
     }
   }
 }
@@ -356,12 +353,16 @@ pub fn throughput_finish(tracker: ThroughputTracker) -> ThroughputStats {
   let total_us = now - tracker.start_us
 
   let ops_per_sec = case total_us > 0 {
-    True -> int.to_float(tracker.operations) /. { int.to_float(total_us) /. 1_000_000.0 }
+    True ->
+      int.to_float(tracker.operations)
+      /. { int.to_float(total_us) /. 1_000_000.0 }
     False -> 0.0
   }
 
   let bytes_per_sec = case total_us > 0 {
-    True -> int.to_float(tracker.bytes_processed) /. { int.to_float(total_us) /. 1_000_000.0 }
+    True ->
+      int.to_float(tracker.bytes_processed)
+      /. { int.to_float(total_us) /. 1_000_000.0 }
     False -> 0.0
   }
 
@@ -402,14 +403,18 @@ pub fn histogram_new(name: String) -> LatencyHistogram {
   LatencyHistogram(
     name: name,
     buckets: buckets,
-    counts: [0, ..counts],  // +1 for overflow bucket
+    counts: [0, ..counts],
+    // +1 for overflow bucket
     total_count: 0,
     sum_us: 0,
   )
 }
 
 /// Create a histogram with custom buckets
-pub fn histogram_with_buckets(name: String, buckets: List(Int)) -> LatencyHistogram {
+pub fn histogram_with_buckets(
+  name: String,
+  buckets: List(Int),
+) -> LatencyHistogram {
   let counts = list.map([0, ..buckets], fn(_) { 0 })
 
   LatencyHistogram(
@@ -472,7 +477,8 @@ fn increment_at_index_loop(
 /// Get histogram statistics
 pub fn histogram_stats(histogram: LatencyHistogram) -> HistogramStats {
   let mean = case histogram.total_count > 0 {
-    True -> int.to_float(histogram.sum_us) /. int.to_float(histogram.total_count)
+    True ->
+      int.to_float(histogram.sum_us) /. int.to_float(histogram.total_count)
     False -> 0.0
   }
 
@@ -492,7 +498,8 @@ pub type HistogramStats {
     count: Int,
     sum_us: Int,
     mean_us: Float,
-    buckets: List(#(Int, Int)),  // (bucket_bound, count)
+    buckets: List(#(Int, Int)),
+    // (bucket_bound, count)
   )
 }
 
@@ -543,23 +550,45 @@ pub type Comparison {
 
 /// Format a benchmark result for display
 pub fn format_result(result: BenchResult) -> String {
-  result.name <> ":\n" <>
-  "  iterations: " <> int.to_string(result.iterations) <> "\n" <>
-  "  mean: " <> format_duration_us(float.round(result.mean_us)) <> "\n" <>
-  "  min: " <> format_duration_us(result.min_us) <> "\n" <>
-  "  max: " <> format_duration_us(result.max_us) <> "\n" <>
-  "  std_dev: " <> format_duration_us(float.round(result.std_dev_us)) <> "\n" <>
-  "  p50: " <> format_duration_us(result.percentiles.p50) <> "\n" <>
-  "  p99: " <> format_duration_us(result.percentiles.p99) <> "\n" <>
-  "  ops/sec: " <> float_to_string_2dp(result.ops_per_sec)
+  result.name
+  <> ":\n"
+  <> "  iterations: "
+  <> int.to_string(result.iterations)
+  <> "\n"
+  <> "  mean: "
+  <> format_duration_us(float.round(result.mean_us))
+  <> "\n"
+  <> "  min: "
+  <> format_duration_us(result.min_us)
+  <> "\n"
+  <> "  max: "
+  <> format_duration_us(result.max_us)
+  <> "\n"
+  <> "  std_dev: "
+  <> format_duration_us(float.round(result.std_dev_us))
+  <> "\n"
+  <> "  p50: "
+  <> format_duration_us(result.percentiles.p50)
+  <> "\n"
+  <> "  p99: "
+  <> format_duration_us(result.percentiles.p99)
+  <> "\n"
+  <> "  ops/sec: "
+  <> float_to_string_2dp(result.ops_per_sec)
 }
 
 /// Format a suite result
 pub fn format_suite(suite: BenchSuite) -> String {
-  let header = "=== " <> suite.name <> " ===\n" <>
-    "Total duration: " <> format_duration_us(suite.total_duration_us) <> "\n\n"
+  let header =
+    "=== "
+    <> suite.name
+    <> " ===\n"
+    <> "Total duration: "
+    <> format_duration_us(suite.total_duration_us)
+    <> "\n\n"
 
-  let results_str = list.map(suite.results, format_result)
+  let results_str =
+    list.map(suite.results, format_result)
     |> list.intersperse("\n")
     |> list.fold("", fn(acc, s) { acc <> s })
 
@@ -568,11 +597,21 @@ pub fn format_suite(suite: BenchSuite) -> String {
 
 /// Format a comparison result
 pub fn format_comparison(comp: Comparison) -> String {
-  "=== " <> comp.name <> " Comparison ===\n" <>
-  "Baseline: " <> format_duration_us(float.round(comp.baseline.mean_us)) <> " (mean)\n" <>
-  "Candidate: " <> format_duration_us(float.round(comp.candidate.mean_us)) <> " (mean)\n" <>
-  "Speedup: " <> float_to_string_2dp(comp.speedup) <> "x\n" <>
-  "Improvement: " <> float_to_string_2dp(comp.improvement_percent) <> "%"
+  "=== "
+  <> comp.name
+  <> " Comparison ===\n"
+  <> "Baseline: "
+  <> format_duration_us(float.round(comp.baseline.mean_us))
+  <> " (mean)\n"
+  <> "Candidate: "
+  <> format_duration_us(float.round(comp.candidate.mean_us))
+  <> " (mean)\n"
+  <> "Speedup: "
+  <> float_to_string_2dp(comp.speedup)
+  <> "x\n"
+  <> "Improvement: "
+  <> float_to_string_2dp(comp.improvement_percent)
+  <> "%"
 }
 
 /// Format duration in microseconds for display
@@ -697,124 +736,138 @@ pub type BenchmarkMeta {
 /// Standard crypto benchmark metadata
 pub fn crypto_bench_meta(bench: CryptoBench) -> BenchmarkMeta {
   case bench {
-    BenchSha256Single -> BenchmarkMeta(
-      id: "crypto.sha256.single",
-      name: "SHA256 Single Hash",
-      category: BenchCrypto,
-      description: "Single SHA256 hash of 32 bytes",
-      expected_ops_per_sec: 1_000_000,
-      regression_threshold_pct: 10,
-    )
-    BenchSha256Double -> BenchmarkMeta(
-      id: "crypto.sha256d",
-      name: "SHA256 Double Hash",
-      category: BenchCrypto,
-      description: "Double SHA256 hash (sha256d) of 32 bytes",
-      expected_ops_per_sec: 500_000,
-      regression_threshold_pct: 10,
-    )
-    BenchRipemd160 -> BenchmarkMeta(
-      id: "crypto.ripemd160",
-      name: "RIPEMD160 Hash",
-      category: BenchCrypto,
-      description: "RIPEMD160 hash of 32 bytes",
-      expected_ops_per_sec: 1_000_000,
-      regression_threshold_pct: 10,
-    )
-    BenchHash160 -> BenchmarkMeta(
-      id: "crypto.hash160",
-      name: "HASH160",
-      category: BenchCrypto,
-      description: "HASH160 (SHA256 + RIPEMD160) of 32 bytes",
-      expected_ops_per_sec: 500_000,
-      regression_threshold_pct: 10,
-    )
-    BenchEcdsaVerify -> BenchmarkMeta(
-      id: "crypto.ecdsa.verify",
-      name: "ECDSA Verify",
-      category: BenchCrypto,
-      description: "ECDSA signature verification",
-      expected_ops_per_sec: 10_000,
-      regression_threshold_pct: 15,
-    )
-    BenchSchnorrVerify -> BenchmarkMeta(
-      id: "crypto.schnorr.verify",
-      name: "Schnorr Verify",
-      category: BenchCrypto,
-      description: "BIP-340 Schnorr signature verification",
-      expected_ops_per_sec: 10_000,
-      regression_threshold_pct: 15,
-    )
-    BenchSchnorrBatch10 -> BenchmarkMeta(
-      id: "crypto.schnorr.batch10",
-      name: "Schnorr Batch Verify (10)",
-      category: BenchCrypto,
-      description: "Batch verify 10 Schnorr signatures",
-      expected_ops_per_sec: 5000,
-      regression_threshold_pct: 15,
-    )
-    BenchSchnorrBatch100 -> BenchmarkMeta(
-      id: "crypto.schnorr.batch100",
-      name: "Schnorr Batch Verify (100)",
-      category: BenchCrypto,
-      description: "Batch verify 100 Schnorr signatures",
-      expected_ops_per_sec: 500,
-      regression_threshold_pct: 15,
-    )
+    BenchSha256Single ->
+      BenchmarkMeta(
+        id: "crypto.sha256.single",
+        name: "SHA256 Single Hash",
+        category: BenchCrypto,
+        description: "Single SHA256 hash of 32 bytes",
+        expected_ops_per_sec: 1_000_000,
+        regression_threshold_pct: 10,
+      )
+    BenchSha256Double ->
+      BenchmarkMeta(
+        id: "crypto.sha256d",
+        name: "SHA256 Double Hash",
+        category: BenchCrypto,
+        description: "Double SHA256 hash (sha256d) of 32 bytes",
+        expected_ops_per_sec: 500_000,
+        regression_threshold_pct: 10,
+      )
+    BenchRipemd160 ->
+      BenchmarkMeta(
+        id: "crypto.ripemd160",
+        name: "RIPEMD160 Hash",
+        category: BenchCrypto,
+        description: "RIPEMD160 hash of 32 bytes",
+        expected_ops_per_sec: 1_000_000,
+        regression_threshold_pct: 10,
+      )
+    BenchHash160 ->
+      BenchmarkMeta(
+        id: "crypto.hash160",
+        name: "HASH160",
+        category: BenchCrypto,
+        description: "HASH160 (SHA256 + RIPEMD160) of 32 bytes",
+        expected_ops_per_sec: 500_000,
+        regression_threshold_pct: 10,
+      )
+    BenchEcdsaVerify ->
+      BenchmarkMeta(
+        id: "crypto.ecdsa.verify",
+        name: "ECDSA Verify",
+        category: BenchCrypto,
+        description: "ECDSA signature verification",
+        expected_ops_per_sec: 10_000,
+        regression_threshold_pct: 15,
+      )
+    BenchSchnorrVerify ->
+      BenchmarkMeta(
+        id: "crypto.schnorr.verify",
+        name: "Schnorr Verify",
+        category: BenchCrypto,
+        description: "BIP-340 Schnorr signature verification",
+        expected_ops_per_sec: 10_000,
+        regression_threshold_pct: 15,
+      )
+    BenchSchnorrBatch10 ->
+      BenchmarkMeta(
+        id: "crypto.schnorr.batch10",
+        name: "Schnorr Batch Verify (10)",
+        category: BenchCrypto,
+        description: "Batch verify 10 Schnorr signatures",
+        expected_ops_per_sec: 5000,
+        regression_threshold_pct: 15,
+      )
+    BenchSchnorrBatch100 ->
+      BenchmarkMeta(
+        id: "crypto.schnorr.batch100",
+        name: "Schnorr Batch Verify (100)",
+        category: BenchCrypto,
+        description: "Batch verify 100 Schnorr signatures",
+        expected_ops_per_sec: 500,
+        regression_threshold_pct: 15,
+      )
   }
 }
 
 /// Standard validation benchmark metadata
 pub fn validation_bench_meta(bench: ValidationBench) -> BenchmarkMeta {
   case bench {
-    BenchValidateHeader -> BenchmarkMeta(
-      id: "validation.header",
-      name: "Validate Block Header",
-      category: BenchValidation,
-      description: "Validate block header (PoW, timestamp, difficulty)",
-      expected_ops_per_sec: 100_000,
-      regression_threshold_pct: 10,
-    )
-    BenchValidateCoinbase -> BenchmarkMeta(
-      id: "validation.coinbase",
-      name: "Validate Coinbase",
-      category: BenchValidation,
-      description: "Validate coinbase transaction",
-      expected_ops_per_sec: 50_000,
-      regression_threshold_pct: 10,
-    )
-    BenchValidateTx -> BenchmarkMeta(
-      id: "validation.tx",
-      name: "Validate Transaction",
-      category: BenchValidation,
-      description: "Validate standard P2PKH transaction",
-      expected_ops_per_sec: 5000,
-      regression_threshold_pct: 15,
-    )
-    BenchConnectBlock -> BenchmarkMeta(
-      id: "validation.connect",
-      name: "Connect Block",
-      category: BenchValidation,
-      description: "Connect block to chainstate (100 txs)",
-      expected_ops_per_sec: 100,
-      regression_threshold_pct: 20,
-    )
-    BenchMerkleRoot100 -> BenchmarkMeta(
-      id: "validation.merkle100",
-      name: "Merkle Root (100 tx)",
-      category: BenchValidation,
-      description: "Compute merkle root for 100 transactions",
-      expected_ops_per_sec: 10_000,
-      regression_threshold_pct: 10,
-    )
-    BenchMerkleRoot1000 -> BenchmarkMeta(
-      id: "validation.merkle1000",
-      name: "Merkle Root (1000 tx)",
-      category: BenchValidation,
-      description: "Compute merkle root for 1000 transactions",
-      expected_ops_per_sec: 1000,
-      regression_threshold_pct: 10,
-    )
+    BenchValidateHeader ->
+      BenchmarkMeta(
+        id: "validation.header",
+        name: "Validate Block Header",
+        category: BenchValidation,
+        description: "Validate block header (PoW, timestamp, difficulty)",
+        expected_ops_per_sec: 100_000,
+        regression_threshold_pct: 10,
+      )
+    BenchValidateCoinbase ->
+      BenchmarkMeta(
+        id: "validation.coinbase",
+        name: "Validate Coinbase",
+        category: BenchValidation,
+        description: "Validate coinbase transaction",
+        expected_ops_per_sec: 50_000,
+        regression_threshold_pct: 10,
+      )
+    BenchValidateTx ->
+      BenchmarkMeta(
+        id: "validation.tx",
+        name: "Validate Transaction",
+        category: BenchValidation,
+        description: "Validate standard P2PKH transaction",
+        expected_ops_per_sec: 5000,
+        regression_threshold_pct: 15,
+      )
+    BenchConnectBlock ->
+      BenchmarkMeta(
+        id: "validation.connect",
+        name: "Connect Block",
+        category: BenchValidation,
+        description: "Connect block to chainstate (100 txs)",
+        expected_ops_per_sec: 100,
+        regression_threshold_pct: 20,
+      )
+    BenchMerkleRoot100 ->
+      BenchmarkMeta(
+        id: "validation.merkle100",
+        name: "Merkle Root (100 tx)",
+        category: BenchValidation,
+        description: "Compute merkle root for 100 transactions",
+        expected_ops_per_sec: 10_000,
+        regression_threshold_pct: 10,
+      )
+    BenchMerkleRoot1000 ->
+      BenchmarkMeta(
+        id: "validation.merkle1000",
+        name: "Merkle Root (1000 tx)",
+        category: BenchValidation,
+        description: "Compute merkle root for 1000 transactions",
+        expected_ops_per_sec: 1000,
+        regression_threshold_pct: 10,
+      )
   }
 }
 
@@ -824,7 +877,9 @@ pub fn is_regression(
   expected_ops: Int,
   threshold_pct: Int,
 ) -> Bool {
-  let threshold = int.to_float(expected_ops) *. { 1.0 -. int.to_float(threshold_pct) /. 100.0 }
+  let threshold =
+    int.to_float(expected_ops)
+    *. { 1.0 -. int.to_float(threshold_pct) /. 100.0 }
   result.ops_per_sec <. threshold
 }
 
@@ -834,12 +889,17 @@ pub fn format_result_with_check(
   meta: BenchmarkMeta,
 ) -> String {
   let base = format_result(result)
-  let status = case is_regression(result, meta.expected_ops_per_sec, meta.regression_threshold_pct) {
+  let status = case
+    is_regression(
+      result,
+      meta.expected_ops_per_sec,
+      meta.regression_threshold_pct,
+    )
+  {
     True -> " [REGRESSION]"
     False -> " [OK]"
   }
   base <> status
-
 }
 
 // ============================================================================

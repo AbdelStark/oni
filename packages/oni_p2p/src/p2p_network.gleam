@@ -20,8 +20,8 @@ import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
 import oni_bitcoin
 import oni_p2p.{
-  type Message, type NetAddr, type P2PError, type ServiceFlags, type VersionPayload,
-  MsgVerack, MsgVersion, MsgPing, MsgPong,
+  type Message, type NetAddr, type P2PError, type ServiceFlags,
+  type VersionPayload, MsgPing, MsgPong, MsgVerack, MsgVersion,
 }
 
 // ============================================================================
@@ -205,15 +205,16 @@ pub fn start_listener(
   config: P2PConfig,
   event_handler: Subject(PeerEvent),
 ) -> Result(Subject(ListenerMsg), actor.StartError) {
-  let initial_state = ListenerState(
-    config: config,
-    listen_socket: None,
-    peers: dict.new(),
-    next_peer_id: 1,
-    event_handler: event_handler,
-    self_subject: None,
-    is_running: False,
-  )
+  let initial_state =
+    ListenerState(
+      config: config,
+      listen_socket: None,
+      peers: dict.new(),
+      next_peer_id: 1,
+      event_handler: event_handler,
+      self_subject: None,
+      is_running: False,
+    )
 
   case actor.start(initial_state, handle_listener_message) {
     Ok(subject) -> {
@@ -244,24 +245,31 @@ fn handle_listener_message(
               actor.continue(ListenerState(..state, is_running: True))
             }
             True -> {
-              case tcp_listen(state.config.listen_port, state.config.bind_address) {
+              case
+                tcp_listen(state.config.listen_port, state.config.bind_address)
+              {
                 Error(reason) -> {
                   io.println("[P2P] Failed to listen: " <> reason)
                   actor.continue(state)
                 }
                 Ok(listen_socket) -> {
-                  io.println("[P2P] Listening on " <>
-                    state.config.bind_address <> ":" <>
-                    int.to_string(state.config.listen_port))
+                  io.println(
+                    "[P2P] Listening on "
+                    <> state.config.bind_address
+                    <> ":"
+                    <> int.to_string(state.config.listen_port),
+                  )
 
                   // Start accept loop
                   spawn_acceptor(listen_socket, self)
 
-                  actor.continue(ListenerState(
-                    ..state,
-                    listen_socket: Some(listen_socket),
-                    is_running: True,
-                  ))
+                  actor.continue(
+                    ListenerState(
+                      ..state,
+                      listen_socket: Some(listen_socket),
+                      is_running: True,
+                    ),
+                  )
                 }
               }
             }
@@ -306,12 +314,24 @@ fn handle_listener_message(
               let peer_id = state.next_peer_id
               let peer_addr = socket_peer_addr(socket)
 
-              io.println("[P2P] Inbound connection from " <>
-                oni_p2p.ip_to_string(peer_addr.ip) <> ":" <>
-                int.to_string(peer_addr.port))
+              io.println(
+                "[P2P] Inbound connection from "
+                <> oni_p2p.ip_to_string(peer_addr.ip)
+                <> ":"
+                <> int.to_string(peer_addr.port),
+              )
 
               // Start peer actor
-              case start_peer_actor(peer_id, socket, peer_addr, True, state.config, state.event_handler) {
+              case
+                start_peer_actor(
+                  peer_id,
+                  socket,
+                  peer_addr,
+                  True,
+                  state.config,
+                  state.event_handler,
+                )
+              {
                 Error(_) -> {
                   tcp_close(socket)
                   actor.continue(state)
@@ -323,11 +343,13 @@ fn handle_listener_message(
                     None -> Nil
                   }
 
-                  actor.continue(ListenerState(
-                    ..state,
-                    peers: dict.insert(state.peers, peer_id, peer_subject),
-                    next_peer_id: peer_id + 1,
-                  ))
+                  actor.continue(
+                    ListenerState(
+                      ..state,
+                      peers: dict.insert(state.peers, peer_id, peer_subject),
+                      next_peer_id: peer_id + 1,
+                    ),
+                  )
                 }
               }
             }
@@ -344,14 +366,22 @@ fn handle_listener_message(
           let outbound_count = count_outbound_peers(state.peers)
           case outbound_count >= state.config.max_outbound {
             True -> {
-              process.send(state.event_handler,
-                PeerError(0, oni_p2p.ConnectionFailed("Too many outbound connections")))
+              process.send(
+                state.event_handler,
+                PeerError(
+                  0,
+                  oni_p2p.ConnectionFailed("Too many outbound connections"),
+                ),
+              )
               actor.continue(state)
             }
             False -> {
-              io.println("[P2P] Connecting to " <>
-                oni_p2p.ip_to_string(addr.ip) <> ":" <>
-                int.to_string(addr.port))
+              io.println(
+                "[P2P] Connecting to "
+                <> oni_p2p.ip_to_string(addr.ip)
+                <> ":"
+                <> int.to_string(addr.port),
+              )
 
               // Spawn connection attempt
               spawn_connector(addr, state.config.connect_timeout_ms, self)
@@ -365,30 +395,50 @@ fn handle_listener_message(
     OutboundConnected(addr, socket) -> {
       let peer_id = state.next_peer_id
 
-      io.println("[P2P] Connected to " <>
-        oni_p2p.ip_to_string(addr.ip) <> ":" <>
-        int.to_string(addr.port))
+      io.println(
+        "[P2P] Connected to "
+        <> oni_p2p.ip_to_string(addr.ip)
+        <> ":"
+        <> int.to_string(addr.port),
+      )
 
-      case start_peer_actor(peer_id, socket, addr, False, state.config, state.event_handler) {
+      case
+        start_peer_actor(
+          peer_id,
+          socket,
+          addr,
+          False,
+          state.config,
+          state.event_handler,
+        )
+      {
         Error(_) -> {
           tcp_close(socket)
           actor.continue(state)
         }
         Ok(peer_subject) -> {
-          actor.continue(ListenerState(
-            ..state,
-            peers: dict.insert(state.peers, peer_id, peer_subject),
-            next_peer_id: peer_id + 1,
-          ))
+          actor.continue(
+            ListenerState(
+              ..state,
+              peers: dict.insert(state.peers, peer_id, peer_subject),
+              next_peer_id: peer_id + 1,
+            ),
+          )
         }
       }
     }
 
     ConnectionFailed(addr, reason) -> {
-      io.println("[P2P] Connection to " <>
-        oni_p2p.ip_to_string(addr.ip) <> " failed: " <> reason)
-      process.send(state.event_handler,
-        PeerError(0, oni_p2p.ConnectionFailed(reason)))
+      io.println(
+        "[P2P] Connection to "
+        <> oni_p2p.ip_to_string(addr.ip)
+        <> " failed: "
+        <> reason,
+      )
+      process.send(
+        state.event_handler,
+        PeerError(0, oni_p2p.ConnectionFailed(reason)),
+      )
       actor.continue(state)
     }
 
@@ -398,10 +448,9 @@ fn handle_listener_message(
 
       case event {
         PeerDisconnectedEvent(peer_id, _reason) -> {
-          actor.continue(ListenerState(
-            ..state,
-            peers: dict.delete(state.peers, peer_id),
-          ))
+          actor.continue(
+            ListenerState(..state, peers: dict.delete(state.peers, peer_id)),
+          )
         }
         _ -> actor.continue(state)
       }
@@ -423,11 +472,13 @@ fn handle_listener_message(
 
 // Helper to count inbound peers (placeholder - would need to track this)
 fn count_inbound_peers(_peers: Dict(Int, Subject(PeerMsg))) -> Int {
-  0  // Would iterate and count inbound
+  0
+  // Would iterate and count inbound
 }
 
 fn count_outbound_peers(_peers: Dict(Int, Subject(PeerMsg))) -> Int {
-  0  // Would iterate and count outbound
+  0
+  // Would iterate and count outbound
 }
 
 // ============================================================================
@@ -443,28 +494,30 @@ fn start_peer_actor(
   config: P2PConfig,
   parent: Subject(PeerEvent),
 ) -> Result(Subject(PeerMsg), actor.StartError) {
-  let info = PeerInfo(
-    id: peer_id,
-    addr: addr,
-    state: PeerConnecting,
-    inbound: inbound,
-    version: None,
-    last_recv: erlang_now_ms(),
-    last_send: 0,
-    bytes_recv: 0,
-    bytes_sent: 0,
-    ping_nonce: None,
-    ping_time: None,
-  )
+  let info =
+    PeerInfo(
+      id: peer_id,
+      addr: addr,
+      state: PeerConnecting,
+      inbound: inbound,
+      version: None,
+      last_recv: erlang_now_ms(),
+      last_send: 0,
+      bytes_recv: 0,
+      bytes_sent: 0,
+      ping_nonce: None,
+      ping_time: None,
+    )
 
-  let initial_state = PeerActorState(
-    info: info,
-    socket: socket,
-    config: config,
-    parent: parent,
-    self_subject: None,
-    recv_buffer: <<>>,
-  )
+  let initial_state =
+    PeerActorState(
+      info: info,
+      socket: socket,
+      config: config,
+      parent: parent,
+      self_subject: None,
+      recv_buffer: <<>>,
+    )
 
   case actor.start(initial_state, handle_peer_message) {
     Ok(subject) -> {
@@ -492,16 +545,19 @@ fn handle_peer_message(
     SendMessage(message) -> {
       case encode_and_send(state.socket, message, state.config.network) {
         Error(_reason) -> {
-          process.send(state.parent,
-            PeerDisconnectedEvent(state.info.id, "Send failed"))
+          process.send(
+            state.parent,
+            PeerDisconnectedEvent(state.info.id, "Send failed"),
+          )
           actor.Stop(process.Normal)
         }
         Ok(bytes_sent) -> {
-          let new_info = PeerInfo(
-            ..state.info,
-            last_send: erlang_now_ms(),
-            bytes_sent: state.info.bytes_sent + bytes_sent,
-          )
+          let new_info =
+            PeerInfo(
+              ..state.info,
+              last_send: erlang_now_ms(),
+              bytes_sent: state.info.bytes_sent + bytes_sent,
+            )
           actor.continue(PeerActorState(..state, info: new_info))
         }
       }
@@ -509,39 +565,44 @@ fn handle_peer_message(
 
     ReceivedData(data) -> {
       let new_buffer = bit_array.append(state.recv_buffer, data)
-      let new_info = PeerInfo(
-        ..state.info,
-        last_recv: erlang_now_ms(),
-        bytes_recv: state.info.bytes_recv + bit_array.byte_size(data),
-      )
+      let new_info =
+        PeerInfo(
+          ..state.info,
+          last_recv: erlang_now_ms(),
+          bytes_recv: state.info.bytes_recv + bit_array.byte_size(data),
+        )
 
       // Try to parse messages from buffer
       case try_parse_messages(new_buffer, state.config.network) {
         Error(reason) -> {
-          process.send(state.parent,
-            PeerError(state.info.id, oni_p2p.InvalidMessage(reason)))
+          process.send(
+            state.parent,
+            PeerError(state.info.id, oni_p2p.InvalidMessage(reason)),
+          )
           actor.Stop(process.Normal)
         }
         Ok(#(messages, remaining)) -> {
           // Process each message
-          let final_state = process_messages(
-            messages,
-            PeerActorState(..state, info: new_info, recv_buffer: remaining)
-          )
+          let final_state =
+            process_messages(
+              messages,
+              PeerActorState(..state, info: new_info, recv_buffer: remaining),
+            )
           actor.continue(final_state)
         }
       }
     }
 
     SocketClosed -> {
-      process.send(state.parent,
-        PeerDisconnectedEvent(state.info.id, "Connection closed"))
+      process.send(
+        state.parent,
+        PeerDisconnectedEvent(state.info.id, "Connection closed"),
+      )
       actor.Stop(process.Normal)
     }
 
     SocketError(reason) -> {
-      process.send(state.parent,
-        PeerDisconnectedEvent(state.info.id, reason))
+      process.send(state.parent, PeerDisconnectedEvent(state.info.id, reason))
       actor.Stop(process.Normal)
     }
 
@@ -552,8 +613,10 @@ fn handle_peer_message(
 
     Disconnect -> {
       tcp_close(state.socket)
-      process.send(state.parent,
-        PeerDisconnectedEvent(state.info.id, "Disconnected by request"))
+      process.send(
+        state.parent,
+        PeerDisconnectedEvent(state.info.id, "Disconnected by request"),
+      )
       actor.Stop(process.Normal)
     }
   }
@@ -586,24 +649,27 @@ fn process_single_message(
       // If we haven't sent our version yet (inbound), send it now
       case state.info.state {
         PeerConnecting -> {
-          let our_version = oni_p2p.version_message(
-            state.config.services,
-            erlang_now_secs(),
-            state.info.addr,
-            generate_nonce(),
-            state.config.best_height,
-          )
-          let _ = encode_and_send(state.socket, our_version, state.config.network)
+          let our_version =
+            oni_p2p.version_message(
+              state.config.services,
+              erlang_now_secs(),
+              state.info.addr,
+              generate_nonce(),
+              state.config.best_height,
+            )
+          let _ =
+            encode_and_send(state.socket, our_version, state.config.network)
           Nil
         }
         _ -> Nil
       }
 
-      let new_info = PeerInfo(
-        ..state.info,
-        state: PeerAwaitingVerack,
-        version: Some(version),
-      )
+      let new_info =
+        PeerInfo(
+          ..state.info,
+          state: PeerAwaitingVerack,
+          version: Some(version),
+        )
       PeerActorState(..state, info: new_info)
     }
 
@@ -611,8 +677,10 @@ fn process_single_message(
       let new_info = PeerInfo(..state.info, state: PeerReady)
       case state.info.version {
         Some(version) ->
-          process.send(state.parent,
-            PeerHandshakeComplete(state.info.id, version))
+          process.send(
+            state.parent,
+            PeerHandshakeComplete(state.info.id, version),
+          )
         None -> Nil
       }
       PeerActorState(..state, info: new_info)
@@ -620,7 +688,8 @@ fn process_single_message(
 
     MsgPing(nonce) -> {
       // Respond with pong
-      let _ = encode_and_send(state.socket, MsgPong(nonce), state.config.network)
+      let _ =
+        encode_and_send(state.socket, MsgPong(nonce), state.config.network)
       state
     }
 
@@ -631,8 +700,7 @@ fn process_single_message(
 
     _ -> {
       // Forward other messages to parent
-      process.send(state.parent,
-        MessageReceived(state.info.id, message))
+      process.send(state.parent, MessageReceived(state.info.id, message))
       state
     }
   }
@@ -747,7 +815,11 @@ pub fn broadcast(listener: Subject(ListenerMsg), message: Message) -> Nil {
 fn tcp_listen(port: Int, bind_address: String) -> Result(ListenSocket, String)
 
 @external(erlang, "p2p_network_ffi", "tcp_connect")
-pub fn tcp_connect(ip: oni_p2p.IpAddr, port: Int, timeout: Int) -> Result(Socket, String)
+pub fn tcp_connect(
+  ip: oni_p2p.IpAddr,
+  port: Int,
+  timeout: Int,
+) -> Result(Socket, String)
 
 @external(erlang, "p2p_network_ffi", "tcp_send")
 fn tcp_send(socket: Socket, data: BitArray) -> Result(Nil, String)
@@ -762,10 +834,17 @@ fn tcp_close_listen(socket: ListenSocket) -> Nil
 fn socket_peer_addr(socket: Socket) -> NetAddr
 
 @external(erlang, "p2p_network_ffi", "spawn_acceptor")
-fn spawn_acceptor(listen_socket: ListenSocket, parent: Subject(ListenerMsg)) -> Nil
+fn spawn_acceptor(
+  listen_socket: ListenSocket,
+  parent: Subject(ListenerMsg),
+) -> Nil
 
 @external(erlang, "p2p_network_ffi", "spawn_connector")
-fn spawn_connector(addr: NetAddr, timeout: Int, parent: Subject(ListenerMsg)) -> Nil
+fn spawn_connector(
+  addr: NetAddr,
+  timeout: Int,
+  parent: Subject(ListenerMsg),
+) -> Nil
 
 @external(erlang, "p2p_network_ffi", "spawn_receiver")
 pub fn spawn_receiver(socket: Socket, parent: Subject(PeerMsg)) -> Nil

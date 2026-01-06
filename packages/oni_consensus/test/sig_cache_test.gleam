@@ -42,8 +42,10 @@ pub fn cache_key_to_string_test() {
 
 pub fn cache_key_uniqueness_test() {
   let key1 = make_key(1, 0, 1)
-  let key2 = make_key(1, 1, 1)  // Different input
-  let key3 = make_key(1, 0, 2)  // Different sighash
+  let key2 = make_key(1, 1, 1)
+  // Different input
+  let key3 = make_key(1, 0, 2)
+  // Different sighash
 
   let str1 = sig_cache.cache_key_to_string(key1)
   let str2 = sig_cache.cache_key_to_string(key2)
@@ -74,7 +76,8 @@ pub fn cache_entry_access_test() {
 
   accessed.last_access |> should.equal(2000)
   accessed.access_count |> should.equal(1)
-  accessed.added_at |> should.equal(1000)  // Unchanged
+  accessed.added_at |> should.equal(1000)
+  // Unchanged
 }
 
 // ============================================================================
@@ -122,7 +125,8 @@ pub fn sig_cache_contains_test() {
 }
 
 pub fn sig_cache_size_test() {
-  let cache = sig_cache.sig_cache_new()
+  let cache =
+    sig_cache.sig_cache_new()
     |> sig_cache.sig_cache_put(make_key(1, 0, 1), True, 1000)
     |> sig_cache.sig_cache_put(make_key(2, 0, 1), True, 1001)
     |> sig_cache.sig_cache_put(make_key(3, 0, 1), False, 1002)
@@ -131,7 +135,8 @@ pub fn sig_cache_size_test() {
 }
 
 pub fn sig_cache_clear_test() {
-  let cache = sig_cache.sig_cache_new()
+  let cache =
+    sig_cache.sig_cache_new()
     |> sig_cache.sig_cache_put(make_key(1, 0, 1), True, 1000)
     |> sig_cache.sig_cache_put(make_key(2, 0, 1), True, 1001)
 
@@ -186,7 +191,8 @@ pub fn sig_cache_hit_ratio_test() {
 }
 
 pub fn sig_cache_invalid_cached_count_test() {
-  let cache = sig_cache.sig_cache_new()
+  let cache =
+    sig_cache.sig_cache_new()
     |> sig_cache.sig_cache_put(make_key(1, 0, 1), True, 1000)
     |> sig_cache.sig_cache_put(make_key(2, 0, 1), False, 1001)
     |> sig_cache.sig_cache_put(make_key(3, 0, 1), False, 1002)
@@ -204,9 +210,10 @@ pub fn sig_cache_eviction_test() {
   let cache = sig_cache.sig_cache_with_size(100)
 
   // Fill beyond capacity
-  let filled = list.fold(list.range(1, 150), cache, fn(acc, n) {
-    sig_cache.sig_cache_put(acc, make_key(n, 0, 1), True, n)
-  })
+  let filled =
+    list.fold(list.range(1, 150), cache, fn(acc, n) {
+      sig_cache.sig_cache_put(acc, make_key(n, 0, 1), True, n)
+    })
 
   // Size should be reduced
   let size = sig_cache.sig_cache_size(filled)
@@ -222,14 +229,18 @@ pub fn sig_cache_eviction_test() {
 // ============================================================================
 
 pub fn sig_cache_batch_get_test() {
-  let cache = sig_cache.sig_cache_new()
+  let cache =
+    sig_cache.sig_cache_new()
     |> sig_cache.sig_cache_put(make_key(1, 0, 1), True, 1000)
     |> sig_cache.sig_cache_put(make_key(2, 0, 1), True, 1001)
 
   let keys = [
-    make_key(1, 0, 1),  // Cached
-    make_key(2, 0, 1),  // Cached
-    make_key(3, 0, 1),  // Not cached
+    make_key(1, 0, 1),
+    // Cached
+    make_key(2, 0, 1),
+    // Cached
+    make_key(3, 0, 1),
+    // Not cached
   ]
 
   let #(_cache2, result) = sig_cache.sig_cache_batch_get(cache, keys, 2000)
@@ -267,11 +278,20 @@ pub fn sig_cache_put_tx_test() {
   let cache2 = sig_cache.sig_cache_put_tx(cache, txid, 3, sighashes, True, 1000)
 
   // All inputs should be cached
-  sig_cache.sig_cache_contains(cache2, sig_cache.cache_key_new(txid, 0, make_hash(1)))
+  sig_cache.sig_cache_contains(
+    cache2,
+    sig_cache.cache_key_new(txid, 0, make_hash(1)),
+  )
   |> should.equal(True)
-  sig_cache.sig_cache_contains(cache2, sig_cache.cache_key_new(txid, 1, make_hash(2)))
+  sig_cache.sig_cache_contains(
+    cache2,
+    sig_cache.cache_key_new(txid, 1, make_hash(2)),
+  )
   |> should.equal(True)
-  sig_cache.sig_cache_contains(cache2, sig_cache.cache_key_new(txid, 2, make_hash(3)))
+  sig_cache.sig_cache_contains(
+    cache2,
+    sig_cache.cache_key_new(txid, 2, make_hash(3)),
+  )
   |> should.equal(True)
 }
 
@@ -284,7 +304,8 @@ pub fn sig_cache_check_tx_all_cached_test() {
   let cache2 = sig_cache.sig_cache_put_tx(cache, txid, 2, sighashes, True, 1000)
 
   // Check should return True
-  let #(_cache3, result) = sig_cache.sig_cache_check_tx(cache2, txid, 2, sighashes, 2000)
+  let #(_cache3, result) =
+    sig_cache.sig_cache_check_tx(cache2, txid, 2, sighashes, 2000)
   result |> should.equal(Some(True))
 }
 
@@ -293,17 +314,19 @@ pub fn sig_cache_check_tx_partial_cached_test() {
   let txid = make_txid(1)
 
   // Only cache first input
-  let cache2 = sig_cache.sig_cache_put(
-    cache,
-    sig_cache.cache_key_new(txid, 0, make_hash(1)),
-    True,
-    1000,
-  )
+  let cache2 =
+    sig_cache.sig_cache_put(
+      cache,
+      sig_cache.cache_key_new(txid, 0, make_hash(1)),
+      True,
+      1000,
+    )
 
   let sighashes = [make_hash(1), make_hash(2)]
 
   // Check should return None (not fully cached)
-  let #(_cache3, result) = sig_cache.sig_cache_check_tx(cache2, txid, 2, sighashes, 2000)
+  let #(_cache3, result) =
+    sig_cache.sig_cache_check_tx(cache2, txid, 2, sighashes, 2000)
   result |> should.equal(None)
 }
 
@@ -313,10 +336,12 @@ pub fn sig_cache_check_tx_invalid_cached_test() {
   let sighashes = [make_hash(1), make_hash(2)]
 
   // Cache with invalid signature
-  let cache2 = sig_cache.sig_cache_put_tx(cache, txid, 2, sighashes, False, 1000)
+  let cache2 =
+    sig_cache.sig_cache_put_tx(cache, txid, 2, sighashes, False, 1000)
 
   // Check should return False
-  let #(_cache3, result) = sig_cache.sig_cache_check_tx(cache2, txid, 2, sighashes, 2000)
+  let #(_cache3, result) =
+    sig_cache.sig_cache_check_tx(cache2, txid, 2, sighashes, 2000)
   result |> should.equal(Some(False))
 }
 
@@ -325,7 +350,8 @@ pub fn sig_cache_check_tx_invalid_cached_test() {
 // ============================================================================
 
 pub fn sig_cache_detailed_stats_test() {
-  let cache = sig_cache.sig_cache_with_size(1000)
+  let cache =
+    sig_cache.sig_cache_with_size(1000)
     |> sig_cache.sig_cache_put(make_key(1, 0, 1), True, 1000)
     |> sig_cache.sig_cache_put(make_key(2, 0, 1), True, 1001)
 

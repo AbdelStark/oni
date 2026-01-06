@@ -92,13 +92,17 @@ pub type BlockTemplate {
 pub fn default_config() -> MiningConfig {
   // P2PKH script for a dummy address (used if no address specified)
   let dummy_script = <<
-    0x76,  // OP_DUP
-    0xa9,  // OP_HASH160
-    0x14,  // Push 20 bytes
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x88,  // OP_EQUALVERIFY
-    0xac,  // OP_CHECKSIG
+    0x76,
+    // OP_DUP
+    0xa9,
+    // OP_HASH160
+    0x14,
+    // Push 20 bytes
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x88,
+    // OP_EQUALVERIFY
+    0xac,
+    // OP_CHECKSIG
   >>
 
   MiningConfig(
@@ -144,28 +148,31 @@ pub fn create_coinbase(
   let extra_nonce_bytes = <<extra_nonce:little-size(32)>>
   let message_bytes = bit_array.from_string(config.coinbase_message)
 
-  let script_sig_bytes = bit_array.concat([
-    height_script,
-    extra_nonce_bytes,
-    message_bytes,
-  ])
+  let script_sig_bytes =
+    bit_array.concat([
+      height_script,
+      extra_nonce_bytes,
+      message_bytes,
+    ])
 
   // Coinbase input (null prevout)
-  let coinbase_input = oni_bitcoin.TxIn(
-    prevout: oni_bitcoin.OutPoint(
-      txid: oni_bitcoin.Txid(hash: oni_bitcoin.Hash256(bytes: <<0:256>>)),
-      vout: 0xffffffff,
-    ),
-    script_sig: oni_bitcoin.Script(bytes: script_sig_bytes),
-    sequence: 0xffffffff,
-    witness: [],
-  )
+  let coinbase_input =
+    oni_bitcoin.TxIn(
+      prevout: oni_bitcoin.OutPoint(
+        txid: oni_bitcoin.Txid(hash: oni_bitcoin.Hash256(bytes: <<0:256>>)),
+        vout: 0xffffffff,
+      ),
+      script_sig: oni_bitcoin.Script(bytes: script_sig_bytes),
+      sequence: 0xffffffff,
+      witness: [],
+    )
 
   // Coinbase output
-  let coinbase_output = oni_bitcoin.TxOut(
-    value: oni_bitcoin.Amount(sats: reward),
-    script_pubkey: oni_bitcoin.Script(bytes: config.coinbase_script),
-  )
+  let coinbase_output =
+    oni_bitcoin.TxOut(
+      value: oni_bitcoin.Amount(sats: reward),
+      script_pubkey: oni_bitcoin.Script(bytes: config.coinbase_script),
+    )
 
   oni_bitcoin.Transaction(
     version: 1,
@@ -178,15 +185,21 @@ pub fn create_coinbase(
 /// Encode block height for coinbase (BIP34)
 fn encode_height(height: Int) -> BitArray {
   case height {
-    0 -> <<1, 0>>  // OP_0
+    0 -> <<1, 0>>
+    // OP_0
     n if n < 17 -> {
-      let opcode = n + 0x50  // OP_1 through OP_16
+      let opcode = n + 0x50
+      // OP_1 through OP_16
       <<opcode>>
     }
-    n if n < 128 -> <<1, n>>  // 1 byte
-    n if n < 32768 -> <<2, n:little-size(16)>>  // 2 bytes
-    n if n < 8388608 -> <<3, n:little-size(24)>>  // 3 bytes
-    n -> <<4, n:little-size(32)>>  // 4 bytes
+    n if n < 128 -> <<1, n>>
+    // 1 byte
+    n if n < 32_768 -> <<2, n:little-size(16)>>
+    // 2 bytes
+    n if n < 8_388_608 -> <<3, n:little-size(24)>>
+    // 3 bytes
+    n -> <<4, n:little-size(32)>>
+    // 4 bytes
   }
 }
 
@@ -196,10 +209,11 @@ fn encode_height(height: Int) -> BitArray {
 
 /// Calculate merkle root from transaction list
 pub fn calculate_merkle_root(txs: List(oni_bitcoin.Transaction)) -> BitArray {
-  let txids = list.map(txs, fn(tx) {
-    let txid = oni_bitcoin.txid_from_tx(tx)
-    txid.hash.bytes
-  })
+  let txids =
+    list.map(txs, fn(tx) {
+      let txid = oni_bitcoin.txid_from_tx(tx)
+      txid.hash.bytes
+    })
 
   merkle_root(txids)
 }
@@ -210,10 +224,11 @@ fn merkle_root(hashes: List(BitArray)) -> BitArray {
     [single] -> single
     _ -> {
       let pairs = pair_hashes(hashes)
-      let next_level = list.map(pairs, fn(pair) {
-        let #(left, right) = pair
-        oni_bitcoin.sha256d(bit_array.concat([left, right]))
-      })
+      let next_level =
+        list.map(pairs, fn(pair) {
+          let #(left, right) = pair
+          oni_bitcoin.sha256d(bit_array.concat([left, right]))
+        })
       merkle_root(next_level)
     }
   }
@@ -222,7 +237,8 @@ fn merkle_root(hashes: List(BitArray)) -> BitArray {
 fn pair_hashes(hashes: List(BitArray)) -> List(#(BitArray, BitArray)) {
   case hashes {
     [] -> []
-    [single] -> [#(single, single)]  // Duplicate last if odd
+    [single] -> [#(single, single)]
+    // Duplicate last if odd
     [a, b, ..rest] -> [#(a, b), ..pair_hashes(rest)]
   }
 }
@@ -232,10 +248,7 @@ fn pair_hashes(hashes: List(BitArray)) -> List(#(BitArray, BitArray)) {
 // ============================================================================
 
 /// Mine a single block with given template
-pub fn mine_block(
-  config: MiningConfig,
-  template: BlockTemplate,
-) -> MiningResult {
+pub fn mine_block(config: MiningConfig, template: BlockTemplate) -> MiningResult {
   // Try with different extra nonces
   mine_with_extra_nonce(config, template, 0)
 }
@@ -249,12 +262,13 @@ fn mine_with_extra_nonce(
     True -> MiningError("Exhausted search space")
     False -> {
       // Create coinbase with this extra nonce
-      let coinbase = create_coinbase(
-        config,
-        template.height,
-        template.total_fees,
-        extra_nonce,
-      )
+      let coinbase =
+        create_coinbase(
+          config,
+          template.height,
+          template.total_fees,
+          extra_nonce,
+        )
 
       // Build transaction list
       let all_txs = [coinbase, ..template.transactions]
@@ -263,14 +277,15 @@ fn mine_with_extra_nonce(
       let merkle = calculate_merkle_root(all_txs)
 
       // Create block header
-      let header = oni_bitcoin.BlockHeader(
-        version: template.version,
-        prev_block: template.prev_block,
-        merkle_root: oni_bitcoin.Hash256(bytes: merkle),
-        timestamp: template.time,
-        bits: template.bits,
-        nonce: 0,
-      )
+      let header =
+        oni_bitcoin.BlockHeader(
+          version: template.version,
+          prev_block: template.prev_block,
+          merkle_root: oni_bitcoin.Hash256(bytes: merkle),
+          timestamp: template.time,
+          bits: template.bits,
+          nonce: 0,
+        )
 
       // Try mining with this coinbase
       case mine_header(header, template.bits) {
@@ -360,10 +375,11 @@ fn int_to_32_bytes(n: Int) -> BitArray {
 
 fn int_to_bytes(n: Int, acc: List(Int)) -> List(Int) {
   case n <= 0 {
-    True -> case acc {
-      [] -> [0]
-      _ -> acc
-    }
+    True ->
+      case acc {
+        [] -> [0]
+        _ -> acc
+      }
     False -> {
       let byte = int.bitwise_and(n, 0xff)
       int_to_bytes(int.bitwise_shift_right(n, 8), [byte, ..acc])
@@ -389,14 +405,16 @@ fn reverse_bytes_acc(input: BitArray, acc: BitArray) -> BitArray {
 
 fn compare_bytes(a: BitArray, b: BitArray) -> Bool {
   case a, b {
-    <<>>, <<>> -> True  // Equal
+    <<>>, <<>> -> True
+    // Equal
     <<ab:size(8), arest:bytes>>, <<bb:size(8), brest:bytes>> -> {
       case ab < bb {
         True -> True
-        False -> case ab > bb {
-          True -> False
-          False -> compare_bytes(arest, brest)
-        }
+        False ->
+          case ab > bb {
+            True -> False
+            False -> compare_bytes(arest, brest)
+          }
       }
     }
     _, _ -> False
@@ -429,15 +447,17 @@ fn generate_blocks_loop(
   case remaining <= 0 {
     True -> Ok(list.reverse(acc))
     False -> {
-      let template = BlockTemplate(
-        prev_block: prev_block,
-        height: height,
-        bits: regtest_bits,
-        time: time,
-        version: 0x20000000,  // BIP9 version bits
-        transactions: [],
-        total_fees: 0,
-      )
+      let template =
+        BlockTemplate(
+          prev_block: prev_block,
+          height: height,
+          bits: regtest_bits,
+          time: time,
+          version: 0x20000000,
+          // BIP9 version bits
+          transactions: [],
+          total_fees: 0,
+        )
 
       case mine_block(config, template) {
         MinedBlock(block) -> {
@@ -447,7 +467,8 @@ fn generate_blocks_loop(
             block_hash,
             height + 1,
             remaining - 1,
-            time + 600,  // 10 minutes between blocks
+            time + 600,
+            // 10 minutes between blocks
             [block, ..acc],
           )
         }
@@ -464,17 +485,12 @@ fn generate_blocks_loop(
 
 /// Result of generateblock RPC call
 pub type GenerateBlockResult {
-  GenerateBlockResult(
-    hash: oni_bitcoin.BlockHash,
-    height: Int,
-  )
+  GenerateBlockResult(hash: oni_bitcoin.BlockHash, height: Int)
 }
 
 /// Result of generatetoaddress RPC call
 pub type GenerateToAddressResult {
-  GenerateToAddressResult(
-    hashes: List(oni_bitcoin.BlockHash),
-  )
+  GenerateToAddressResult(hashes: List(oni_bitcoin.BlockHash))
 }
 
 // ============================================================================
@@ -486,10 +502,11 @@ pub fn calculate_witness_commitment(
   txs: List(oni_bitcoin.Transaction),
 ) -> BitArray {
   // Calculate witness merkle root
-  let wtxids = list.map(txs, fn(tx) {
-    let wtxid = oni_bitcoin.wtxid_from_tx(tx)
-    wtxid.hash.bytes
-  })
+  let wtxids =
+    list.map(txs, fn(tx) {
+      let wtxid = oni_bitcoin.wtxid_from_tx(tx)
+      wtxid.hash.bytes
+    })
 
   // First wtxid (coinbase) is 0x00...00
   let wtxids = case wtxids {
@@ -501,17 +518,20 @@ pub fn calculate_witness_commitment(
 
   // Commitment = SHA256d(witness_merkle_root || witness_reserved_value)
   let witness_reserved_value = <<0:256>>
-  oni_bitcoin.sha256d(bit_array.concat([
-    witness_merkle,
-    witness_reserved_value,
-  ]))
+  oni_bitcoin.sha256d(
+    bit_array.concat([
+      witness_merkle,
+      witness_reserved_value,
+    ]),
+  )
 }
 
 /// Create witness commitment output script
 pub fn witness_commitment_script(commitment: BitArray) -> BitArray {
   // OP_RETURN followed by the commitment
   bit_array.concat([
-    <<0x6a, 0x24, 0xaa, 0x21, 0xa9, 0xed>>,  // OP_RETURN PUSH36 WITNESS_MAGIC
+    <<0x6a, 0x24, 0xaa, 0x21, 0xa9, 0xed>>,
+    // OP_RETURN PUSH36 WITNESS_MAGIC
     commitment,
   ])
 }
@@ -524,10 +544,11 @@ pub fn add_witness_commitment(
   let commitment = calculate_witness_commitment([coinbase, ..other_txs])
   let commit_script = witness_commitment_script(commitment)
 
-  let commit_output = oni_bitcoin.TxOut(
-    value: oni_bitcoin.Amount(sats: 0),
-    script_pubkey: oni_bitcoin.Script(bytes: commit_script),
-  )
+  let commit_output =
+    oni_bitcoin.TxOut(
+      value: oni_bitcoin.Amount(sats: 0),
+      script_pubkey: oni_bitcoin.Script(bytes: commit_script),
+    )
 
   oni_bitcoin.Transaction(
     ..coinbase,

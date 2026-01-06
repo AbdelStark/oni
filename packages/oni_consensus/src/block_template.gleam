@@ -16,13 +16,13 @@ import gleam/float
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
-import oni_bitcoin.{
-  type Block, type BlockHash, type Hash256,
-  type Script, type Transaction, type Txid,
-}
 import gleam/set
-import oni_consensus.{compute_merkle_root}
 import mempool.{type Mempool, type MempoolEntry}
+import oni_bitcoin.{
+  type Block, type BlockHash, type Hash256, type Script, type Transaction,
+  type Txid,
+}
+import oni_consensus.{compute_merkle_root}
 
 // ============================================================================
 // Constants
@@ -126,7 +126,8 @@ pub type TemplateParams {
 pub fn calculate_subsidy(height: Int) -> Int {
   let halvings = height / halving_interval
   case halvings >= 64 {
-    True -> 0  // Subsidy exhausted
+    True -> 0
+    // Subsidy exhausted
     False -> int.bitwise_shift_right(initial_subsidy_sats, halvings)
   }
 }
@@ -179,15 +180,17 @@ fn convert_to_template_txs(
       let depends = build_depends_list(entry, txid_index)
 
       // Create template transaction
-      let template_tx = TemplateTransaction(
-        data: encode_transaction(entry.tx),
-        txid: entry.txid,
-        hash: entry.txid.hash,  // Txid contains the Hash256
-        fee: tx_fee,
-        sigops: tx_sigops,
-        weight: tx_weight,
-        depends: depends,
-      )
+      let template_tx =
+        TemplateTransaction(
+          data: encode_transaction(entry.tx),
+          txid: entry.txid,
+          hash: entry.txid.hash,
+          // Txid contains the Hash256
+          fee: tx_fee,
+          sigops: tx_sigops,
+          weight: tx_weight,
+          depends: depends,
+        )
 
       // Update index with current position
       let new_index = dict.insert(txid_index, txid_key, idx)
@@ -206,16 +209,16 @@ fn convert_to_template_txs(
 }
 
 /// Build list of dependency indices for a transaction
-fn build_depends_list(entry: MempoolEntry, txid_index: Dict(String, Int)) -> List(Int) {
-  list.filter_map(
-    set.to_list(entry.ancestors),
-    fn(ancestor_key) {
-      case dict.get(txid_index, ancestor_key) {
-        Ok(idx) -> Ok(idx)
-        Error(_) -> Error(Nil)
-      }
+fn build_depends_list(
+  entry: MempoolEntry,
+  txid_index: Dict(String, Int),
+) -> List(Int) {
+  list.filter_map(set.to_list(entry.ancestors), fn(ancestor_key) {
+    case dict.get(txid_index, ancestor_key) {
+      Ok(idx) -> Ok(idx)
+      Error(_) -> Error(Nil)
     }
-  )
+  })
 }
 
 /// Estimate sigops for a transaction
@@ -237,28 +240,27 @@ pub fn create_coinbase(
   witness_commitment: Option(BitArray),
 ) -> Transaction {
   // Coinbase input (null prevout)
-  let coinbase_input = oni_bitcoin.TxIn(
-    oni_bitcoin.outpoint_null(),
-    create_coinbase_script(height),
-    0xFFFFFFFF,
-    [],
-  )
+  let coinbase_input =
+    oni_bitcoin.TxIn(
+      oni_bitcoin.outpoint_null(),
+      create_coinbase_script(height),
+      0xFFFFFFFF,
+      [],
+    )
 
   // Main output to miner
-  let main_output = oni_bitcoin.TxOut(
-    oni_bitcoin.sats(value),
-    output_script,
-  )
+  let main_output = oni_bitcoin.TxOut(oni_bitcoin.sats(value), output_script)
 
   // Outputs list
   let outputs = case witness_commitment {
     None -> [main_output]
     Some(commitment) -> {
       // Add witness commitment output (OP_RETURN)
-      let witness_output = oni_bitcoin.TxOut(
-        oni_bitcoin.sats(0),
-        create_witness_commitment_script(commitment),
-      )
+      let witness_output =
+        oni_bitcoin.TxOut(
+          oni_bitcoin.sats(0),
+          create_witness_commitment_script(commitment),
+        )
       [main_output, witness_output]
     }
   }
@@ -284,15 +286,17 @@ fn encode_height(height: Int) -> BitArray {
   case height {
     h if h <= 16 -> <<h:8>>
     h if h <= 127 -> <<1:8, h:8>>
-    h if h <= 32767 -> <<2:8, h:16-little>>
-    h if h <= 8388607 -> <<3:8, h:24-little>>
+    h if h <= 32_767 -> <<2:8, h:16-little>>
+    h if h <= 8_388_607 -> <<3:8, h:24-little>>
     h -> <<4:8, h:32-little>>
   }
 }
 
 /// Create witness commitment script (OP_RETURN + commitment)
 fn create_witness_commitment_script(commitment: BitArray) -> Script {
-  let script_bytes = <<0x6a, 0x24>>  // OP_RETURN OP_PUSHBYTES_36
+  let script_bytes =
+    <<0x6a, 0x24>>
+    // OP_RETURN OP_PUSHBYTES_36
     |> bit_array.append(witness_commitment_header)
     |> bit_array.append(commitment)
   oni_bitcoin.Script(script_bytes)
@@ -314,7 +318,8 @@ pub fn calculate_witness_commitment(
   let witness_root = compute_merkle_root(wtxids)
 
   // Witness commitment = SHA256(SHA256(witness_root || witness_reserved))
-  let witness_reserved = <<0:256>>  // 32 bytes of zeros
+  let witness_reserved = <<0:256>>
+  // 32 bytes of zeros
   let commitment_data = bit_array.append(witness_root.bytes, witness_reserved)
   let commitment = oni_bitcoin.hash256_digest(commitment_data)
   commitment.bytes
@@ -325,10 +330,7 @@ pub fn calculate_witness_commitment(
 // ============================================================================
 
 /// Create a block template from mempool and chainstate
-pub fn create_template(
-  pool: Mempool,
-  params: TemplateParams,
-) -> BlockTemplate {
+pub fn create_template(pool: Mempool, params: TemplateParams) -> BlockTemplate {
   // Select transactions from mempool
   let #(txs, weight_used, sigops_used, total_fees) =
     select_transactions(pool, max_block_weight)
@@ -350,12 +352,14 @@ pub fn create_template(
   let target = bits_to_target(params.bits)
 
   BlockTemplate(
-    version: 0x20000000,  // BIP9 versionbits base
+    version: 0x20000000,
+    // BIP9 versionbits base
     prev_block_hash: params.prev_block_hash,
     transactions: txs,
     coinbase_value: coinbase_value,
     target: target,
-    min_time: params.cur_time - 7200,  // 2 hours in past allowed
+    min_time: params.cur_time - 7200,
+    // 2 hours in past allowed
     cur_time: params.cur_time,
     height: params.height,
     bits: params.bits,
@@ -379,11 +383,16 @@ fn bits_to_target(bits: Int) -> BitArray {
       let zeros_after = shift
       build_target_bytes(mantissa, zeros_before, zeros_after)
     }
-    False -> <<0:256>>  // Invalid, return zero target
+    False -> <<0:256>>
+    // Invalid, return zero target
   }
 }
 
-fn build_target_bytes(mantissa: Int, zeros_before: Int, zeros_after: Int) -> BitArray {
+fn build_target_bytes(
+  mantissa: Int,
+  zeros_before: Int,
+  zeros_after: Int,
+) -> BitArray {
   let before = create_zeros(zeros_before)
   let mant = <<mantissa:24-big>>
   let after = create_zeros(zeros_after)
@@ -455,29 +464,31 @@ pub fn select_transactions_cpfp(
   let packages = build_tx_packages(entries)
 
   // Sort by package fee rate
-  let sorted = list.sort(packages, fn(a, b) {
-    float.compare(b.package_fee_rate, a.package_fee_rate)
-  })
+  let sorted =
+    list.sort(packages, fn(a, b) {
+      float.compare(b.package_fee_rate, a.package_fee_rate)
+    })
 
   // Select packages that fit
   select_packages(sorted, max_weight, [], set.new(), 0, 0, 0)
 }
 
 fn build_tx_packages(entries: List(MempoolEntry)) -> List(TxPackage) {
-  let entry_by_key = list.fold(entries, dict.new(), fn(acc, entry) {
-    let key = oni_bitcoin.txid_to_hex(entry.txid)
-    dict.insert(acc, key, entry)
-  })
+  let entry_by_key =
+    list.fold(entries, dict.new(), fn(acc, entry) {
+      let key = oni_bitcoin.txid_to_hex(entry.txid)
+      dict.insert(acc, key, entry)
+    })
 
   list.map(entries, fn(entry) {
     let ancestors = gather_ancestors(entry, entry_by_key)
-    let total_fee = oni_bitcoin.amount_to_sats(entry.fee) +
-      list.fold(ancestors, 0, fn(acc, anc) {
+    let total_fee =
+      oni_bitcoin.amount_to_sats(entry.fee)
+      + list.fold(ancestors, 0, fn(acc, anc) {
         acc + oni_bitcoin.amount_to_sats(anc.fee)
       })
-    let total_vsize = entry.vsize + list.fold(ancestors, 0, fn(acc, anc) {
-      acc + anc.vsize
-    })
+    let total_vsize =
+      entry.vsize + list.fold(ancestors, 0, fn(acc, anc) { acc + anc.vsize })
     let rate = case total_vsize > 0 {
       True -> int.to_float(total_fee) /. int.to_float(total_vsize)
       False -> 0.0
@@ -498,9 +509,7 @@ fn gather_ancestors(
   all_entries: Dict(String, MempoolEntry),
 ) -> List(MempoolEntry) {
   set.to_list(entry.ancestors)
-  |> list.filter_map(fn(key) {
-    dict.get(all_entries, key)
-  })
+  |> list.filter_map(fn(key) { dict.get(all_entries, key) })
 }
 
 fn select_packages(
@@ -520,18 +529,40 @@ fn select_packages(
 
       // Skip if already selected
       case set.contains(selected_keys, tx_key) {
-        True -> select_packages(rest, remaining_weight, acc, selected_keys,
-          weight_used, sigops_used, fees_used)
+        True ->
+          select_packages(
+            rest,
+            remaining_weight,
+            acc,
+            selected_keys,
+            weight_used,
+            sigops_used,
+            fees_used,
+          )
         False -> {
           // Check if fits
           case pkg_weight <= remaining_weight {
-            False -> select_packages(rest, remaining_weight, acc, selected_keys,
-              weight_used, sigops_used, fees_used)
+            False ->
+              select_packages(
+                rest,
+                remaining_weight,
+                acc,
+                selected_keys,
+                weight_used,
+                sigops_used,
+                fees_used,
+              )
             True -> {
               // Add ancestors first
-              let #(acc2, keys2, w2, s2, f2) = add_ancestors(
-                pkg.ancestors, acc, selected_keys, weight_used, sigops_used, fees_used
-              )
+              let #(acc2, keys2, w2, s2, f2) =
+                add_ancestors(
+                  pkg.ancestors,
+                  acc,
+                  selected_keys,
+                  weight_used,
+                  sigops_used,
+                  fees_used,
+                )
 
               // Add the transaction
               let template_tx = mempool_entry_to_template(pkg.tx)
@@ -543,8 +574,15 @@ fn select_packages(
               let new_sigops = s2 + tx_sigops
               let new_fees = f2 + tx_fee
 
-              select_packages(rest, remaining_weight - pkg_weight,
-                [template_tx, ..acc2], new_keys, new_weight, new_sigops, new_fees)
+              select_packages(
+                rest,
+                remaining_weight - pkg_weight,
+                [template_tx, ..acc2],
+                new_keys,
+                new_weight,
+                new_sigops,
+                new_fees,
+              )
             }
           }
         }
@@ -572,12 +610,13 @@ fn add_ancestors(
           let tx_sigops = estimate_sigops(anc.tx)
           let tx_fee = oni_bitcoin.amount_to_sats(anc.fee)
 
-          add_ancestors(rest,
+          add_ancestors(
+            rest,
             [template_tx, ..acc],
             set.insert(selected, key),
             weight + anc.vsize * 4,
             sigops + tx_sigops,
-            fees + tx_fee
+            fees + tx_fee,
           )
         }
       }
@@ -614,46 +653,54 @@ pub fn create_coinbase_with_extra_nonce(
 ) -> #(Transaction, Int, Int) {
   // Create coinbase script with height and extra nonce placeholder
   let height_script = encode_height(height)
-  let extra_nonce_placeholder = <<0:64>>  // 8 bytes for extra nonce
-  let coinbase_script = bit_array.concat([
-    height_script,
-    extra_data,
-    extra_nonce_placeholder,
-  ])
+  let extra_nonce_placeholder = <<0:64>>
+  // 8 bytes for extra nonce
+  let coinbase_script =
+    bit_array.concat([
+      height_script,
+      extra_data,
+      extra_nonce_placeholder,
+    ])
 
   // Calculate extra nonce range
-  let extra_nonce_start = bit_array.byte_size(height_script) + bit_array.byte_size(extra_data)
+  let extra_nonce_start =
+    bit_array.byte_size(height_script) + bit_array.byte_size(extra_data)
   let extra_nonce_len = extra_nonce_size
 
-  let coinbase_input = oni_bitcoin.TxIn(
-    prevout: oni_bitcoin.outpoint_null(),
-    script_sig: oni_bitcoin.Script(coinbase_script),
-    sequence: 0xFFFFFFFF,
-    witness: [<<0:256>>],  // Witness reserved value
-  )
+  let coinbase_input =
+    oni_bitcoin.TxIn(
+      prevout: oni_bitcoin.outpoint_null(),
+      script_sig: oni_bitcoin.Script(coinbase_script),
+      sequence: 0xFFFFFFFF,
+      witness: [<<0:256>>],
+      // Witness reserved value
+    )
 
-  let main_output = oni_bitcoin.TxOut(
-    value: oni_bitcoin.sats(value),
-    script_pubkey: output_script,
-  )
+  let main_output =
+    oni_bitcoin.TxOut(
+      value: oni_bitcoin.sats(value),
+      script_pubkey: output_script,
+    )
 
   let outputs = case witness_commitment {
     None -> [main_output]
     Some(commitment) -> {
-      let witness_output = oni_bitcoin.TxOut(
-        value: oni_bitcoin.sats(0),
-        script_pubkey: create_witness_commitment_script(commitment),
-      )
+      let witness_output =
+        oni_bitcoin.TxOut(
+          value: oni_bitcoin.sats(0),
+          script_pubkey: create_witness_commitment_script(commitment),
+        )
       [main_output, witness_output]
     }
   }
 
-  let tx = oni_bitcoin.Transaction(
-    version: 2,
-    inputs: [coinbase_input],
-    outputs: outputs,
-    lock_time: 0,
-  )
+  let tx =
+    oni_bitcoin.Transaction(
+      version: 2,
+      inputs: [coinbase_input],
+      outputs: outputs,
+      lock_time: 0,
+    )
 
   #(tx, extra_nonce_start, extra_nonce_len)
 }
@@ -671,30 +718,27 @@ pub fn assemble_block(
 ) -> Block {
   // Calculate merkle root
   let coinbase_txid = oni_bitcoin.txid_from_tx(coinbase)
-  let merkle_root = calculate_template_merkle_root(
-    coinbase_txid,
-    template.transactions
-  )
+  let merkle_root =
+    calculate_template_merkle_root(coinbase_txid, template.transactions)
 
   // Create header
-  let header = oni_bitcoin.BlockHeader(
-    version: template.version,
-    prev_block: template.prev_block_hash,
-    merkle_root: merkle_root,
-    timestamp: timestamp,
-    bits: template.bits,
-    nonce: nonce,
-  )
+  let header =
+    oni_bitcoin.BlockHeader(
+      version: template.version,
+      prev_block: template.prev_block_hash,
+      merkle_root: merkle_root,
+      timestamp: timestamp,
+      bits: template.bits,
+      nonce: nonce,
+    )
 
   // Assemble transactions
-  let transactions = [coinbase, ..list.map(template.transactions, fn(t) {
-    decode_template_tx(t.data)
-  })]
+  let transactions = [
+    coinbase,
+    ..list.map(template.transactions, fn(t) { decode_template_tx(t.data) })
+  ]
 
-  oni_bitcoin.Block(
-    header: header,
-    transactions: transactions,
-  )
+  oni_bitcoin.Block(header: header, transactions: transactions)
 }
 
 fn decode_template_tx(data: BitArray) -> Transaction {
@@ -811,17 +855,19 @@ pub fn create_mining_job(
 ) -> MiningJob {
   // Calculate witness commitment
   let zero_hash = oni_bitcoin.Hash256(<<0:256>>)
-  let witness_commitment = calculate_witness_commitment(zero_hash, template.transactions)
+  let witness_commitment =
+    calculate_witness_commitment(zero_hash, template.transactions)
 
   // Create coinbase parts
-  let #(coinbase1, coinbase2) = create_coinbase_parts(
-    template.height,
-    template.coinbase_value,
-    coinbase_output_script,
-    Some(witness_commitment),
-    extra_nonce_size_1,
-    extra_nonce_size_2,
-  )
+  let #(coinbase1, coinbase2) =
+    create_coinbase_parts(
+      template.height,
+      template.coinbase_value,
+      coinbase_output_script,
+      Some(witness_commitment),
+      extra_nonce_size_1,
+      extra_nonce_size_2,
+    )
 
   // Calculate merkle branches
   let txids = list.map(template.transactions, fn(t) { t.txid.hash.bytes })
@@ -853,30 +899,36 @@ fn create_coinbase_parts(
   let input_count = <<1:8>>
   let prevout = <<0:256, 0xFFFFFFFF:32-little>>
   let height_script = encode_height(height)
-  let script_len = bit_array.byte_size(height_script) + extra_nonce_size_1 + extra_nonce_size_2
+  let script_len =
+    bit_array.byte_size(height_script) + extra_nonce_size_1 + extra_nonce_size_2
   let len_byte = oni_bitcoin.compact_size_encode(script_len)
 
-  let coinbase1 = bit_array.concat([
-    version,
-    <<0:8, 1:8>>,  // SegWit marker + flag
-    input_count,
-    prevout,
-    len_byte,
-    height_script,
-  ])
+  let coinbase1 =
+    bit_array.concat([
+      version,
+      <<0:8, 1:8>>,
+      // SegWit marker + flag
+      input_count,
+      prevout,
+      len_byte,
+      height_script,
+    ])
 
   // Part 2: sequence + outputs + witness + locktime
   let sequence = <<0xFFFFFFFF:32-little>>
-  let output_data = create_outputs_data(value, output_script, witness_commitment)
-  let witness = <<1:8, 32:8, 0:256>>  // 1 witness item, 32 bytes, all zeros
+  let output_data =
+    create_outputs_data(value, output_script, witness_commitment)
+  let witness = <<1:8, 32:8, 0:256>>
+  // 1 witness item, 32 bytes, all zeros
   let locktime = <<0:32-little>>
 
-  let coinbase2 = bit_array.concat([
-    sequence,
-    output_data,
-    witness,
-    locktime,
-  ])
+  let coinbase2 =
+    bit_array.concat([
+      sequence,
+      output_data,
+      witness,
+      locktime,
+    ])
 
   #(coinbase1, coinbase2)
 }
@@ -887,32 +939,38 @@ fn create_outputs_data(
   witness_commitment: Option(BitArray),
 ) -> BitArray {
   let script_bytes = oni_bitcoin.script_to_bytes(output_script)
-  let main_output = bit_array.concat([
-    <<value:64-little>>,
-    oni_bitcoin.compact_size_encode(bit_array.byte_size(script_bytes)),
-    script_bytes,
-  ])
+  let main_output =
+    bit_array.concat([
+      <<value:64-little>>,
+      oni_bitcoin.compact_size_encode(bit_array.byte_size(script_bytes)),
+      script_bytes,
+    ])
 
   case witness_commitment {
     None -> {
       bit_array.concat([
-        <<1:8>>,  // Output count
+        <<1:8>>,
+        // Output count
         main_output,
       ])
     }
     Some(commitment) -> {
-      let witness_script = bit_array.concat([
-        <<0x6a, 0x24>>,
-        witness_commitment_header,
-        commitment,
-      ])
-      let witness_output = bit_array.concat([
-        <<0:64-little>>,  // Zero value
-        oni_bitcoin.compact_size_encode(bit_array.byte_size(witness_script)),
-        witness_script,
-      ])
+      let witness_script =
+        bit_array.concat([
+          <<0x6a, 0x24>>,
+          witness_commitment_header,
+          commitment,
+        ])
+      let witness_output =
+        bit_array.concat([
+          <<0:64-little>>,
+          // Zero value
+          oni_bitcoin.compact_size_encode(bit_array.byte_size(witness_script)),
+          witness_script,
+        ])
       bit_array.concat([
-        <<2:8>>,  // Output count
+        <<2:8>>,
+        // Output count
         main_output,
         witness_output,
       ])
@@ -947,7 +1005,10 @@ fn calculate_branches_recursive(
   }
 }
 
-fn combine_hash_pairs(hashes: List(BitArray), acc: List(BitArray)) -> List(BitArray) {
+fn combine_hash_pairs(
+  hashes: List(BitArray),
+  acc: List(BitArray),
+) -> List(BitArray) {
   case hashes {
     [] -> list.reverse(acc)
     [single] -> list.reverse([single, ..acc])

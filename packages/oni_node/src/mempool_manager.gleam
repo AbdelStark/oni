@@ -21,16 +21,18 @@ import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
-import oni_bitcoin.{type Amount, type OutPoint, type Transaction, type Txid, Amount}
-import oni_supervisor.{
-  type ChainstateMsg, type MempoolMsg, AddTx, ClearConfirmed, GetSize,
-  GetUtxo, MempoolShutdown,
-}
-import mempool_validation.{
-  type UtxoLookupResult, type UtxoView, type ValidationResult,
-  UtxoAvailable, UtxoInMempool, UtxoNotFound, UtxoSpent,
-}
 import mempool_policy
+import mempool_validation.{
+  type UtxoLookupResult, type UtxoView, type ValidationResult, UtxoAvailable,
+  UtxoInMempool, UtxoNotFound, UtxoSpent,
+}
+import oni_bitcoin.{
+  type Amount, type OutPoint, type Transaction, type Txid, Amount,
+}
+import oni_supervisor.{
+  type ChainstateMsg, type MempoolMsg, AddTx, ClearConfirmed, GetSize, GetUtxo,
+  MempoolShutdown,
+}
 
 // ============================================================================
 // Manager Types
@@ -39,10 +41,7 @@ import mempool_policy
 /// Messages for the mempool manager actor
 pub type ManagerMsg {
   /// Submit a transaction for validation and inclusion
-  SubmitTx(
-    tx: Transaction,
-    reply: Subject(Result(SubmitResult, SubmitError)),
-  )
+  SubmitTx(tx: Transaction, reply: Subject(Result(SubmitResult, SubmitError)))
   /// Get transaction by txid
   GetTx(txid: Txid, reply: Subject(Option(Transaction)))
   /// Get mempool info
@@ -63,12 +62,7 @@ pub type ManagerMsg {
 
 /// Successful transaction submission result
 pub type SubmitResult {
-  SubmitResult(
-    txid: Txid,
-    fee: Int,
-    vsize: Int,
-    fee_rate: Float,
-  )
+  SubmitResult(txid: Txid, fee: Int, vsize: Int, fee_rate: Float)
 }
 
 /// Transaction submission error
@@ -98,10 +92,7 @@ pub type MempoolInfo {
 
 /// Fee estimation result
 pub type FeeEstimate {
-  FeeEstimate(
-    fee_rate: Float,
-    blocks: Int,
-  )
+  FeeEstimate(fee_rate: Float, blocks: Int)
 }
 
 /// Test acceptance result
@@ -168,15 +159,16 @@ pub fn start(
   mempool: Subject(MempoolMsg),
   chain_height: Int,
 ) -> Result(Subject(ManagerMsg), actor.StartError) {
-  let initial_state = ManagerState(
-    chainstate: chainstate,
-    mempool: mempool,
-    mempool_utxos: dict.new(),
-    spent_outputs: dict.new(),
-    tx_metadata: dict.new(),
-    chain_height: chain_height,
-    fee_histogram: [],
-  )
+  let initial_state =
+    ManagerState(
+      chainstate: chainstate,
+      mempool: mempool,
+      mempool_utxos: dict.new(),
+      spent_outputs: dict.new(),
+      tx_metadata: dict.new(),
+      chain_height: chain_height,
+      fee_histogram: [],
+    )
 
   actor.start(initial_state, handle_manager_msg)
 }
@@ -192,7 +184,11 @@ fn handle_manager_msg(
   case msg {
     SubmitTx(tx, reply) -> {
       // Step 1: Check policy (stateless)
-      let policy_result = mempool_policy.check_transaction(tx, mempool_policy.default_policy_config())
+      let policy_result =
+        mempool_policy.check_transaction(
+          tx,
+          mempool_policy.default_policy_config(),
+        )
       case policy_result {
         Error(policy_error) -> {
           let reason = mempool_policy.error_to_string(policy_error)
@@ -204,7 +200,8 @@ fn handle_manager_msg(
           let utxo_view = create_utxo_view(state)
 
           // Step 3: Validate contextually
-          let validation_result = mempool_validation.validate_transaction(tx, utxo_view)
+          let validation_result =
+            mempool_validation.validate_transaction(tx, utxo_view)
           case validation_result {
             Error(validation_error) -> {
               let reason = mempool_validation.error_to_string(validation_error)
@@ -220,7 +217,8 @@ fn handle_manager_msg(
                 }
                 None -> {
                   // Step 5: Add to underlying mempool
-                  let add_result = process.call(state.mempool, AddTx(tx, _), 5000)
+                  let add_result =
+                    process.call(state.mempool, AddTx(tx, _), 5000)
                   case add_result {
                     Error("Transaction already in mempool") -> {
                       process.send(reply, Error(AlreadyInMempool))
@@ -237,14 +235,16 @@ fn handle_manager_msg(
                     Ok(_) -> {
                       // Step 6: Update manager state
                       let txid = oni_bitcoin.txid_from_tx(tx)
-                      let new_state = update_state_after_add(state, tx, txid, result)
+                      let new_state =
+                        update_state_after_add(state, tx, txid, result)
 
-                      let submit_result = SubmitResult(
-                        txid: txid,
-                        fee: result.fee,
-                        vsize: result.vsize,
-                        fee_rate: result.fee_rate,
-                      )
+                      let submit_result =
+                        SubmitResult(
+                          txid: txid,
+                          fee: result.fee,
+                          vsize: result.vsize,
+                          fee_rate: result.fee_rate,
+                        )
                       process.send(reply, Ok(submit_result))
                       actor.continue(new_state)
                     }
@@ -278,13 +278,15 @@ fn handle_manager_msg(
       let size = process.call(state.mempool, GetSize, 5000)
       let min_fee = calculate_min_fee_rate(state)
 
-      let info = MempoolInfo(
-        size: size,
-        bytes: calculate_mempool_bytes(state),
-        usage: size,
-        max_size: 300_000_000,  // From config
-        min_fee_rate: min_fee,
-      )
+      let info =
+        MempoolInfo(
+          size: size,
+          bytes: calculate_mempool_bytes(state),
+          usage: size,
+          max_size: 300_000_000,
+          // From config
+          min_fee_rate: min_fee,
+        )
       process.send(reply, info)
       actor.continue(state)
     }
@@ -297,36 +299,49 @@ fn handle_manager_msg(
 
     TestAccept(tx, reply) -> {
       // Run validation without adding to mempool
-      let policy_result = mempool_policy.check_transaction(tx, mempool_policy.default_policy_config())
+      let policy_result =
+        mempool_policy.check_transaction(
+          tx,
+          mempool_policy.default_policy_config(),
+        )
       case policy_result {
         Error(policy_error) -> {
           let reason = mempool_policy.error_to_string(policy_error)
-          process.send(reply, TestAcceptResult(
-            allowed: False,
-            fee: 0,
-            vsize: 0,
-            reject_reason: Some(reason),
-          ))
+          process.send(
+            reply,
+            TestAcceptResult(
+              allowed: False,
+              fee: 0,
+              vsize: 0,
+              reject_reason: Some(reason),
+            ),
+          )
         }
         Ok(_) -> {
           let utxo_view = create_utxo_view(state)
           case mempool_validation.validate_transaction(tx, utxo_view) {
             Error(validation_error) -> {
               let reason = mempool_validation.error_to_string(validation_error)
-              process.send(reply, TestAcceptResult(
-                allowed: False,
-                fee: 0,
-                vsize: 0,
-                reject_reason: Some(reason),
-              ))
+              process.send(
+                reply,
+                TestAcceptResult(
+                  allowed: False,
+                  fee: 0,
+                  vsize: 0,
+                  reject_reason: Some(reason),
+                ),
+              )
             }
             Ok(result) -> {
-              process.send(reply, TestAcceptResult(
-                allowed: True,
-                fee: result.fee,
-                vsize: result.vsize,
-                reject_reason: None,
-              ))
+              process.send(
+                reply,
+                TestAcceptResult(
+                  allowed: True,
+                  fee: result.fee,
+                  vsize: result.vsize,
+                  reject_reason: None,
+                ),
+              )
             }
           }
         }
@@ -345,19 +360,15 @@ fn handle_manager_msg(
       // Remove confirmed transactions and their metadata
       process.send(state.mempool, ClearConfirmed(txids))
       let new_state = remove_confirmed_txs(state, txids)
-      let updated_state = ManagerState(
-        ..new_state,
-        chain_height: state.chain_height + 1,
-      )
+      let updated_state =
+        ManagerState(..new_state, chain_height: state.chain_height + 1)
       actor.continue(updated_state)
     }
 
     OnBlockDisconnected(_txids) -> {
       // Would restore previously confirmed txs
-      let updated_state = ManagerState(
-        ..state,
-        chain_height: state.chain_height - 1,
-      )
+      let updated_state =
+        ManagerState(..state, chain_height: state.chain_height - 1)
       actor.continue(updated_state)
     }
 
@@ -377,7 +388,8 @@ fn create_utxo_view(state: ManagerState) -> UtxoView {
   mempool_validation.UtxoView(
     lookup: fn(outpoint) { lookup_utxo(state, outpoint) },
     chain_height: state.chain_height,
-    median_time_past: 0,  // Would need to calculate
+    median_time_past: 0,
+    // Would need to calculate
   )
 }
 
@@ -392,30 +404,30 @@ fn lookup_utxo(state: ManagerState, outpoint: OutPoint) -> UtxoLookupResult {
       // Check mempool UTXOs (unconfirmed parents)
       case dict.get(state.mempool_utxos, outpoint_key) {
         Ok(mempool_utxo) -> {
-          let info = mempool_validation.UtxoInfo(
-            value: mempool_utxo.value,
-            script_pubkey: mempool_utxo.script_pubkey,
-            height: state.chain_height + 1,  // Unconfirmed
-            is_coinbase: False,
-          )
+          let info =
+            mempool_validation.UtxoInfo(
+              value: mempool_utxo.value,
+              script_pubkey: mempool_utxo.script_pubkey,
+              height: state.chain_height + 1,
+              // Unconfirmed
+              is_coinbase: False,
+            )
           UtxoInMempool(info)
         }
         Error(_) -> {
           // Check chainstate
-          let chainstate_result = process.call(
-            state.chainstate,
-            GetUtxo(outpoint, _),
-            5000,
-          )
+          let chainstate_result =
+            process.call(state.chainstate, GetUtxo(outpoint, _), 5000)
           case chainstate_result {
             None -> UtxoNotFound
             Some(coin_info) -> {
-              let info = mempool_validation.UtxoInfo(
-                value: coin_info.value,
-                script_pubkey: coin_info.script_pubkey,
-                height: coin_info.height,
-                is_coinbase: coin_info.is_coinbase,
-              )
+              let info =
+                mempool_validation.UtxoInfo(
+                  value: coin_info.value,
+                  script_pubkey: coin_info.script_pubkey,
+                  height: coin_info.height,
+                  is_coinbase: coin_info.is_coinbase,
+                )
               UtxoAvailable(info)
             }
           }
@@ -439,26 +451,30 @@ fn update_state_after_add(
   let txid_hex = oni_bitcoin.txid_to_hex(txid)
 
   // Add metadata
-  let metadata = TxMetadata(
-    fee: result.fee,
-    vsize: result.vsize,
-    fee_rate: result.fee_rate,
-    ancestor_count: result.ancestor_count,
-    time_added: 0,  // Would use actual timestamp
-  )
+  let metadata =
+    TxMetadata(
+      fee: result.fee,
+      vsize: result.vsize,
+      fee_rate: result.fee_rate,
+      ancestor_count: result.ancestor_count,
+      time_added: 0,
+      // Would use actual timestamp
+    )
   let new_metadata = dict.insert(state.tx_metadata, txid_hex, metadata)
 
   // Mark inputs as spent
-  let new_spent = list.fold(tx.inputs, state.spent_outputs, fn(acc, input) {
-    let key = outpoint_to_key(input.prevout)
-    dict.insert(acc, key, txid)
-  })
+  let new_spent =
+    list.fold(tx.inputs, state.spent_outputs, fn(acc, input) {
+      let key = outpoint_to_key(input.prevout)
+      dict.insert(acc, key, txid)
+    })
 
   // Add outputs to mempool UTXOs
   let new_utxos = add_tx_outputs_to_mempool(state.mempool_utxos, tx, txid)
 
   // Update fee histogram
-  let new_histogram = update_fee_histogram(state.fee_histogram, result.fee_rate, result.vsize)
+  let new_histogram =
+    update_fee_histogram(state.fee_histogram, result.fee_rate, result.vsize)
 
   ManagerState(
     ..state,
@@ -489,11 +505,12 @@ fn add_outputs_loop(
     [output, ..rest] -> {
       let outpoint = oni_bitcoin.OutPoint(txid: txid, vout: index)
       let key = outpoint_to_key(outpoint)
-      let mempool_utxo = MempoolUtxo(
-        value: output.value,
-        script_pubkey: output.script_pubkey,
-        creating_txid: txid,
-      )
+      let mempool_utxo =
+        MempoolUtxo(
+          value: output.value,
+          script_pubkey: output.script_pubkey,
+          creating_txid: txid,
+        )
       let new_utxos = dict.insert(utxos, key, mempool_utxo)
       add_outputs_loop(new_utxos, rest, txid, index + 1)
     }
@@ -501,10 +518,7 @@ fn add_outputs_loop(
 }
 
 /// Remove confirmed transactions from tracking
-fn remove_confirmed_txs(
-  state: ManagerState,
-  txids: List(Txid),
-) -> ManagerState {
+fn remove_confirmed_txs(state: ManagerState, txids: List(Txid)) -> ManagerState {
   list.fold(txids, state, fn(s, txid) {
     let txid_hex = oni_bitcoin.txid_to_hex(txid)
 
@@ -513,14 +527,14 @@ fn remove_confirmed_txs(
 
     // Remove from mempool UTXOs (outputs are now in chainstate)
     // This is simplified - would need to track which UTXOs belong to which tx
-    let new_utxos = dict.filter(s.mempool_utxos, fn(_key, utxo) {
-      utxo.creating_txid != txid
-    })
+    let new_utxos =
+      dict.filter(s.mempool_utxos, fn(_key, utxo) { utxo.creating_txid != txid })
 
     // Remove from spent outputs
-    let new_spent = dict.filter(s.spent_outputs, fn(_key, spending_txid) {
-      spending_txid != txid
-    })
+    let new_spent =
+      dict.filter(s.spent_outputs, fn(_key, spending_txid) {
+        spending_txid != txid
+      })
 
     ManagerState(
       ..s,
@@ -578,18 +592,18 @@ fn update_fee_histogram(
       False -> order.Gt
     }
   })
-  |> list.take(1000)  // Keep limited history
+  |> list.take(1000)
+  // Keep limited history
 }
 
 /// Estimate fee rate for target confirmation blocks
 fn estimate_fee_rate(state: ManagerState, _target_blocks: Int) -> Float {
   // Simple approach: use median of recent fees
   case state.fee_histogram {
-    [] -> 1.0  // Minimum fee
+    [] -> 1.0
+    // Minimum fee
     histogram -> {
-      let total_size = list.fold(histogram, 0, fn(acc, entry) {
-        acc + entry.1
-      })
+      let total_size = list.fold(histogram, 0, fn(acc, entry) { acc + entry.1 })
       let target = total_size / 2
       find_median_fee_rate(histogram, 0, target)
     }
@@ -615,23 +629,30 @@ fn find_median_fee_rate(
 
 /// Calculate total mempool bytes
 fn calculate_mempool_bytes(state: ManagerState) -> Int {
-  dict.fold(state.tx_metadata, 0, fn(acc, _key, meta) {
-    acc + meta.vsize
-  })
+  dict.fold(state.tx_metadata, 0, fn(acc, _key, meta) { acc + meta.vsize })
 }
 
 /// Calculate minimum fee rate to get into mempool
 fn calculate_min_fee_rate(state: ManagerState) -> Float {
   // If mempool is not full, return minimum relay fee
   let size = dict.size(state.tx_metadata)
-  case size < 300_000 {  // threshold
+  case size < 300_000 {
+    // threshold
     True -> 1.0
     False -> {
       // Return lowest fee rate in mempool
-      let rates = dict.fold(state.tx_metadata, [], fn(acc, _key, meta) {
-        [meta.fee_rate, ..acc]
-      })
-      case list.reduce(rates, fn(a, b) { case a <. b { True -> a False -> b } }) {
+      let rates =
+        dict.fold(state.tx_metadata, [], fn(acc, _key, meta) {
+          [meta.fee_rate, ..acc]
+        })
+      case
+        list.reduce(rates, fn(a, b) {
+          case a <. b {
+            True -> a
+            False -> b
+          }
+        })
+      {
         Ok(min) -> min
         Error(_) -> 1.0
       }

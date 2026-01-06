@@ -1,14 +1,15 @@
 // descriptors_test.gleam - Tests for output script descriptors
 
-import gleam/string
 import descriptors
+import gleam/string
 
 // ============================================================================
 // Basic Parsing Tests
 // ============================================================================
 
 pub fn parse_pkh_descriptor_test() {
-  let desc = "pkh(02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5)"
+  let desc =
+    "pkh(02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5)"
 
   let result = descriptors.parse(desc)
 
@@ -19,7 +20,8 @@ pub fn parse_pkh_descriptor_test() {
 }
 
 pub fn parse_wpkh_descriptor_test() {
-  let desc = "wpkh(02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5)"
+  let desc =
+    "wpkh(02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5)"
 
   let result = descriptors.parse(desc)
 
@@ -39,7 +41,8 @@ pub fn parse_unknown_type_fails_test() {
 }
 
 pub fn parse_missing_paren_fails_test() {
-  let desc = "pkh(02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5"
+  let desc =
+    "pkh(02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5"
 
   let result = descriptors.parse(desc)
 
@@ -61,7 +64,8 @@ pub fn parse_invalid_key_fails_test() {
 // ============================================================================
 
 pub fn compute_checksum_deterministic_test() {
-  let desc = "pkh(02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5)"
+  let desc =
+    "pkh(02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5)"
 
   let cs1 = descriptors.compute_checksum(desc)
   let cs2 = descriptors.compute_checksum(desc)
@@ -71,7 +75,8 @@ pub fn compute_checksum_deterministic_test() {
 }
 
 pub fn to_string_with_checksum_test() {
-  let desc = "pkh(02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5)"
+  let desc =
+    "pkh(02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5)"
 
   case descriptors.parse(desc) {
     Ok(parsed) -> {
@@ -89,7 +94,8 @@ pub fn to_string_with_checksum_test() {
 // ============================================================================
 
 pub fn pkh_roundtrip_test() {
-  let original = "pkh(02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5)"
+  let original =
+    "pkh(02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5)"
 
   case descriptors.parse(original) {
     Ok(parsed) -> {

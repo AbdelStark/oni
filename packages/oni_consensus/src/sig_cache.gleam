@@ -47,25 +47,17 @@ pub type CacheKey {
 }
 
 /// Create a cache key
-pub fn cache_key_new(
-  txid: Txid,
-  input_index: Int,
-  sighash: Hash256,
-) -> CacheKey {
-  CacheKey(
-    txid: txid,
-    input_index: input_index,
-    sighash: sighash,
-  )
+pub fn cache_key_new(txid: Txid, input_index: Int, sighash: Hash256) -> CacheKey {
+  CacheKey(txid: txid, input_index: input_index, sighash: sighash)
 }
 
 /// Convert cache key to string for dict lookup
 pub fn cache_key_to_string(key: CacheKey) -> String {
-  oni_bitcoin.txid_to_hex(key.txid) <>
-    ":" <>
-    int.to_string(key.input_index) <>
-    ":" <>
-    oni_bitcoin.hash256_to_hex(key.sighash)
+  oni_bitcoin.txid_to_hex(key.txid)
+  <> ":"
+  <> int.to_string(key.input_index)
+  <> ":"
+  <> oni_bitcoin.hash256_to_hex(key.sighash)
 }
 
 // ============================================================================
@@ -201,7 +193,8 @@ pub fn sig_cache_put(
 
   // Check if already exists
   case dict.has_key(cache.entries, key_str) {
-    True -> cache  // Don't update existing entries
+    True -> cache
+    // Don't update existing entries
     False -> {
       // Check if we need to evict
       let cache_after_eviction = case cache.size >= cache.max_entries {
@@ -211,27 +204,30 @@ pub fn sig_cache_put(
 
       // Add new entry
       let entry = cache_entry_new(valid, timestamp)
-      let new_entries = dict.insert(cache_after_eviction.entries, key_str, entry)
+      let new_entries =
+        dict.insert(cache_after_eviction.entries, key_str, entry)
 
-      let new_stats = CacheStats(
-        ..cache_after_eviction.stats,
-        additions: cache_after_eviction.stats.additions + 1,
-        invalid_cached: case valid {
-          False -> cache_after_eviction.stats.invalid_cached + 1
-          True -> cache_after_eviction.stats.invalid_cached
-        },
-      )
+      let new_stats =
+        CacheStats(
+          ..cache_after_eviction.stats,
+          additions: cache_after_eviction.stats.additions + 1,
+          invalid_cached: case valid {
+            False -> cache_after_eviction.stats.invalid_cached + 1
+            True -> cache_after_eviction.stats.invalid_cached
+          },
+        )
 
       let new_ops = cache_after_eviction.ops_since_cleanup + 1
 
       // Periodic cleanup if needed
-      let final_cache = SigCache(
-        ..cache_after_eviction,
-        entries: new_entries,
-        size: cache_after_eviction.size + 1,
-        stats: new_stats,
-        ops_since_cleanup: new_ops,
-      )
+      let final_cache =
+        SigCache(
+          ..cache_after_eviction,
+          entries: new_entries,
+          size: cache_after_eviction.size + 1,
+          stats: new_stats,
+          ops_since_cleanup: new_ops,
+        )
 
       case new_ops >= cleanup_interval {
         True -> cleanup_old_entries(final_cache, timestamp)
@@ -268,12 +264,7 @@ pub fn sig_cache_hit_ratio(cache: SigCache) -> Float {
 
 /// Clear the cache
 pub fn sig_cache_clear(cache: SigCache) -> SigCache {
-  SigCache(
-    ..cache,
-    entries: dict.new(),
-    size: 0,
-    ops_since_cleanup: 0,
-  )
+  SigCache(..cache, entries: dict.new(), size: 0, ops_since_cleanup: 0)
 }
 
 // ============================================================================
@@ -284,22 +275,25 @@ pub fn sig_cache_clear(cache: SigCache) -> SigCache {
 fn evict_lru(cache: SigCache, _timestamp: Int) -> SigCache {
   // Get all entries with their keys and sort by last_access
   let entries_list = dict.to_list(cache.entries)
-  let sorted = list.sort(entries_list, fn(a, b) {
-    let #(_key_a, entry_a) = a
-    let #(_key_b, entry_b) = b
-    int.compare(entry_a.last_access, entry_b.last_access)
-  })
+  let sorted =
+    list.sort(entries_list, fn(a, b) {
+      let #(_key_a, entry_a) = a
+      let #(_key_b, entry_b) = b
+      int.compare(entry_a.last_access, entry_b.last_access)
+    })
 
   // Remove oldest entries
   let to_remove = list.take(sorted, eviction_batch_size)
-  let keys_to_remove = list.map(to_remove, fn(pair) {
-    let #(key, _entry) = pair
-    key
-  })
+  let keys_to_remove =
+    list.map(to_remove, fn(pair) {
+      let #(key, _entry) = pair
+      key
+    })
 
-  let new_entries = list.fold(keys_to_remove, cache.entries, fn(acc, key) {
-    dict.delete(acc, key)
-  })
+  let new_entries =
+    list.fold(keys_to_remove, cache.entries, fn(acc, key) {
+      dict.delete(acc, key)
+    })
 
   let removed_count = list.length(keys_to_remove)
 
@@ -344,31 +338,37 @@ pub fn sig_cache_batch_get(
 ) -> #(SigCache, BatchResult) {
   let initial = BatchResult(cached: [], uncached: [])
 
-  let #(final_cache, result) = list.fold(keys, #(cache, initial), fn(acc, key) {
-    let #(current_cache, current_result) = acc
+  let #(final_cache, result) =
+    list.fold(keys, #(cache, initial), fn(acc, key) {
+      let #(current_cache, current_result) = acc
 
-    case sig_cache_get(current_cache, key, timestamp) {
-      #(new_cache, Some(valid)) -> {
-        let new_result = BatchResult(
-          ..current_result,
-          cached: [#(key, valid), ..current_result.cached],
-        )
-        #(new_cache, new_result)
+      case sig_cache_get(current_cache, key, timestamp) {
+        #(new_cache, Some(valid)) -> {
+          let new_result =
+            BatchResult(..current_result, cached: [
+              #(key, valid),
+              ..current_result.cached
+            ])
+          #(new_cache, new_result)
+        }
+        #(new_cache, None) -> {
+          let new_result =
+            BatchResult(..current_result, uncached: [
+              key,
+              ..current_result.uncached
+            ])
+          #(new_cache, new_result)
+        }
       }
-      #(new_cache, None) -> {
-        let new_result = BatchResult(
-          ..current_result,
-          uncached: [key, ..current_result.uncached],
-        )
-        #(new_cache, new_result)
-      }
-    }
-  })
+    })
 
-  #(final_cache, BatchResult(
-    cached: list.reverse(result.cached),
-    uncached: list.reverse(result.uncached),
-  ))
+  #(
+    final_cache,
+    BatchResult(
+      cached: list.reverse(result.cached),
+      uncached: list.reverse(result.uncached),
+    ),
+  )
 }
 
 /// Store multiple results at once
@@ -432,21 +432,31 @@ fn check_inputs_recursive(
   timestamp: Int,
 ) -> #(SigCache, Option(Bool)) {
   case remaining {
-    [] -> #(cache, Some(True))  // All inputs verified
+    [] -> #(cache, Some(True))
+    // All inputs verified
     [#(idx, hash), ..rest] -> {
       case idx >= num_inputs {
-        True -> #(cache, Some(True))  // Past input count
+        True -> #(cache, Some(True))
+        // Past input count
         False -> {
           let key = cache_key_new(txid, idx, hash)
           case sig_cache_get(cache, key, timestamp) {
             #(new_cache, Some(True)) -> {
-              check_inputs_recursive(new_cache, txid, rest, num_inputs, timestamp)
+              check_inputs_recursive(
+                new_cache,
+                txid,
+                rest,
+                num_inputs,
+                timestamp,
+              )
             }
             #(new_cache, Some(False)) -> {
-              #(new_cache, Some(False))  // Invalid signature cached
+              #(new_cache, Some(False))
+              // Invalid signature cached
             }
             #(new_cache, None) -> {
-              #(new_cache, None)  // Cache miss
+              #(new_cache, None)
+              // Cache miss
             }
           }
         }

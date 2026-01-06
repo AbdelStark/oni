@@ -15,14 +15,14 @@ import oni_bitcoin.{
   type Amount, type Block, type Hash256, type OutPoint, type Script,
   type Transaction, type TxIn, type TxOut,
 }
-import oni_storage.{type Coin, type UtxoView}
 import oni_consensus.{
-  type ConsensusError, BlockBadCoinbase, BlockDuplicateTx, BlockInvalidMerkleRoot,
-  BlockInvalidWitnessCommitment, BlockWeightExceeded, TxDuplicateInputs,
-  TxEmptyInputs, TxEmptyOutputs, TxInputNotFound, TxInvalidAmount,
-  TxLockTimeNotMet, TxOutputValueOverflow, TxOversized, TxPrematureCoinbaseSpend,
-  TxSequenceLockNotMet,
+  type ConsensusError, BlockBadCoinbase, BlockDuplicateTx,
+  BlockInvalidMerkleRoot, BlockInvalidWitnessCommitment, BlockWeightExceeded,
+  TxDuplicateInputs, TxEmptyInputs, TxEmptyOutputs, TxInputNotFound,
+  TxInvalidAmount, TxLockTimeNotMet, TxOutputValueOverflow, TxOversized,
+  TxPrematureCoinbaseSpend, TxSequenceLockNotMet,
 }
+import oni_storage.{type Coin, type UtxoView}
 
 // ============================================================================
 // Validation Constants
@@ -85,15 +85,24 @@ pub type ValidationContext {
 /// Validation flags for soft fork activation
 pub type ValidationFlags {
   ValidationFlags(
-    bip16: Bool,     // P2SH
-    bip34: Bool,     // Height in coinbase
-    bip65: Bool,     // CHECKLOCKTIMEVERIFY
-    bip66: Bool,     // Strict DER signatures
-    bip68: Bool,     // Relative lock-time
-    bip112: Bool,    // CHECKSEQUENCEVERIFY
-    bip141: Bool,    // SegWit
-    bip143: Bool,    // SegWit sighash
-    bip341: Bool,    // Taproot
+    bip16: Bool,
+    // P2SH
+    bip34: Bool,
+    // Height in coinbase
+    bip65: Bool,
+    // CHECKLOCKTIMEVERIFY
+    bip66: Bool,
+    // Strict DER signatures
+    bip68: Bool,
+    // Relative lock-time
+    bip112: Bool,
+    // CHECKSEQUENCEVERIFY
+    bip141: Bool,
+    // SegWit
+    bip143: Bool,
+    // SegWit sighash
+    bip341: Bool,
+    // Taproot
   )
 }
 
@@ -279,7 +288,8 @@ fn validate_sequence_lock(
         False -> Ok(Nil)
         True -> {
           let masked = int.bitwise_and(input.sequence, sequence_locktime_mask)
-          let is_time = int.bitwise_and(input.sequence, sequence_locktime_type_flag) != 0
+          let is_time =
+            int.bitwise_and(input.sequence, sequence_locktime_type_flag) != 0
 
           case is_time {
             True -> {
@@ -445,8 +455,8 @@ fn decode_little_endian(bytes: BitArray) -> Result(Int, Nil) {
   case bytes {
     <<a:8>> -> Ok(a)
     <<a:8, b:8>> -> Ok(a + b * 256)
-    <<a:8, b:8, c:8>> -> Ok(a + b * 256 + c * 65536)
-    <<a:8, b:8, c:8, d:8>> -> Ok(a + b * 256 + c * 65536 + d * 16777216)
+    <<a:8, b:8, c:8>> -> Ok(a + b * 256 + c * 65_536)
+    <<a:8, b:8, c:8, d:8>> -> Ok(a + b * 256 + c * 65_536 + d * 16_777_216)
     _ -> Error(Nil)
   }
 }
@@ -458,7 +468,8 @@ fn validate_witness_commitment(block: Block) -> Result(Nil, ConsensusError) {
     [] -> Ok(Nil)
     [coinbase, ..] -> {
       // Check if any tx has witness
-      let has_witness = list.any(block.transactions, oni_bitcoin.transaction_has_witness)
+      let has_witness =
+        list.any(block.transactions, oni_bitcoin.transaction_has_witness)
       case has_witness {
         False -> Ok(Nil)
         True -> {
@@ -473,7 +484,8 @@ fn validate_witness_commitment(block: Block) -> Result(Nil, ConsensusError) {
                   // Compute expected commitment
                   let wtxids = compute_wtxid_list(block.transactions)
                   let wtxid_root = oni_consensus.compute_merkle_root(wtxids)
-                  let expected = oni_consensus.compute_witness_commitment(wtxid_root, nonce)
+                  let expected =
+                    oni_consensus.compute_witness_commitment(wtxid_root, nonce)
                   case commitment == expected {
                     True -> Ok(Nil)
                     False -> Error(BlockInvalidWitnessCommitment)
@@ -606,7 +618,8 @@ pub fn sighash_legacy(
   sighash_type: Int,
 ) -> Hash256 {
   // Create a copy of the transaction
-  let modified_tx = prepare_legacy_sighash_tx(tx, input_index, script_code, sighash_type)
+  let modified_tx =
+    prepare_legacy_sighash_tx(tx, input_index, script_code, sighash_type)
 
   // Serialize and hash
   let serialized = serialize_tx_legacy(modified_tx)
@@ -637,7 +650,11 @@ fn prepare_legacy_sighash_tx(
       list.index_map(tx.inputs, fn(input, i) {
         case i == input_index {
           True -> oni_bitcoin.TxIn(..input, script_sig: script_code)
-          False -> oni_bitcoin.TxIn(..input, script_sig: oni_bitcoin.script_from_bytes(<<>>))
+          False ->
+            oni_bitcoin.TxIn(
+              ..input,
+              script_sig: oni_bitcoin.script_from_bytes(<<>>),
+            )
         }
       })
     }
@@ -645,8 +662,10 @@ fn prepare_legacy_sighash_tx(
 
   // Modify outputs based on sighash type
   let outputs = case base_type {
-    0x02 -> []  // SIGHASH_NONE: no outputs
-    0x03 -> {   // SIGHASH_SINGLE: only matching output
+    0x02 -> []
+    // SIGHASH_NONE: no outputs
+    0x03 -> {
+      // SIGHASH_SINGLE: only matching output
       case list_nth(tx.outputs, input_index) {
         Ok(out) -> {
           // Fill with empty outputs up to input_index
@@ -664,7 +683,8 @@ fn prepare_legacy_sighash_tx(
         Error(_) -> tx.outputs
       }
     }
-    _ -> tx.outputs  // SIGHASH_ALL: all outputs
+    _ -> tx.outputs
+    // SIGHASH_ALL: all outputs
   }
 
   // Clear sequences for NONE and SINGLE (except signing input)
@@ -706,21 +726,26 @@ pub fn sighash_segwit_v0(
   }
 
   // Compute sequence hash
-  let hash_sequence = case anyonecanpay || base_type == 0x02 || base_type == 0x03 {
+  let hash_sequence = case
+    anyonecanpay || base_type == 0x02 || base_type == 0x03
+  {
     True -> oni_bitcoin.Hash256(<<0:256>>)
     False -> hash_sequences(tx.inputs)
   }
 
   // Compute outputs hash
   let hash_outputs = case base_type {
-    0x02 -> oni_bitcoin.Hash256(<<0:256>>)  // NONE
-    0x03 -> {  // SINGLE
+    0x02 -> oni_bitcoin.Hash256(<<0:256>>)
+    // NONE
+    0x03 -> {
+      // SINGLE
       case list_nth(tx.outputs, input_index) {
         Ok(out) -> oni_bitcoin.hash256_digest(serialize_output(out))
         Error(_) -> oni_bitcoin.Hash256(<<0:256>>)
       }
     }
-    _ -> hash_outputs(tx.outputs)  // ALL
+    _ -> hash_outputs(tx.outputs)
+    // ALL
   }
 
   // Get the input
@@ -729,22 +754,24 @@ pub fn sighash_segwit_v0(
     Ok(input) -> {
       // Build preimage
       let script_bytes = oni_bitcoin.script_to_bytes(script_code)
-      let script_len = oni_bitcoin.compact_size_encode(bit_array.byte_size(script_bytes))
+      let script_len =
+        oni_bitcoin.compact_size_encode(bit_array.byte_size(script_bytes))
       let value_sats = oni_bitcoin.amount_to_sats(value)
 
-      let preimage = bit_array.concat([
-        <<tx.version:32-little>>,
-        hash_prevouts.bytes,
-        hash_sequence.bytes,
-        serialize_outpoint(input.prevout),
-        script_len,
-        script_bytes,
-        <<value_sats:64-little>>,
-        <<input.sequence:32-little>>,
-        hash_outputs.bytes,
-        <<tx.lock_time:32-little>>,
-        <<sighash_type:32-little>>,
-      ])
+      let preimage =
+        bit_array.concat([
+          <<tx.version:32-little>>,
+          hash_prevouts.bytes,
+          hash_sequence.bytes,
+          serialize_outpoint(input.prevout),
+          script_len,
+          script_bytes,
+          <<value_sats:64-little>>,
+          <<input.sequence:32-little>>,
+          hash_outputs.bytes,
+          <<tx.lock_time:32-little>>,
+          <<sighash_type:32-little>>,
+        ])
 
       oni_bitcoin.hash256_digest(preimage)
     }
@@ -768,7 +795,8 @@ pub fn sighash_taproot(
 
   // Hash type
   let hash_type_byte = case sighash_type {
-    0x00 -> <<0x00:8>>  // Default = ALL
+    0x00 -> <<0x00:8>>
+    // Default = ALL
     _ -> <<sighash_type:8>>
   }
 
@@ -795,27 +823,28 @@ pub fn sighash_taproot(
 
   // Add outputs hash based on sighash type (BIP-341)
   let with_outputs = case base_type {
-    0x02 -> with_prevouts  // SIGHASH_NONE: no outputs
+    0x02 -> with_prevouts
+    // SIGHASH_NONE: no outputs
     0x03 -> {
       // SIGHASH_SINGLE: only the output at input_index
       case list_nth(tx.outputs, input_index) {
-        Ok(out) -> list.append(with_prevouts, [
-          oni_bitcoin.hash256_digest(serialize_output(out)).bytes,
-        ])
+        Ok(out) ->
+          list.append(with_prevouts, [
+            oni_bitcoin.hash256_digest(serialize_output(out)).bytes,
+          ])
         Error(_) -> with_prevouts
       }
     }
-    _ -> list.append(with_prevouts, [hash_outputs(tx.outputs).bytes])  // SIGHASH_ALL/DEFAULT
+    _ -> list.append(with_prevouts, [hash_outputs(tx.outputs).bytes])
+    // SIGHASH_ALL/DEFAULT
   }
 
   // Add spend type
-  let spend_type = int.bitwise_or(
-    int.bitwise_shift_left(ext_flag, 1),
-    case annex_hash {
+  let spend_type =
+    int.bitwise_or(int.bitwise_shift_left(ext_flag, 1), case annex_hash {
       Some(_) -> 1
       None -> 0
-    },
-  )
+    })
 
   let with_spend_type = list.append(with_outputs, [<<spend_type:8>>])
 
@@ -827,9 +856,11 @@ pub fn sighash_taproot(
           list.append(with_spend_type, [
             serialize_outpoint(input.prevout),
             <<oni_bitcoin.amount_to_sats(prevout.value):64-little>>,
-            oni_bitcoin.compact_size_encode(bit_array.byte_size(
-              oni_bitcoin.script_to_bytes(prevout.script_pubkey),
-            )),
+            oni_bitcoin.compact_size_encode(
+              bit_array.byte_size(oni_bitcoin.script_to_bytes(
+                prevout.script_pubkey,
+              )),
+            ),
             oni_bitcoin.script_to_bytes(prevout.script_pubkey),
             <<input.sequence:32-little>>,
           ])
@@ -865,9 +896,12 @@ pub fn is_coinbase(tx: Transaction) -> Bool {
 
 /// Check for duplicate inputs
 fn has_duplicate_inputs(tx: Transaction) -> Bool {
-  let outpoints = list.map(tx.inputs, fn(input) {
-    oni_bitcoin.txid_to_hex(input.prevout.txid) <> ":" <> int.to_string(input.prevout.vout)
-  })
+  let outpoints =
+    list.map(tx.inputs, fn(input) {
+      oni_bitcoin.txid_to_hex(input.prevout.txid)
+      <> ":"
+      <> int.to_string(input.prevout.vout)
+    })
   let unique = list.unique(outpoints)
   list.length(outpoints) != list.length(unique)
 }
@@ -912,16 +946,18 @@ pub fn calculate_tx_weight(tx: Transaction) -> Int {
 /// Calculate base size (non-witness)
 fn calculate_tx_base_size(tx: Transaction) -> Int {
   // version (4) + input count + inputs + output count + outputs + locktime (4)
-  4 + compact_size_len(list.length(tx.inputs))
-    + sum_input_sizes(tx.inputs)
-    + compact_size_len(list.length(tx.outputs))
-    + sum_output_sizes(tx.outputs)
-    + 4
+  4
+  + compact_size_len(list.length(tx.inputs))
+  + sum_input_sizes(tx.inputs)
+  + compact_size_len(list.length(tx.outputs))
+  + sum_output_sizes(tx.outputs)
+  + 4
 }
 
 fn sum_input_sizes(inputs: List(TxIn)) -> Int {
   list.fold(inputs, 0, fn(acc, input) {
-    let script_size = bit_array.byte_size(oni_bitcoin.script_to_bytes(input.script_sig))
+    let script_size =
+      bit_array.byte_size(oni_bitcoin.script_to_bytes(input.script_sig))
     // outpoint (36) + script varint + script + sequence (4)
     acc + 36 + compact_size_len(script_size) + script_size + 4
   })
@@ -929,7 +965,8 @@ fn sum_input_sizes(inputs: List(TxIn)) -> Int {
 
 fn sum_output_sizes(outputs: List(TxOut)) -> Int {
   list.fold(outputs, 0, fn(acc, output) {
-    let script_size = bit_array.byte_size(oni_bitcoin.script_to_bytes(output.script_pubkey))
+    let script_size =
+      bit_array.byte_size(oni_bitcoin.script_to_bytes(output.script_pubkey))
     // value (8) + script varint + script
     acc + 8 + compact_size_len(script_size) + script_size
   })
@@ -941,11 +978,15 @@ fn calculate_tx_witness_size(tx: Transaction) -> Int {
     False -> 0
     True -> {
       // marker (1) + flag (1) + witness data
-      2 + list.fold(tx.inputs, 0, fn(acc, input) {
-        acc + compact_size_len(list.length(input.witness))
-          + list.fold(input.witness, 0, fn(wacc, item) {
-              wacc + compact_size_len(bit_array.byte_size(item)) + bit_array.byte_size(item)
-            })
+      2
+      + list.fold(tx.inputs, 0, fn(acc, input) {
+        acc
+        + compact_size_len(list.length(input.witness))
+        + list.fold(input.witness, 0, fn(wacc, item) {
+          wacc
+          + compact_size_len(bit_array.byte_size(item))
+          + bit_array.byte_size(item)
+        })
       })
     }
   }
@@ -993,7 +1034,8 @@ fn serialize_tx_legacy(tx: Transaction) -> BitArray {
 fn serialize_tx_witness(tx: Transaction) -> BitArray {
   bit_array.concat([
     <<tx.version:32-little>>,
-    <<0x00:8, 0x01:8>>,  // marker + flag
+    <<0x00:8, 0x01:8>>,
+    // marker + flag
     oni_bitcoin.compact_size_encode(list.length(tx.inputs)),
     serialize_inputs(tx.inputs),
     oni_bitcoin.compact_size_encode(list.length(tx.outputs)),
@@ -1043,32 +1085,35 @@ fn serialize_output(output: TxOut) -> BitArray {
 
 fn serialize_witnesses(inputs: List(TxIn)) -> BitArray {
   list.fold(inputs, <<>>, fn(acc, input) {
-    let witness_data = bit_array.concat([
-      oni_bitcoin.compact_size_encode(list.length(input.witness)),
-      ..list.map(input.witness, fn(item) {
-        bit_array.concat([
-          oni_bitcoin.compact_size_encode(bit_array.byte_size(item)),
-          item,
-        ])
-      })
-    ])
+    let witness_data =
+      bit_array.concat([
+        oni_bitcoin.compact_size_encode(list.length(input.witness)),
+        ..list.map(input.witness, fn(item) {
+          bit_array.concat([
+            oni_bitcoin.compact_size_encode(bit_array.byte_size(item)),
+            item,
+          ])
+        })
+      ])
     bit_array.append(acc, witness_data)
   })
 }
 
 /// Hash all prevouts
 fn hash_prevouts(inputs: List(TxIn)) -> Hash256 {
-  let data = list.fold(inputs, <<>>, fn(acc, input) {
-    bit_array.append(acc, serialize_outpoint(input.prevout))
-  })
+  let data =
+    list.fold(inputs, <<>>, fn(acc, input) {
+      bit_array.append(acc, serialize_outpoint(input.prevout))
+    })
   oni_bitcoin.hash256_digest(data)
 }
 
 /// Hash all sequences
 fn hash_sequences(inputs: List(TxIn)) -> Hash256 {
-  let data = list.fold(inputs, <<>>, fn(acc, input) {
-    bit_array.append(acc, <<input.sequence:32-little>>)
-  })
+  let data =
+    list.fold(inputs, <<>>, fn(acc, input) {
+      bit_array.append(acc, <<input.sequence:32-little>>)
+    })
   oni_bitcoin.hash256_digest(data)
 }
 
@@ -1080,22 +1125,26 @@ fn hash_outputs(outputs: List(TxOut)) -> Hash256 {
 
 /// Hash all amounts (for Taproot)
 fn hash_amounts(outputs: List(TxOut)) -> Hash256 {
-  let data = list.fold(outputs, <<>>, fn(acc, output) {
-    bit_array.append(acc, <<oni_bitcoin.amount_to_sats(output.value):64-little>>)
-  })
+  let data =
+    list.fold(outputs, <<>>, fn(acc, output) {
+      bit_array.append(acc, <<
+        oni_bitcoin.amount_to_sats(output.value):64-little,
+      >>)
+    })
   oni_bitcoin.hash256_digest(data)
 }
 
 /// Hash all script pubkeys (for Taproot)
 fn hash_script_pubkeys(outputs: List(TxOut)) -> Hash256 {
-  let data = list.fold(outputs, <<>>, fn(acc, output) {
-    let script = oni_bitcoin.script_to_bytes(output.script_pubkey)
-    bit_array.concat([
-      acc,
-      oni_bitcoin.compact_size_encode(bit_array.byte_size(script)),
-      script,
-    ])
-  })
+  let data =
+    list.fold(outputs, <<>>, fn(acc, output) {
+      let script = oni_bitcoin.script_to_bytes(output.script_pubkey)
+      bit_array.concat([
+        acc,
+        oni_bitcoin.compact_size_encode(bit_array.byte_size(script)),
+        script,
+      ])
+    })
   oni_bitcoin.hash256_digest(data)
 }
 

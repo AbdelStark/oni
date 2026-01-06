@@ -321,16 +321,19 @@ pub fn from_mnemonic(
             Error(e) -> Error(e)
             Ok(account_key) -> {
               let account_xpub = to_extended_public_key(account_key)
-              let account_xpubs = dict.insert(wallet.account_xpubs, 0, account_xpub)
+              let account_xpubs =
+                dict.insert(wallet.account_xpubs, 0, account_xpub)
 
               // Encrypt master key with AES-256-GCM using wallet password
               let encrypted_master = encrypt_key(master_key, wallet_password)
 
-              Ok(Wallet(
-                ..wallet,
-                master_key: Some(encrypted_master),
-                account_xpubs: account_xpubs,
-              ))
+              Ok(
+                Wallet(
+                  ..wallet,
+                  master_key: Some(encrypted_master),
+                  account_xpubs: account_xpubs,
+                ),
+              )
             }
           }
         }
@@ -350,10 +353,7 @@ pub fn from_xpub(
       let wallet = new_wallet(network)
       let account_xpubs = dict.insert(wallet.account_xpubs, 0, account_xpub)
 
-      Ok(Wallet(
-        ..wallet,
-        account_xpubs: account_xpubs,
-      ))
+      Ok(Wallet(..wallet, account_xpubs: account_xpubs))
     }
   }
 }
@@ -453,11 +453,12 @@ fn derive_account_key(
     WalletTestnet | WalletRegtest | WalletSignet -> 1
   }
 
-  let path = DerivationPath(components: [
-    Hardened(purpose),
-    Hardened(coin_type),
-    Hardened(account),
-  ])
+  let path =
+    DerivationPath(components: [
+      Hardened(purpose),
+      Hardened(coin_type),
+      Hardened(account),
+    ])
 
   derive_path(master, path)
 }
@@ -480,7 +481,8 @@ pub fn derive_public_child(
   index: Int,
 ) -> Result(ExtendedPublicKey, WalletError) {
   case index >= hardened_offset {
-    True -> Error(InvalidDerivationPath("Cannot derive hardened from public key"))
+    True ->
+      Error(InvalidDerivationPath("Cannot derive hardened from public key"))
     False -> {
       let data = bit_array.concat([parent.key, <<index:32-big>>])
       let hmac_result = hmac_sha512(parent.chain_code, data)
@@ -551,41 +553,46 @@ fn generate_address(
       let #(address, script) = case wallet.default_address_type {
         NativeSegwit -> generate_p2wpkh_address(address_key, wallet.network)
         Legacy -> generate_p2pkh_address(address_key, wallet.network)
-        NestedSegwit -> generate_p2sh_p2wpkh_address(address_key, wallet.network)
+        NestedSegwit ->
+          generate_p2sh_p2wpkh_address(address_key, wallet.network)
         Taproot -> generate_p2tr_address(address_key, wallet.network)
       }
 
-      let path = DerivationPath(components: [
-        Hardened(bip84_purpose),
-        Hardened(network_coin_type(wallet.network)),
-        Hardened(0),
-        Normal(chain),
-        Normal(index),
-      ])
+      let path =
+        DerivationPath(components: [
+          Hardened(bip84_purpose),
+          Hardened(network_coin_type(wallet.network)),
+          Hardened(0),
+          Normal(chain),
+          Normal(index),
+        ])
 
-      let wallet_addr = WalletAddress(
-        address: address,
-        address_type: wallet.default_address_type,
-        derivation_path: path,
-        is_change: is_change,
-        index: index,
-        used: False,
-        script_pubkey: script,
-      )
+      let wallet_addr =
+        WalletAddress(
+          address: address,
+          address_type: wallet.default_address_type,
+          derivation_path: path,
+          is_change: is_change,
+          index: index,
+          used: False,
+          script_pubkey: script,
+        )
 
       // Update wallet state
       let new_addresses = dict.insert(wallet.addresses, address, wallet_addr)
       let new_wallet = case is_change {
-        False -> Wallet(
-          ..wallet,
-          addresses: new_addresses,
-          next_receive_index: index + 1,
-        )
-        True -> Wallet(
-          ..wallet,
-          addresses: new_addresses,
-          next_change_index: index + 1,
-        )
+        False ->
+          Wallet(
+            ..wallet,
+            addresses: new_addresses,
+            next_receive_index: index + 1,
+          )
+        True ->
+          Wallet(
+            ..wallet,
+            addresses: new_addresses,
+            next_change_index: index + 1,
+          )
       }
 
       Ok(#(new_wallet, wallet_addr))
@@ -622,9 +629,15 @@ fn generate_p2pkh_address(
   let pubkey_hash = hash160(key.key)
 
   // Script: OP_DUP OP_HASH160 <20-byte-key-hash> OP_EQUALVERIFY OP_CHECKSIG
-  let script = oni_bitcoin.script_from_bytes(<<
-    0x76, 0xa9, 0x14, pubkey_hash:bits, 0x88, 0xac
-  >>)
+  let script =
+    oni_bitcoin.script_from_bytes(<<
+      0x76,
+      0xa9,
+      0x14,
+      pubkey_hash:bits,
+      0x88,
+      0xac,
+    >>)
 
   // Base58Check address
   let version = case network {
@@ -648,7 +661,8 @@ fn generate_p2sh_p2wpkh_address(
   let script_hash = hash160(redeem_script)
 
   // Script: OP_HASH160 <20-byte-script-hash> OP_EQUAL
-  let script = oni_bitcoin.script_from_bytes(<<0xa9, 0x14, script_hash:bits, 0x87>>)
+  let script =
+    oni_bitcoin.script_from_bytes(<<0xa9, 0x14, script_hash:bits, 0x87>>)
 
   // Base58Check address
   let version = case network {
@@ -699,17 +713,22 @@ pub fn select_coins(
   fee_rate: Float,
   strategy: SelectionStrategy,
 ) -> Result(CoinSelection, WalletError) {
-  let available_utxos = dict.values(wallet.utxos)
+  let available_utxos =
+    dict.values(wallet.utxos)
     |> list.filter(fn(u) { u.confirmations > 0 || !u.is_coinbase })
 
   case list.is_empty(available_utxos) {
     True -> Error(InsufficientFunds)
     False -> {
       case strategy {
-        MinimizeInputs -> select_largest_first(available_utxos, target_amount, fee_rate)
-        MinimizeFees -> select_minimize_fees(available_utxos, target_amount, fee_rate)
-        MaximizePrivacy -> select_privacy_focused(available_utxos, target_amount, fee_rate)
-        BranchAndBound -> select_branch_and_bound(available_utxos, target_amount, fee_rate)
+        MinimizeInputs ->
+          select_largest_first(available_utxos, target_amount, fee_rate)
+        MinimizeFees ->
+          select_minimize_fees(available_utxos, target_amount, fee_rate)
+        MaximizePrivacy ->
+          select_privacy_focused(available_utxos, target_amount, fee_rate)
+        BranchAndBound ->
+          select_branch_and_bound(available_utxos, target_amount, fee_rate)
       }
     }
   }
@@ -722,17 +741,19 @@ fn select_largest_first(
   fee_rate: Float,
 ) -> Result(CoinSelection, WalletError) {
   // Sort by value descending
-  let sorted = list.sort(utxos, fn(a, b) {
-    let va = oni_bitcoin.amount_to_sats(a.amount)
-    let vb = oni_bitcoin.amount_to_sats(b.amount)
-    case va > vb {
-      True -> order.Lt
-      False -> case va < vb {
-        True -> order.Gt
-        False -> order.Eq
+  let sorted =
+    list.sort(utxos, fn(a, b) {
+      let va = oni_bitcoin.amount_to_sats(a.amount)
+      let vb = oni_bitcoin.amount_to_sats(b.amount)
+      case va > vb {
+        True -> order.Lt
+        False ->
+          case va < vb {
+            True -> order.Gt
+            False -> order.Eq
+          }
       }
-    }
-  })
+    })
 
   accumulate_inputs(sorted, target, fee_rate, [], 0)
 }
@@ -745,8 +766,10 @@ fn accumulate_inputs(
   total: Int,
 ) -> Result(CoinSelection, WalletError) {
   let num_inputs = list.length(selected)
-  let estimated_size = estimate_tx_size(num_inputs, 2) // 2 outputs (payment + change)
-  let fee = float.ceiling(fee_rate *. int.to_float(estimated_size)) |> float.truncate
+  let estimated_size = estimate_tx_size(num_inputs, 2)
+  // 2 outputs (payment + change)
+  let fee =
+    float.ceiling(fee_rate *. int.to_float(estimated_size)) |> float.truncate
 
   let required = target + fee
 
@@ -766,7 +789,13 @@ fn accumulate_inputs(
         [] -> Error(InsufficientFunds)
         [utxo, ..rest] -> {
           let value = oni_bitcoin.amount_to_sats(utxo.amount)
-          accumulate_inputs(rest, target, fee_rate, [utxo, ..selected], total + value)
+          accumulate_inputs(
+            rest,
+            target,
+            fee_rate,
+            [utxo, ..selected],
+            total + value,
+          )
         }
       }
     }
@@ -793,15 +822,17 @@ fn select_privacy_focused(
   fee_rate: Float,
 ) -> Result(CoinSelection, WalletError) {
   // Sort by confirmations descending (oldest first)
-  let sorted = list.sort(utxos, fn(a, b) {
-    case a.confirmations > b.confirmations {
-      True -> order.Lt
-      False -> case a.confirmations < b.confirmations {
-        True -> order.Gt
-        False -> order.Eq
+  let sorted =
+    list.sort(utxos, fn(a, b) {
+      case a.confirmations > b.confirmations {
+        True -> order.Lt
+        False ->
+          case a.confirmations < b.confirmations {
+            True -> order.Gt
+            False -> order.Eq
+          }
       }
-    }
-  })
+    })
 
   accumulate_inputs(sorted, target, fee_rate, [], 0)
 }
@@ -825,16 +856,21 @@ fn find_exact_match(
   fee_rate: Float,
 ) -> Result(CoinSelection, WalletError) {
   // Simple implementation: try single UTXOs that match exactly
-  let matching = list.filter(utxos, fn(u) {
-    let value = oni_bitcoin.amount_to_sats(u.amount)
-    let fee = float.ceiling(fee_rate *. int.to_float(estimate_tx_size(1, 1))) |> float.truncate
-    value == target + fee
-  })
+  let matching =
+    list.filter(utxos, fn(u) {
+      let value = oni_bitcoin.amount_to_sats(u.amount)
+      let fee =
+        float.ceiling(fee_rate *. int.to_float(estimate_tx_size(1, 1)))
+        |> float.truncate
+      value == target + fee
+    })
 
   case matching {
     [utxo, ..] -> {
       let value = oni_bitcoin.amount_to_sats(utxo.amount)
-      let fee = float.ceiling(fee_rate *. int.to_float(estimate_tx_size(1, 1))) |> float.truncate
+      let fee =
+        float.ceiling(fee_rate *. int.to_float(estimate_tx_size(1, 1)))
+        |> float.truncate
       Ok(CoinSelection(
         inputs: [utxo],
         total_input: value,
@@ -878,7 +914,12 @@ pub fn sign_transaction(
         Error(_) -> Error(InvalidPassword)
         Ok(master_key) -> {
           // Sign each input
-          sign_inputs(master_key, request.tx, request.inputs, request.sighash_type)
+          sign_inputs(
+            master_key,
+            request.tx,
+            request.inputs,
+            request.sighash_type,
+          )
         }
       }
     }
@@ -894,7 +935,8 @@ fn sign_inputs(
   list.fold(inputs, Ok(tx), fn(acc, input) {
     case acc {
       Error(e) -> Error(e)
-      Ok(current_tx) -> sign_single_input(master_key, current_tx, input, sighash_type)
+      Ok(current_tx) ->
+        sign_single_input(master_key, current_tx, input, sighash_type)
     }
   })
 }
@@ -988,7 +1030,8 @@ fn sign_taproot_input(
   // For default sighash, signature is 64 bytes
   // For other types, append sighash byte
   let witness_sig = case sighash_type {
-    0 | 1 -> signature  // SIGHASH_DEFAULT or SIGHASH_ALL
+    0 | 1 -> signature
+    // SIGHASH_DEFAULT or SIGHASH_ALL
     _ -> bit_array.concat([signature, <<sighash_type:8>>])
   }
 
@@ -1095,7 +1138,8 @@ pub fn serialize_xpub(key: ExtendedPublicKey) -> String {
     WalletTestnet | WalletRegtest | WalletSignet -> testnet_tpub_version
   }
 
-  let data = bytes_builder.new()
+  let data =
+    bytes_builder.new()
     |> bytes_builder.append(<<version:32-big>>)
     |> bytes_builder.append(<<key.depth:8>>)
     |> bytes_builder.append(key.parent_fingerprint)
@@ -1113,9 +1157,14 @@ fn parse_extended_public_key(xpub: String) -> Result(ExtendedPublicKey, Nil) {
     Error(_) -> Error(Nil)
     Ok(data) -> {
       case data {
-        <<version:32-big, depth:8, fingerprint:bytes-size(4),
-          child_index:32-big, chain_code:bytes-size(32),
-          key:bytes-size(33)>> -> {
+        <<
+          version:32-big,
+          depth:8,
+          fingerprint:bytes-size(4),
+          child_index:32-big,
+          chain_code:bytes-size(32),
+          key:bytes-size(33),
+        >> -> {
           let network = case version {
             v if v == mainnet_xpub_version -> WalletMainnet
             _ -> WalletTestnet
@@ -1168,7 +1217,12 @@ fn hmac_sha512(key: BitArray, data: BitArray) -> BitArray {
   |> fn(h) { bit_array.concat([h, h]) }
 }
 
-fn pbkdf2_sha512(_password: String, _salt: String, _iterations: Int, _length: Int) -> BitArray {
+fn pbkdf2_sha512(
+  _password: String,
+  _salt: String,
+  _iterations: Int,
+  _length: Int,
+) -> BitArray {
   // Placeholder - would use actual PBKDF2
   <<0:512>>
 }
@@ -1176,7 +1230,8 @@ fn pbkdf2_sha512(_password: String, _salt: String, _iterations: Int, _length: In
 fn private_to_public(private_key: BitArray) -> BitArray {
   // Placeholder - would use secp256k1 point multiplication
   let _ = private_key
-  <<0x02, 0:256>>  // Compressed public key
+  <<0x02, 0:256>>
+  // Compressed public key
 }
 
 fn add_private_keys(a: BitArray, b: BitArray) -> BitArray {
@@ -1200,14 +1255,16 @@ fn ecdsa_sign(private_key: BitArray, message: BitArray) -> BitArray {
   // Placeholder - would use secp256k1 ECDSA signing
   let _ = private_key
   let _ = message
-  <<0:576>>  // DER encoded signature (up to 72 bytes)
+  <<0:576>>
+  // DER encoded signature (up to 72 bytes)
 }
 
 fn schnorr_sign(private_key: BitArray, message: BitArray) -> BitArray {
   // Placeholder - would use BIP340 Schnorr signing
   let _ = private_key
   let _ = message
-  <<0:512>>  // 64-byte Schnorr signature
+  <<0:512>>
+  // 64-byte Schnorr signature
 }
 
 fn compute_segwit_sighash(
@@ -1261,7 +1318,12 @@ fn build_p2pkh_scriptsig(
 ) -> oni_bitcoin.Script {
   let sig_len = bit_array.byte_size(signature)
   let pk_len = bit_array.byte_size(pubkey)
-  oni_bitcoin.script_from_bytes(<<sig_len:8, signature:bits, pk_len:8, pubkey:bits>>)
+  oni_bitcoin.script_from_bytes(<<
+    sig_len:8,
+    signature:bits,
+    pk_len:8,
+    pubkey:bits,
+  >>)
 }
 
 /// Encrypt an extended private key using AES-256-GCM with PBKDF2 key derivation
@@ -1280,21 +1342,27 @@ fn encrypt_key(key: ExtendedPrivateKey, password: String) -> EncryptedKey {
   // Encrypt using AES-256-GCM
   let #(ciphertext, auth_tag) = aes_gcm_encrypt(derived_key, iv, key_data, <<>>)
 
-  EncryptedKey(
-    ciphertext: ciphertext,
-    iv: iv,
-    salt: salt,
-    auth_tag: auth_tag,
-  )
+  EncryptedKey(ciphertext: ciphertext, iv: iv, salt: salt, auth_tag: auth_tag)
 }
 
 /// Decrypt an encrypted key using AES-256-GCM
-fn decrypt_key(encrypted: EncryptedKey, password: String) -> Result(ExtendedPrivateKey, Nil) {
+fn decrypt_key(
+  encrypted: EncryptedKey,
+  password: String,
+) -> Result(ExtendedPrivateKey, Nil) {
   // Derive key from password using same PBKDF2 parameters
   let derived_key = derive_key_pbkdf2(password, encrypted.salt, 100_000, 32)
 
   // Decrypt using AES-256-GCM
-  case aes_gcm_decrypt(derived_key, encrypted.iv, encrypted.ciphertext, encrypted.auth_tag, <<>>) {
+  case
+    aes_gcm_decrypt(
+      derived_key,
+      encrypted.iv,
+      encrypted.ciphertext,
+      encrypted.auth_tag,
+      <<>>,
+    )
+  {
     Ok(plaintext) -> deserialize_extended_private_key(plaintext)
     Error(_) -> Error(Nil)
   }
@@ -1314,15 +1382,23 @@ fn serialize_extended_private_key(key: ExtendedPrivateKey) -> BitArray {
     key.parent_fingerprint:bits,
     key.child_index:32,
     key.chain_code:bits,
-    key.key:bits
+    key.key:bits,
   >>
 }
 
 /// Deserialize an extended private key after decryption
-fn deserialize_extended_private_key(data: BitArray) -> Result(ExtendedPrivateKey, Nil) {
+fn deserialize_extended_private_key(
+  data: BitArray,
+) -> Result(ExtendedPrivateKey, Nil) {
   case data {
-    <<network_byte:8, depth:8, parent_fingerprint:32-bits, child_index:32,
-      chain_code:256-bits, key:bits>> -> {
+    <<
+      network_byte:8,
+      depth:8,
+      parent_fingerprint:32-bits,
+      child_index:32,
+      chain_code:256-bits,
+      key:bits,
+    >> -> {
       let network = case network_byte {
         0 -> WalletMainnet
         1 -> WalletTestnet
@@ -1347,7 +1423,12 @@ fn deserialize_extended_private_key(data: BitArray) -> Result(ExtendedPrivateKey
 fn crypto_strong_rand_bytes(n: Int) -> BitArray
 
 /// PBKDF2 key derivation
-fn derive_key_pbkdf2(password: String, salt: BitArray, iterations: Int, key_length: Int) -> BitArray {
+fn derive_key_pbkdf2(
+  password: String,
+  salt: BitArray,
+  iterations: Int,
+  key_length: Int,
+) -> BitArray {
   // Use Erlang crypto:pbkdf2_hmac - convert password string to binary
   let password_bytes = string_to_binary(password)
   pbkdf2_hmac_sha256(password_bytes, salt, iterations, key_length)
@@ -1361,20 +1442,43 @@ fn string_to_binary(s: String) -> BitArray {
 }
 
 @external(erlang, "crypto", "pbkdf2_hmac")
-fn pbkdf2_hmac_external(hash: BitArray, password: BitArray, salt: BitArray, iterations: Int, key_length: Int) -> BitArray
+fn pbkdf2_hmac_external(
+  hash: BitArray,
+  password: BitArray,
+  salt: BitArray,
+  iterations: Int,
+  key_length: Int,
+) -> BitArray
 
-fn pbkdf2_hmac_sha256(password: BitArray, salt: BitArray, iterations: Int, key_length: Int) -> BitArray {
+fn pbkdf2_hmac_sha256(
+  password: BitArray,
+  salt: BitArray,
+  iterations: Int,
+  key_length: Int,
+) -> BitArray {
   pbkdf2_hmac_external(<<"sha256">>, password, salt, iterations, key_length)
 }
 
 /// AES-256-GCM encryption (returns ciphertext and auth tag)
-fn aes_gcm_encrypt(key: BitArray, iv: BitArray, plaintext: BitArray, aad: BitArray) -> #(BitArray, BitArray) {
+fn aes_gcm_encrypt(
+  key: BitArray,
+  iv: BitArray,
+  plaintext: BitArray,
+  aad: BitArray,
+) -> #(BitArray, BitArray) {
   crypto_block_encrypt(<<"aes_256_gcm">>, key, iv, #(aad, plaintext, 16))
 }
 
 /// AES-256-GCM decryption
-fn aes_gcm_decrypt(key: BitArray, iv: BitArray, ciphertext: BitArray, tag: BitArray, aad: BitArray) -> Result(BitArray, Nil) {
-  let plaintext = crypto_block_decrypt(<<"aes_256_gcm">>, key, iv, #(aad, ciphertext, tag))
+fn aes_gcm_decrypt(
+  key: BitArray,
+  iv: BitArray,
+  ciphertext: BitArray,
+  tag: BitArray,
+  aad: BitArray,
+) -> Result(BitArray, Nil) {
+  let plaintext =
+    crypto_block_decrypt(<<"aes_256_gcm">>, key, iv, #(aad, ciphertext, tag))
   case bit_array.byte_size(plaintext) > 0 {
     True -> Ok(plaintext)
     False -> Error(Nil)
@@ -1382,10 +1486,20 @@ fn aes_gcm_decrypt(key: BitArray, iv: BitArray, ciphertext: BitArray, tag: BitAr
 }
 
 @external(erlang, "crypto", "crypto_one_time_aead")
-fn crypto_block_encrypt(cipher: BitArray, key: BitArray, iv: BitArray, data: #(BitArray, BitArray, Int)) -> #(BitArray, BitArray)
+fn crypto_block_encrypt(
+  cipher: BitArray,
+  key: BitArray,
+  iv: BitArray,
+  data: #(BitArray, BitArray, Int),
+) -> #(BitArray, BitArray)
 
 @external(erlang, "crypto", "crypto_one_time_aead")
-fn crypto_block_decrypt(cipher: BitArray, key: BitArray, iv: BitArray, data: #(BitArray, BitArray, BitArray)) -> BitArray
+fn crypto_block_decrypt(
+  cipher: BitArray,
+  key: BitArray,
+  iv: BitArray,
+  data: #(BitArray, BitArray, BitArray),
+) -> BitArray
 
 fn encode_base58check(data: BitArray) -> String {
   // Placeholder - would use actual Base58Check encoding

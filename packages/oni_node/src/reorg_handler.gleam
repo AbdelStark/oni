@@ -22,8 +22,8 @@ import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
 import oni_bitcoin.{type Block, type BlockHash, type Network, type Transaction}
 import oni_storage.{type BlockIndexEntry, type BlockUndo}
-import persistent_chainstate.{type PersistentChainstateMsg}
 import oni_supervisor.{type MempoolMsg}
+import persistent_chainstate.{type PersistentChainstateMsg}
 
 // ============================================================================
 // Configuration
@@ -43,11 +43,7 @@ pub type ReorgConfig {
 
 /// Default reorg configuration
 pub fn default_config() -> ReorgConfig {
-  ReorgConfig(
-    max_reorg_depth: 100,
-    resubmit_txs: True,
-    debug: False,
-  )
+  ReorgConfig(max_reorg_depth: 100, resubmit_txs: True, debug: False)
 }
 
 // ============================================================================
@@ -72,12 +68,7 @@ pub type ReorgEvent {
 
 /// Block on fork (for comparison)
 pub type ForkBlock {
-  ForkBlock(
-    hash: BlockHash,
-    height: Int,
-    prev_hash: BlockHash,
-    total_work: Int,
-  )
+  ForkBlock(hash: BlockHash, height: Int, prev_hash: BlockHash, total_work: Int)
 }
 
 // ============================================================================
@@ -87,11 +78,7 @@ pub type ForkBlock {
 /// Messages for the reorg handler actor
 pub type ReorgMsg {
   /// Check if new block causes a reorg
-  CheckReorg(
-    new_tip: BlockHash,
-    new_work: Int,
-    reply: Subject(ReorgResult),
-  )
+  CheckReorg(new_tip: BlockHash, new_work: Int, reply: Subject(ReorgResult))
   /// Execute a reorg
   ExecuteReorg(
     old_tip: BlockHash,
@@ -153,21 +140,22 @@ pub fn start(
   chainstate: Subject(PersistentChainstateMsg),
   mempool: Subject(MempoolMsg),
 ) -> Result(Subject(ReorgMsg), actor.StartError) {
-  let initial_state = ReorgState(
-    config: config,
-    chainstate: chainstate,
-    mempool: mempool,
-    current_tip: None,
-    current_height: 0,
-    stats: ReorgStats(
-      total_reorgs: 0,
-      max_depth_seen: 0,
-      blocks_disconnected: 0,
-      blocks_connected: 0,
-      txs_resubmitted: 0,
-    ),
-    block_index: dict.new(),
-  )
+  let initial_state =
+    ReorgState(
+      config: config,
+      chainstate: chainstate,
+      mempool: mempool,
+      current_tip: None,
+      current_height: 0,
+      stats: ReorgStats(
+        total_reorgs: 0,
+        max_depth_seen: 0,
+        blocks_disconnected: 0,
+        blocks_connected: 0,
+        txs_resubmitted: 0,
+      ),
+      block_index: dict.new(),
+    )
 
   actor.start(initial_state, handle_message)
 }
@@ -183,7 +171,8 @@ pub fn plan_reorg(
   case find_common_ancestor(old_tip, new_tip, block_index) {
     Error(err) -> Error(err)
     Ok(#(ancestor, disconnect_path, connect_path)) -> {
-      let _ = ancestor  // Used for verification
+      let _ = ancestor
+      // Used for verification
       Ok(#(disconnect_path, connect_path))
     }
   }
@@ -260,9 +249,13 @@ fn execute_reorg(
   state: ReorgState,
 ) -> Result(#(ReorgEvent, ReorgState), String) {
   case state.config.debug {
-    True -> io.println("[Reorg] Executing reorg from " <>
-      oni_bitcoin.block_hash_to_hex(old_tip) <> " to " <>
-      oni_bitcoin.block_hash_to_hex(new_tip))
+    True ->
+      io.println(
+        "[Reorg] Executing reorg from "
+        <> oni_bitcoin.block_hash_to_hex(old_tip)
+        <> " to "
+        <> oni_bitcoin.block_hash_to_hex(new_tip),
+      )
     False -> Nil
   }
 
@@ -270,7 +263,10 @@ fn execute_reorg(
   let old_tip_hex = oni_bitcoin.block_hash_to_hex(old_tip)
   let new_tip_hex = oni_bitcoin.block_hash_to_hex(new_tip)
 
-  case dict.get(state.block_index, old_tip_hex), dict.get(state.block_index, new_tip_hex) {
+  case
+    dict.get(state.block_index, old_tip_hex),
+    dict.get(state.block_index, new_tip_hex)
+  {
     Error(_), _ -> Error("Old tip not found in block index")
     _, Error(_) -> Error("New tip not found in block index")
     Ok(old_block), Ok(new_block) -> {
@@ -314,7 +310,8 @@ fn do_reorg(
         Error(err) -> Error("Failed to connect blocks: " <> err)
         Ok(#(confirmed_txids, state2)) -> {
           // 3. Resubmit disconnected transactions (minus those confirmed in new chain)
-          let txs_to_resubmit = filter_confirmed(disconnected_txs, confirmed_txids)
+          let txs_to_resubmit =
+            filter_confirmed(disconnected_txs, confirmed_txids)
 
           case state.config.resubmit_txs {
             True -> resubmit_transactions(txs_to_resubmit, state2.mempool)
@@ -327,25 +324,33 @@ fn do_reorg(
             Error(_) -> old_tip_fallback()
           }
 
-          let event = ReorgEvent(
-            fork_point: fork_point,
-            fork_height: case list.last(to_disconnect) {
-              Ok(block) -> block.height - 1
-              Error(_) -> 0
-            },
-            blocks_disconnected: list.length(to_disconnect),
-            blocks_connected: list.length(to_connect),
-            resubmit_txs: txs_to_resubmit,
-          )
+          let event =
+            ReorgEvent(
+              fork_point: fork_point,
+              fork_height: case list.last(to_disconnect) {
+                Ok(block) -> block.height - 1
+                Error(_) -> 0
+              },
+              blocks_disconnected: list.length(to_disconnect),
+              blocks_connected: list.length(to_connect),
+              resubmit_txs: txs_to_resubmit,
+            )
 
-          let new_stats = ReorgStats(
-            ..state2.stats,
-            total_reorgs: state2.stats.total_reorgs + 1,
-            max_depth_seen: int.max(state2.stats.max_depth_seen, list.length(to_disconnect)),
-            blocks_disconnected: state2.stats.blocks_disconnected + list.length(to_disconnect),
-            blocks_connected: state2.stats.blocks_connected + list.length(to_connect),
-            txs_resubmitted: state2.stats.txs_resubmitted + list.length(txs_to_resubmit),
-          )
+          let new_stats =
+            ReorgStats(
+              ..state2.stats,
+              total_reorgs: state2.stats.total_reorgs + 1,
+              max_depth_seen: int.max(
+                state2.stats.max_depth_seen,
+                list.length(to_disconnect),
+              ),
+              blocks_disconnected: state2.stats.blocks_disconnected
+                + list.length(to_disconnect),
+              blocks_connected: state2.stats.blocks_connected
+                + list.length(to_connect),
+              txs_resubmitted: state2.stats.txs_resubmitted
+                + list.length(txs_to_resubmit),
+            )
 
           // Update current tip
           let new_tip = case list.first(to_connect) {
@@ -358,16 +363,22 @@ fn do_reorg(
             Error(_) -> state.current_height
           }
 
-          io.println("[Reorg] Completed: disconnected " <>
-            int.to_string(list.length(to_disconnect)) <> ", connected " <>
-            int.to_string(list.length(to_connect)))
+          io.println(
+            "[Reorg] Completed: disconnected "
+            <> int.to_string(list.length(to_disconnect))
+            <> ", connected "
+            <> int.to_string(list.length(to_connect)),
+          )
 
-          Ok(#(event, ReorgState(
-            ..state2,
-            stats: new_stats,
-            current_tip: new_tip,
-            current_height: new_height,
-          )))
+          Ok(#(
+            event,
+            ReorgState(
+              ..state2,
+              stats: new_stats,
+              current_tip: new_tip,
+              current_height: new_height,
+            ),
+          ))
         }
       }
     }
@@ -395,8 +406,11 @@ fn disconnect_blocks_loop(
       // and collect the transactions from the disconnected block
 
       case state.config.debug {
-        True -> io.println("[Reorg] Disconnecting block at height " <>
-          int.to_string(block.height))
+        True ->
+          io.println(
+            "[Reorg] Disconnecting block at height "
+            <> int.to_string(block.height),
+          )
         False -> Nil
       }
 
@@ -429,8 +443,10 @@ fn connect_blocks_loop(
       // 3. Collect confirmed txids
 
       case state.config.debug {
-        True -> io.println("[Reorg] Connecting block at height " <>
-          int.to_string(block.height))
+        True ->
+          io.println(
+            "[Reorg] Connecting block at height " <> int.to_string(block.height),
+          )
         False -> Nil
       }
 
@@ -445,9 +461,10 @@ fn filter_confirmed(
   txs: List(Transaction),
   confirmed: List(oni_bitcoin.Txid),
 ) -> List(Transaction) {
-  let confirmed_set = list.fold(confirmed, dict.new(), fn(acc, txid) {
-    dict.insert(acc, oni_bitcoin.txid_to_hex(txid), True)
-  })
+  let confirmed_set =
+    list.fold(confirmed, dict.new(), fn(acc, txid) {
+      dict.insert(acc, oni_bitcoin.txid_to_hex(txid), True)
+    })
 
   list.filter(txs, fn(tx) {
     let txid = oni_bitcoin.txid_from_tx(tx)

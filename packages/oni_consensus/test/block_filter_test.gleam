@@ -1,11 +1,11 @@
 // block_filter_test.gleam - Tests for Compact Block Filters (BIP157/158)
 
+import block_filter
 import gleam/bit_array
 import gleam/option
 import gleeunit
 import gleeunit/should
 import oni_bitcoin
-import block_filter
 
 pub fn main() {
   gleeunit.main()
@@ -36,11 +36,11 @@ pub fn gr_encode_decode_empty_test() {
 
 pub fn gr_encode_decode_large_values_test() {
   let p = 19
-  let deltas = [524288, 1000000, 12345]
+  let deltas = [524_288, 1_000_000, 12_345]
   let encoded = block_filter.golomb_rice_encode(deltas, p)
   let decoded = block_filter.golomb_rice_decode(encoded, 3, p)
 
-  decoded |> should.equal([524288, 1524288, 1536633])
+  decoded |> should.equal([524_288, 1_524_288, 1_536_633])
 }
 
 // ============================================================================
@@ -71,41 +71,43 @@ pub fn construct_empty_block_filter_test() {
   // Create an empty block (just coinbase)
   let genesis_hash = oni_bitcoin.BlockHash(oni_bitcoin.Hash256(<<0:256>>))
 
-  let coinbase_input = oni_bitcoin.TxIn(
-    prevout: oni_bitcoin.OutPoint(
-      txid: oni_bitcoin.Txid(oni_bitcoin.Hash256(<<0:256>>)),
-      vout: 0xFFFFFFFF,
-    ),
-    script_sig: oni_bitcoin.script_from_bytes(<<4, 0, 0, 0, 0>>),
-    sequence: 0xFFFFFFFF,
-    witness: [],
-  )
+  let coinbase_input =
+    oni_bitcoin.TxIn(
+      prevout: oni_bitcoin.OutPoint(
+        txid: oni_bitcoin.Txid(oni_bitcoin.Hash256(<<0:256>>)),
+        vout: 0xFFFFFFFF,
+      ),
+      script_sig: oni_bitcoin.script_from_bytes(<<4, 0, 0, 0, 0>>),
+      sequence: 0xFFFFFFFF,
+      witness: [],
+    )
 
-  let coinbase_output = oni_bitcoin.TxOut(
-    value: oni_bitcoin.sats(5_000_000_000),
-    script_pubkey: oni_bitcoin.script_from_bytes(<<0x51>>),  // OP_1
-  )
+  let coinbase_output =
+    oni_bitcoin.TxOut(
+      value: oni_bitcoin.sats(5_000_000_000),
+      script_pubkey: oni_bitcoin.script_from_bytes(<<0x51>>),
+      // OP_1
+    )
 
-  let coinbase_tx = oni_bitcoin.Transaction(
-    version: 1,
-    inputs: [coinbase_input],
-    outputs: [coinbase_output],
-    lock_time: 0,
-  )
+  let coinbase_tx =
+    oni_bitcoin.Transaction(
+      version: 1,
+      inputs: [coinbase_input],
+      outputs: [coinbase_output],
+      lock_time: 0,
+    )
 
-  let header = oni_bitcoin.BlockHeader(
-    version: 1,
-    prev_block: genesis_hash,
-    merkle_root: oni_bitcoin.Hash256(<<0:256>>),
-    timestamp: 1231006505,
-    bits: 0x1d00ffff,
-    nonce: 0,
-  )
+  let header =
+    oni_bitcoin.BlockHeader(
+      version: 1,
+      prev_block: genesis_hash,
+      merkle_root: oni_bitcoin.Hash256(<<0:256>>),
+      timestamp: 1_231_006_505,
+      bits: 0x1d00ffff,
+      nonce: 0,
+    )
 
-  let block = oni_bitcoin.Block(
-    header: header,
-    transactions: [coinbase_tx],
-  )
+  let block = oni_bitcoin.Block(header: header, transactions: [coinbase_tx])
 
   let filter = block_filter.construct_basic_filter(block, genesis_hash)
 
@@ -123,42 +125,44 @@ pub fn filter_match_present_test() {
   let block_hash = oni_bitcoin.BlockHash(oni_bitcoin.Hash256(<<1:256>>))
 
   // Create a block with a known output script
-  let test_script = <<0x76, 0xa9, 0x14>>  // Start of P2PKH
-  let output = oni_bitcoin.TxOut(
-    value: oni_bitcoin.sats(1000),
-    script_pubkey: oni_bitcoin.script_from_bytes(test_script),
-  )
+  let test_script = <<0x76, 0xa9, 0x14>>
+  // Start of P2PKH
+  let output =
+    oni_bitcoin.TxOut(
+      value: oni_bitcoin.sats(1000),
+      script_pubkey: oni_bitcoin.script_from_bytes(test_script),
+    )
 
-  let input = oni_bitcoin.TxIn(
-    prevout: oni_bitcoin.OutPoint(
-      txid: oni_bitcoin.Txid(oni_bitcoin.Hash256(<<2:256>>)),
-      vout: 0,
-    ),
-    script_sig: oni_bitcoin.script_from_bytes(<<>>),
-    sequence: 0xFFFFFFFF,
-    witness: [],
-  )
+  let input =
+    oni_bitcoin.TxIn(
+      prevout: oni_bitcoin.OutPoint(
+        txid: oni_bitcoin.Txid(oni_bitcoin.Hash256(<<2:256>>)),
+        vout: 0,
+      ),
+      script_sig: oni_bitcoin.script_from_bytes(<<>>),
+      sequence: 0xFFFFFFFF,
+      witness: [],
+    )
 
-  let tx = oni_bitcoin.Transaction(
-    version: 1,
-    inputs: [input],
-    outputs: [output],
-    lock_time: 0,
-  )
+  let tx =
+    oni_bitcoin.Transaction(
+      version: 1,
+      inputs: [input],
+      outputs: [output],
+      lock_time: 0,
+    )
 
-  let header = oni_bitcoin.BlockHeader(
-    version: 1,
-    prev_block: block_hash,
-    merkle_root: oni_bitcoin.Hash256(<<0:256>>),
-    timestamp: 1231006505,
-    bits: 0x1d00ffff,
-    nonce: 0,
-  )
+  let header =
+    oni_bitcoin.BlockHeader(
+      version: 1,
+      prev_block: block_hash,
+      merkle_root: oni_bitcoin.Hash256(<<0:256>>),
+      timestamp: 1_231_006_505,
+      bits: 0x1d00ffff,
+      nonce: 0,
+    )
 
-  let block = oni_bitcoin.Block(
-    header: header,
-    transactions: [tx],
-  )
+  let block = oni_bitcoin.Block(header: header, transactions: [tx])
 
   let filter = block_filter.construct_basic_filter(block, block_hash)
 
@@ -171,41 +175,42 @@ pub fn filter_match_absent_test() {
   let block_hash = oni_bitcoin.BlockHash(oni_bitcoin.Hash256(<<1:256>>))
 
   let test_script = <<0x76, 0xa9, 0x14>>
-  let output = oni_bitcoin.TxOut(
-    value: oni_bitcoin.sats(1000),
-    script_pubkey: oni_bitcoin.script_from_bytes(test_script),
-  )
+  let output =
+    oni_bitcoin.TxOut(
+      value: oni_bitcoin.sats(1000),
+      script_pubkey: oni_bitcoin.script_from_bytes(test_script),
+    )
 
-  let input = oni_bitcoin.TxIn(
-    prevout: oni_bitcoin.OutPoint(
-      txid: oni_bitcoin.Txid(oni_bitcoin.Hash256(<<2:256>>)),
-      vout: 0,
-    ),
-    script_sig: oni_bitcoin.script_from_bytes(<<>>),
-    sequence: 0xFFFFFFFF,
-    witness: [],
-  )
+  let input =
+    oni_bitcoin.TxIn(
+      prevout: oni_bitcoin.OutPoint(
+        txid: oni_bitcoin.Txid(oni_bitcoin.Hash256(<<2:256>>)),
+        vout: 0,
+      ),
+      script_sig: oni_bitcoin.script_from_bytes(<<>>),
+      sequence: 0xFFFFFFFF,
+      witness: [],
+    )
 
-  let tx = oni_bitcoin.Transaction(
-    version: 1,
-    inputs: [input],
-    outputs: [output],
-    lock_time: 0,
-  )
+  let tx =
+    oni_bitcoin.Transaction(
+      version: 1,
+      inputs: [input],
+      outputs: [output],
+      lock_time: 0,
+    )
 
-  let header = oni_bitcoin.BlockHeader(
-    version: 1,
-    prev_block: block_hash,
-    merkle_root: oni_bitcoin.Hash256(<<0:256>>),
-    timestamp: 1231006505,
-    bits: 0x1d00ffff,
-    nonce: 0,
-  )
+  let header =
+    oni_bitcoin.BlockHeader(
+      version: 1,
+      prev_block: block_hash,
+      merkle_root: oni_bitcoin.Hash256(<<0:256>>),
+      timestamp: 1_231_006_505,
+      bits: 0x1d00ffff,
+      nonce: 0,
+    )
 
-  let block = oni_bitcoin.Block(
-    header: header,
-    transactions: [tx],
-  )
+  let block = oni_bitcoin.Block(header: header, transactions: [tx])
 
   let filter = block_filter.construct_basic_filter(block, block_hash)
 
@@ -223,12 +228,13 @@ pub fn filter_match_absent_test() {
 
 pub fn filter_hash_test() {
   let block_hash = oni_bitcoin.BlockHash(oni_bitcoin.Hash256(<<1:256>>))
-  let filter = block_filter.BlockFilter(
-    filter_type: 0,
-    block_hash: block_hash,
-    n_elements: 0,
-    filter_data: <<1, 2, 3, 4>>,
-  )
+  let filter =
+    block_filter.BlockFilter(
+      filter_type: 0,
+      block_hash: block_hash,
+      n_elements: 0,
+      filter_data: <<1, 2, 3, 4>>,
+    )
 
   let hash = block_filter.filter_hash(filter)
 
@@ -238,12 +244,13 @@ pub fn filter_hash_test() {
 
 pub fn genesis_filter_header_test() {
   let block_hash = oni_bitcoin.BlockHash(oni_bitcoin.Hash256(<<1:256>>))
-  let filter = block_filter.BlockFilter(
-    filter_type: 0,
-    block_hash: block_hash,
-    n_elements: 0,
-    filter_data: <<>>,
-  )
+  let filter =
+    block_filter.BlockFilter(
+      filter_type: 0,
+      block_hash: block_hash,
+      n_elements: 0,
+      filter_data: <<>>,
+    )
 
   let header = block_filter.genesis_filter_header(filter)
 
@@ -256,19 +263,21 @@ pub fn filter_header_chain_test() {
   let block_hash1 = oni_bitcoin.BlockHash(oni_bitcoin.Hash256(<<1:256>>))
   let block_hash2 = oni_bitcoin.BlockHash(oni_bitcoin.Hash256(<<2:256>>))
 
-  let filter1 = block_filter.BlockFilter(
-    filter_type: 0,
-    block_hash: block_hash1,
-    n_elements: 1,
-    filter_data: <<1, 2, 3>>,
-  )
+  let filter1 =
+    block_filter.BlockFilter(
+      filter_type: 0,
+      block_hash: block_hash1,
+      n_elements: 1,
+      filter_data: <<1, 2, 3>>,
+    )
 
-  let filter2 = block_filter.BlockFilter(
-    filter_type: 0,
-    block_hash: block_hash2,
-    n_elements: 1,
-    filter_data: <<4, 5, 6>>,
-  )
+  let filter2 =
+    block_filter.BlockFilter(
+      filter_type: 0,
+      block_hash: block_hash2,
+      n_elements: 1,
+      filter_data: <<4, 5, 6>>,
+    )
 
   // Create header chain
   let header1 = block_filter.genesis_filter_header(filter1)
@@ -284,12 +293,13 @@ pub fn filter_header_chain_test() {
 
 pub fn encode_decode_filter_test() {
   let block_hash = oni_bitcoin.BlockHash(oni_bitcoin.Hash256(<<1:256>>))
-  let filter = block_filter.BlockFilter(
-    filter_type: 0,
-    block_hash: block_hash,
-    n_elements: 5,
-    filter_data: <<1, 2, 3, 4, 5, 6, 7, 8>>,
-  )
+  let filter =
+    block_filter.BlockFilter(
+      filter_type: 0,
+      block_hash: block_hash,
+      n_elements: 5,
+      filter_data: <<1, 2, 3, 4, 5, 6, 7, 8>>,
+    )
 
   let encoded = block_filter.encode_filter(filter)
   let decoded = block_filter.decode_filter(encoded, 0, block_hash)

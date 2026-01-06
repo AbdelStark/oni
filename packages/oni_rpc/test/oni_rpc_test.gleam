@@ -1,8 +1,8 @@
+import gleam/dict
+import gleam/option.{None, Some}
+import gleam/string
 import gleeunit
 import gleeunit/should
-import gleam/dict
-import gleam/string
-import gleam/option.{None, Some}
 import oni_rpc
 
 pub fn main() {
@@ -44,11 +44,12 @@ pub fn value_to_bool_test() {
 }
 
 pub fn value_get_array_element_test() {
-  let arr = oni_rpc.RpcArray([
-    oni_rpc.RpcInt(1),
-    oni_rpc.RpcInt(2),
-    oni_rpc.RpcInt(3),
-  ])
+  let arr =
+    oni_rpc.RpcArray([
+      oni_rpc.RpcInt(1),
+      oni_rpc.RpcInt(2),
+      oni_rpc.RpcInt(3),
+    ])
 
   case oni_rpc.value_get_array_element(arr, 1) {
     Some(oni_rpc.RpcInt(2)) -> should.be_ok(Ok(Nil))
@@ -57,10 +58,11 @@ pub fn value_get_array_element_test() {
 }
 
 pub fn value_get_field_test() {
-  let obj = oni_rpc.RpcObject(
-    dict.new()
-    |> dict.insert("name", oni_rpc.RpcString("test"))
-  )
+  let obj =
+    oni_rpc.RpcObject(
+      dict.new()
+      |> dict.insert("name", oni_rpc.RpcString("test")),
+    )
 
   case oni_rpc.value_get_field(obj, "name") {
     Some(oni_rpc.RpcString("test")) -> should.be_ok(Ok(Nil))
@@ -102,10 +104,8 @@ pub fn error_code_internal_test() {
 // ============================================================================
 
 pub fn success_response_test() {
-  let response = oni_rpc.success_response(
-    oni_rpc.IdInt(1),
-    oni_rpc.RpcString("result"),
-  )
+  let response =
+    oni_rpc.success_response(oni_rpc.IdInt(1), oni_rpc.RpcString("result"))
 
   case response {
     oni_rpc.RpcSuccess(_, oni_rpc.IdInt(1), oni_rpc.RpcString("result")) ->
@@ -115,10 +115,8 @@ pub fn success_response_test() {
 }
 
 pub fn error_response_test() {
-  let response = oni_rpc.error_response(
-    oni_rpc.IdInt(1),
-    oni_rpc.MethodNotFound("foo"),
-  )
+  let response =
+    oni_rpc.error_response(oni_rpc.IdInt(1), oni_rpc.MethodNotFound("foo"))
 
   case response {
     oni_rpc.RpcFailure(_, oni_rpc.IdInt(1), err) -> {
@@ -129,10 +127,7 @@ pub fn error_response_test() {
 }
 
 pub fn serialize_success_response_test() {
-  let response = oni_rpc.success_response(
-    oni_rpc.IdInt(1),
-    oni_rpc.RpcInt(42),
-  )
+  let response = oni_rpc.success_response(oni_rpc.IdInt(1), oni_rpc.RpcInt(42))
 
   let json = oni_rpc.serialize_response(response)
 
@@ -144,10 +139,11 @@ pub fn serialize_success_response_test() {
 }
 
 pub fn serialize_error_response_test() {
-  let response = oni_rpc.error_response(
-    oni_rpc.IdString("test"),
-    oni_rpc.ParseError("bad json"),
-  )
+  let response =
+    oni_rpc.error_response(
+      oni_rpc.IdString("test"),
+      oni_rpc.ParseError("bad json"),
+    )
 
   let json = oni_rpc.serialize_response(response)
 
@@ -174,20 +170,19 @@ pub fn server_handle_unknown_method_test() {
   let config = oni_rpc.default_config()
   let server = oni_rpc.server_new(config)
 
-  let request = oni_rpc.RpcRequest(
-    jsonrpc: "2.0",
-    id: oni_rpc.IdInt(1),
-    method: "unknownmethod12345",
-    params: oni_rpc.ParamsNone,
-  )
+  let request =
+    oni_rpc.RpcRequest(
+      jsonrpc: "2.0",
+      id: oni_rpc.IdInt(1),
+      method: "unknownmethod12345",
+      params: oni_rpc.ParamsNone,
+    )
 
-  let ctx = oni_rpc.RpcContext(
-    authenticated: True,
-    remote_addr: None,
-    request_time: 0,
-  )
+  let ctx =
+    oni_rpc.RpcContext(authenticated: True, remote_addr: None, request_time: 0)
 
-  let #(_new_server, response) = oni_rpc.server_handle_request(server, request, ctx)
+  let #(_new_server, response) =
+    oni_rpc.server_handle_request(server, request, ctx)
 
   case response {
     oni_rpc.RpcFailure(_, _, err) -> {
@@ -201,20 +196,19 @@ pub fn server_handle_getblockcount_test() {
   let config = oni_rpc.default_config()
   let server = oni_rpc.server_new(config)
 
-  let request = oni_rpc.RpcRequest(
-    jsonrpc: "2.0",
-    id: oni_rpc.IdInt(1),
-    method: "getblockcount",
-    params: oni_rpc.ParamsNone,
-  )
+  let request =
+    oni_rpc.RpcRequest(
+      jsonrpc: "2.0",
+      id: oni_rpc.IdInt(1),
+      method: "getblockcount",
+      params: oni_rpc.ParamsNone,
+    )
 
-  let ctx = oni_rpc.RpcContext(
-    authenticated: True,
-    remote_addr: None,
-    request_time: 0,
-  )
+  let ctx =
+    oni_rpc.RpcContext(authenticated: True, remote_addr: None, request_time: 0)
 
-  let #(_new_server, response) = oni_rpc.server_handle_request(server, request, ctx)
+  let #(_new_server, response) =
+    oni_rpc.server_handle_request(server, request, ctx)
 
   case response {
     oni_rpc.RpcSuccess(_, _, oni_rpc.RpcInt(0)) -> should.be_ok(Ok(Nil))
@@ -226,20 +220,19 @@ pub fn server_handle_help_test() {
   let config = oni_rpc.default_config()
   let server = oni_rpc.server_new(config)
 
-  let request = oni_rpc.RpcRequest(
-    jsonrpc: "2.0",
-    id: oni_rpc.IdInt(1),
-    method: "help",
-    params: oni_rpc.ParamsNone,
-  )
+  let request =
+    oni_rpc.RpcRequest(
+      jsonrpc: "2.0",
+      id: oni_rpc.IdInt(1),
+      method: "help",
+      params: oni_rpc.ParamsNone,
+    )
 
-  let ctx = oni_rpc.RpcContext(
-    authenticated: True,
-    remote_addr: None,
-    request_time: 0,
-  )
+  let ctx =
+    oni_rpc.RpcContext(authenticated: True, remote_addr: None, request_time: 0)
 
-  let #(_new_server, response) = oni_rpc.server_handle_request(server, request, ctx)
+  let #(_new_server, response) =
+    oni_rpc.server_handle_request(server, request, ctx)
 
   case response {
     oni_rpc.RpcSuccess(_, _, oni_rpc.RpcString(_)) -> should.be_ok(Ok(Nil))
@@ -248,26 +241,28 @@ pub fn server_handle_help_test() {
 }
 
 pub fn server_handle_unauthorized_test() {
-  let config = oni_rpc.RpcConfig(
-    ..oni_rpc.default_config(),
-    allow_anonymous: False,
-  )
+  let config =
+    oni_rpc.RpcConfig(..oni_rpc.default_config(), allow_anonymous: False)
   let server = oni_rpc.server_new(config)
 
-  let request = oni_rpc.RpcRequest(
-    jsonrpc: "2.0",
-    id: oni_rpc.IdInt(1),
-    method: "getblockcount",
-    params: oni_rpc.ParamsNone,
-  )
+  let request =
+    oni_rpc.RpcRequest(
+      jsonrpc: "2.0",
+      id: oni_rpc.IdInt(1),
+      method: "getblockcount",
+      params: oni_rpc.ParamsNone,
+    )
 
-  let ctx = oni_rpc.RpcContext(
-    authenticated: False,  // Not authenticated
-    remote_addr: None,
-    request_time: 0,
-  )
+  let ctx =
+    oni_rpc.RpcContext(
+      authenticated: False,
+      // Not authenticated
+      remote_addr: None,
+      request_time: 0,
+    )
 
-  let #(_new_server, response) = oni_rpc.server_handle_request(server, request, ctx)
+  let #(_new_server, response) =
+    oni_rpc.server_handle_request(server, request, ctx)
 
   case response {
     oni_rpc.RpcFailure(_, _, _) -> should.be_ok(Ok(Nil))
@@ -279,18 +274,16 @@ pub fn server_stats_increment_test() {
   let config = oni_rpc.default_config()
   let server = oni_rpc.server_new(config)
 
-  let request = oni_rpc.RpcRequest(
-    jsonrpc: "2.0",
-    id: oni_rpc.IdInt(1),
-    method: "getblockcount",
-    params: oni_rpc.ParamsNone,
-  )
+  let request =
+    oni_rpc.RpcRequest(
+      jsonrpc: "2.0",
+      id: oni_rpc.IdInt(1),
+      method: "getblockcount",
+      params: oni_rpc.ParamsNone,
+    )
 
-  let ctx = oni_rpc.RpcContext(
-    authenticated: True,
-    remote_addr: None,
-    request_time: 0,
-  )
+  let ctx =
+    oni_rpc.RpcContext(authenticated: True, remote_addr: None, request_time: 0)
 
   let #(server1, _) = oni_rpc.server_handle_request(server, request, ctx)
   let #(server2, _) = oni_rpc.server_handle_request(server1, request, ctx)

@@ -58,7 +58,11 @@ pub fn component_healthy(name: String, now: Int) -> ComponentHealth {
 }
 
 /// Create a degraded component result
-pub fn component_degraded(name: String, message: String, now: Int) -> ComponentHealth {
+pub fn component_degraded(
+  name: String,
+  message: String,
+  now: Int,
+) -> ComponentHealth {
   ComponentHealth(
     name: name,
     status: Degraded,
@@ -69,7 +73,11 @@ pub fn component_degraded(name: String, message: String, now: Int) -> ComponentH
 }
 
 /// Create an unhealthy component result
-pub fn component_unhealthy(name: String, message: String, now: Int) -> ComponentHealth {
+pub fn component_unhealthy(
+  name: String,
+  message: String,
+  now: Int,
+) -> ComponentHealth {
   ComponentHealth(
     name: name,
     status: Unhealthy,
@@ -98,11 +106,7 @@ pub type HealthRegistry {
 
 /// Create a new health registry
 pub fn registry_new() -> HealthRegistry {
-  HealthRegistry(
-    checks: dict.new(),
-    results: dict.new(),
-    last_full_check: 0,
-  )
+  HealthRegistry(checks: dict.new(), results: dict.new(), last_full_check: 0)
 }
 
 /// Register a health check
@@ -111,24 +115,18 @@ pub fn register_check(
   name: String,
   check: HealthCheck,
 ) -> HealthRegistry {
-  HealthRegistry(
-    ..registry,
-    checks: dict.insert(registry.checks, name, check),
-  )
+  HealthRegistry(..registry, checks: dict.insert(registry.checks, name, check))
 }
 
 /// Run all health checks
 pub fn run_all_checks(registry: HealthRegistry, now: Int) -> HealthRegistry {
-  let new_results = dict.fold(registry.checks, dict.new(), fn(acc, name, check) {
-    let result = check(now)
-    dict.insert(acc, name, result)
-  })
+  let new_results =
+    dict.fold(registry.checks, dict.new(), fn(acc, name, check) {
+      let result = check(now)
+      dict.insert(acc, name, result)
+    })
 
-  HealthRegistry(
-    ..registry,
-    results: new_results,
-    last_full_check: now,
-  )
+  HealthRegistry(..registry, results: new_results, last_full_check: now)
 }
 
 /// Get a specific check result
@@ -146,19 +144,21 @@ pub fn get_check_result(
 pub fn overall_status(registry: HealthRegistry) -> HealthStatus {
   let results = dict.values(registry.results)
 
-  let has_unhealthy = list.any(results, fn(r) {
-    case r.status {
-      Unhealthy -> True
-      _ -> False
-    }
-  })
+  let has_unhealthy =
+    list.any(results, fn(r) {
+      case r.status {
+        Unhealthy -> True
+        _ -> False
+      }
+    })
 
-  let has_degraded = list.any(results, fn(r) {
-    case r.status {
-      Degraded -> True
-      _ -> False
-    }
-  })
+  let has_degraded =
+    list.any(results, fn(r) {
+      case r.status {
+        Degraded -> True
+        _ -> False
+      }
+    })
 
   case has_unhealthy, has_degraded {
     True, _ -> Unhealthy
@@ -181,7 +181,8 @@ pub fn database_check(
     False -> component_unhealthy("database", "Database connection lost", now)
     True -> {
       // Check if writes are stale (more than 5 minutes)
-      let stale_threshold = 300_000  // 5 minutes in ms
+      let stale_threshold = 300_000
+      // 5 minutes in ms
       case now - last_write_time > stale_threshold {
         True -> component_degraded("database", "No recent writes", now)
         False -> component_healthy("database", now)
@@ -198,11 +199,8 @@ pub fn network_check(
 ) -> ComponentHealth {
   case connected_peers {
     0 -> component_unhealthy("network", "No connected peers", now)
-    n if n < min_peers -> component_degraded(
-      "network",
-      "Low peer count: " <> int.to_string(n),
-      now,
-    )
+    n if n < min_peers ->
+      component_degraded("network", "Low peer count: " <> int.to_string(n), now)
     _ -> component_healthy("network", now)
   }
 }
@@ -226,11 +224,14 @@ pub fn sync_check(
     False -> {
       // Check if we're significantly behind
       case best_known_height - current_height > 10 {
-        True -> component_degraded(
-          "sync",
-          "Behind by " <> int.to_string(best_known_height - current_height) <> " blocks",
-          now,
-        )
+        True ->
+          component_degraded(
+            "sync",
+            "Behind by "
+              <> int.to_string(best_known_height - current_height)
+              <> " blocks",
+            now,
+          )
         False -> component_healthy("sync", now)
       }
     }
@@ -245,16 +246,18 @@ pub fn mempool_check(
 ) -> ComponentHealth {
   let usage_percent = size_mb * 100 / max_size_mb
   case usage_percent {
-    p if p > 95 -> component_degraded(
-      "mempool",
-      "Mempool nearly full: " <> int.to_string(p) <> "%",
-      now,
-    )
-    p if p > 80 -> component_degraded(
-      "mempool",
-      "Mempool high usage: " <> int.to_string(p) <> "%",
-      now,
-    )
+    p if p > 95 ->
+      component_degraded(
+        "mempool",
+        "Mempool nearly full: " <> int.to_string(p) <> "%",
+        now,
+      )
+    p if p > 80 ->
+      component_degraded(
+        "mempool",
+        "Mempool high usage: " <> int.to_string(p) <> "%",
+        now,
+      )
     _ -> component_healthy("mempool", now)
   }
 }
@@ -271,11 +274,12 @@ pub fn rpc_check(
     True -> {
       let usage_percent = active_connections * 100 / max_connections
       case usage_percent > 90 {
-        True -> component_degraded(
-          "rpc",
-          "RPC connections at " <> int.to_string(usage_percent) <> "%",
-          now,
-        )
+        True ->
+          component_degraded(
+            "rpc",
+            "RPC connections at " <> int.to_string(usage_percent) <> "%",
+            now,
+          )
         False -> component_healthy("rpc", now)
       }
     }
@@ -316,17 +320,28 @@ pub fn generate_report(
 
 /// Serialize health report to JSON string
 pub fn report_to_json(report: HealthReport) -> String {
-  let components_json = report.components
+  let components_json =
+    report.components
     |> list.map(component_to_json)
     |> string.join(",")
 
-  "{" <>
-  "\"status\":\"" <> health_status_to_string(report.status) <> "\"," <>
-  "\"uptime_secs\":" <> int.to_string(report.uptime_secs) <> "," <>
-  "\"version\":\"" <> report.version <> "\"," <>
-  "\"timestamp\":" <> int.to_string(report.timestamp) <> "," <>
-  "\"components\":[" <> components_json <> "]" <>
-  "}"
+  "{"
+  <> "\"status\":\""
+  <> health_status_to_string(report.status)
+  <> "\","
+  <> "\"uptime_secs\":"
+  <> int.to_string(report.uptime_secs)
+  <> ","
+  <> "\"version\":\""
+  <> report.version
+  <> "\","
+  <> "\"timestamp\":"
+  <> int.to_string(report.timestamp)
+  <> ","
+  <> "\"components\":["
+  <> components_json
+  <> "]"
+  <> "}"
 }
 
 fn component_to_json(component: ComponentHealth) -> String {
@@ -340,13 +355,18 @@ fn component_to_json(component: ComponentHealth) -> String {
     None -> ""
   }
 
-  "{" <>
-  "\"name\":\"" <> component.name <> "\"," <>
-  "\"status\":\"" <> health_status_to_string(component.status) <> "\"," <>
-  "\"last_check\":" <> int.to_string(component.last_check) <>
-  message_json <>
-  latency_json <>
-  "}"
+  "{"
+  <> "\"name\":\""
+  <> component.name
+  <> "\","
+  <> "\"status\":\""
+  <> health_status_to_string(component.status)
+  <> "\","
+  <> "\"last_check\":"
+  <> int.to_string(component.last_check)
+  <> message_json
+  <> latency_json
+  <> "}"
 }
 
 fn escape_json_string(s: String) -> String {
@@ -382,18 +402,12 @@ pub type Metric {
 
 /// Metrics collector
 pub type MetricsCollector {
-  MetricsCollector(
-    metrics: Dict(String, Metric),
-    prefix: String,
-  )
+  MetricsCollector(metrics: Dict(String, Metric), prefix: String)
 }
 
 /// Create a new metrics collector
 pub fn metrics_new(prefix: String) -> MetricsCollector {
-  MetricsCollector(
-    metrics: dict.new(),
-    prefix: prefix,
-  )
+  MetricsCollector(metrics: dict.new(), prefix: prefix)
 }
 
 /// Record a counter metric
@@ -403,13 +417,14 @@ pub fn counter(
   value: Float,
   help: String,
 ) -> MetricsCollector {
-  let metric = Metric(
-    name: collector.prefix <> "_" <> name,
-    metric_type: Counter,
-    value: value,
-    labels: dict.new(),
-    help: help,
-  )
+  let metric =
+    Metric(
+      name: collector.prefix <> "_" <> name,
+      metric_type: Counter,
+      value: value,
+      labels: dict.new(),
+      help: help,
+    )
   MetricsCollector(
     ..collector,
     metrics: dict.insert(collector.metrics, name, metric),
@@ -423,13 +438,14 @@ pub fn gauge(
   value: Float,
   help: String,
 ) -> MetricsCollector {
-  let metric = Metric(
-    name: collector.prefix <> "_" <> name,
-    metric_type: Gauge,
-    value: value,
-    labels: dict.new(),
-    help: help,
-  )
+  let metric =
+    Metric(
+      name: collector.prefix <> "_" <> name,
+      metric_type: Gauge,
+      value: value,
+      labels: dict.new(),
+      help: help,
+    )
   MetricsCollector(
     ..collector,
     metrics: dict.insert(collector.metrics, name, metric),
@@ -451,12 +467,36 @@ pub fn collect_node_metrics(
   collector
   |> gauge("block_height", int_to_float(block_height), "Current block height")
   |> gauge("peer_count", int_to_float(peer_count), "Number of connected peers")
-  |> gauge("mempool_size", int_to_float(mempool_size), "Number of transactions in mempool")
-  |> gauge("mempool_bytes", int_to_float(mempool_bytes), "Size of mempool in bytes")
-  |> gauge("uptime_seconds", int_to_float(uptime_secs), "Node uptime in seconds")
-  |> counter("rpc_requests_total", int_to_float(rpc_requests_total), "Total RPC requests processed")
-  |> counter("blocks_validated_total", int_to_float(blocks_validated), "Total blocks validated")
-  |> counter("txs_validated_total", int_to_float(txs_validated), "Total transactions validated")
+  |> gauge(
+    "mempool_size",
+    int_to_float(mempool_size),
+    "Number of transactions in mempool",
+  )
+  |> gauge(
+    "mempool_bytes",
+    int_to_float(mempool_bytes),
+    "Size of mempool in bytes",
+  )
+  |> gauge(
+    "uptime_seconds",
+    int_to_float(uptime_secs),
+    "Node uptime in seconds",
+  )
+  |> counter(
+    "rpc_requests_total",
+    int_to_float(rpc_requests_total),
+    "Total RPC requests processed",
+  )
+  |> counter(
+    "blocks_validated_total",
+    int_to_float(blocks_validated),
+    "Total blocks validated",
+  )
+  |> counter(
+    "txs_validated_total",
+    int_to_float(txs_validated),
+    "Total transactions validated",
+  )
 }
 
 /// Export metrics in Prometheus format
@@ -474,9 +514,19 @@ fn metric_to_prometheus(metric: Metric) -> String {
     Histogram -> "histogram"
   }
 
-  "# HELP " <> metric.name <> " " <> metric.help <> "\n" <>
-  "# TYPE " <> metric.name <> " " <> type_str <> "\n" <>
-  metric.name <> " " <> float_to_string(metric.value)
+  "# HELP "
+  <> metric.name
+  <> " "
+  <> metric.help
+  <> "\n"
+  <> "# TYPE "
+  <> metric.name
+  <> " "
+  <> type_str
+  <> "\n"
+  <> metric.name
+  <> " "
+  <> float_to_string(metric.value)
 }
 
 // ============================================================================
@@ -522,13 +572,15 @@ pub fn readiness_probe(
 ) -> ReadinessResult {
   case db_connected {
     False -> NotReady("Database not connected")
-    True -> case has_peers {
-      False -> NotReady("No peer connections")
-      True -> case is_synced {
-        False -> NotReady("Still syncing")
-        True -> Ready
+    True ->
+      case has_peers {
+        False -> NotReady("No peer connections")
+        True ->
+          case is_synced {
+            False -> NotReady("Still syncing")
+            True -> Ready
+          }
       }
-    }
   }
 }
 
@@ -536,7 +588,10 @@ pub fn readiness_probe(
 pub fn liveness_response(result: LivenessResult) -> #(Int, String) {
   case result {
     Live -> #(200, "{\"status\":\"live\"}")
-    NotLive(reason) -> #(503, "{\"status\":\"not_live\",\"reason\":\"" <> reason <> "\"}")
+    NotLive(reason) -> #(
+      503,
+      "{\"status\":\"not_live\",\"reason\":\"" <> reason <> "\"}",
+    )
   }
 }
 
@@ -544,7 +599,10 @@ pub fn liveness_response(result: LivenessResult) -> #(Int, String) {
 pub fn readiness_response(result: ReadinessResult) -> #(Int, String) {
   case result {
     Ready -> #(200, "{\"status\":\"ready\"}")
-    NotReady(reason) -> #(503, "{\"status\":\"not_ready\",\"reason\":\"" <> reason <> "\"}")
+    NotReady(reason) -> #(
+      503,
+      "{\"status\":\"not_ready\",\"reason\":\"" <> reason <> "\"}",
+    )
   }
 }
 

@@ -53,12 +53,13 @@ pub type MaintenanceConfig {
 /// Default maintenance configuration
 pub fn default_config() -> MaintenanceConfig {
   MaintenanceConfig(
-    batch_size: 10000,
+    batch_size: 10_000,
     batch_timeout_ms: 5000,
     parallel: True,
     verify_integrity: True,
     create_backups: True,
-    min_free_space: 1_073_741_824,  // 1GB
+    min_free_space: 1_073_741_824,
+    // 1GB
     target_utxo_count: 0,
     prune_keep_blocks: 0,
   )
@@ -177,15 +178,15 @@ pub fn update_progress(
 
 /// Mark task as completed
 pub fn complete_task(state: TaskState, current_time: Int) -> TaskState {
-  TaskState(
-    ..state,
-    status: StatusCompleted,
-    finished_at: Some(current_time),
-  )
+  TaskState(..state, status: StatusCompleted, finished_at: Some(current_time))
 }
 
 /// Mark task as failed
-pub fn fail_task(state: TaskState, reason: String, current_time: Int) -> TaskState {
+pub fn fail_task(
+  state: TaskState,
+  reason: String,
+  current_time: Int,
+) -> TaskState {
   TaskState(
     ..state,
     status: StatusFailed(reason),
@@ -230,13 +231,14 @@ pub fn compact_utxo(
   // For now, we just return the view unchanged
   // as the in-memory dict is already optimized
 
-  let result = CompactionResult(
-    utxos_before: before_count,
-    utxos_after: before_count,
-    bytes_saved: 0,
-    duration_ms: 0,
-    errors: [],
-  )
+  let result =
+    CompactionResult(
+      utxos_before: before_count,
+      utxos_after: before_count,
+      bytes_saved: 0,
+      duration_ms: 0,
+      errors: [],
+    )
 
   #(view, result)
 }
@@ -294,10 +296,7 @@ pub type AgeDistribution {
 }
 
 /// Analyze UTXO set
-pub fn analyze_utxo(
-  view: UtxoView,
-  current_height: Int,
-) -> UtxoAnalysis {
+pub fn analyze_utxo(view: UtxoView, current_height: Int) -> UtxoAnalysis {
   let coins = dict.values(view.coins)
 
   let #(total_value, value_dist, age_dist, coinbase_count, dust_count) =
@@ -313,10 +312,16 @@ pub fn analyze_utxo(
           tv + value,
           add_to_value_bucket(vd, value),
           add_to_age_bucket(ad, age),
-          case coin.is_coinbase { True -> cc + 1 False -> cc },
-          case value < 546 { True -> dc + 1 False -> dc },
+          case coin.is_coinbase {
+            True -> cc + 1
+            False -> cc
+          },
+          case value < 546 {
+            True -> dc + 1
+            False -> dc
+          },
         )
-      }
+      },
     )
 
   UtxoAnalysis(
@@ -338,8 +343,8 @@ fn value_distribution_new() -> ValueDistribution {
 fn add_to_value_bucket(dist: ValueDistribution, value: Int) -> ValueDistribution {
   case value {
     v if v < 1000 -> ValueDistribution(..dist, tiny: dist.tiny + 1)
-    v if v < 10000 -> ValueDistribution(..dist, small: dist.small + 1)
-    v if v < 100000 -> ValueDistribution(..dist, medium: dist.medium + 1)
+    v if v < 10_000 -> ValueDistribution(..dist, small: dist.small + 1)
+    v if v < 100_000 -> ValueDistribution(..dist, medium: dist.medium + 1)
     v if v < 100_000_000 -> ValueDistribution(..dist, large: dist.large + 1)
     _ -> ValueDistribution(..dist, huge: dist.huge + 1)
   }
@@ -353,8 +358,8 @@ fn add_to_age_bucket(dist: AgeDistribution, age: Int) -> AgeDistribution {
   case age {
     a if a < 100 -> AgeDistribution(..dist, very_new: dist.very_new + 1)
     a if a < 1000 -> AgeDistribution(..dist, new: dist.new + 1)
-    a if a < 10000 -> AgeDistribution(..dist, medium: dist.medium + 1)
-    a if a < 100000 -> AgeDistribution(..dist, old: dist.old + 1)
+    a if a < 10_000 -> AgeDistribution(..dist, medium: dist.medium + 1)
+    a if a < 100_000 -> AgeDistribution(..dist, old: dist.old + 1)
     _ -> AgeDistribution(..dist, ancient: dist.ancient + 1)
   }
 }
@@ -404,7 +409,8 @@ pub fn prune_blocks(
 ) -> PruneResult {
   PruneResult(
     blocks_pruned: list.length(targets),
-    bytes_freed: list.length(targets) * 1_000_000,  // Estimate 1MB per block
+    bytes_freed: list.length(targets) * 1_000_000,
+    // Estimate 1MB per block
     lowest_retained_height: current_height - keep_blocks,
     duration_ms: 0,
   )
@@ -437,10 +443,8 @@ pub fn verify_index(
   let total = list.length(entries)
 
   // Verify each entry
-  let #(valid_entries, error_count) = list.fold(
-    entries,
-    #([], 0),
-    fn(acc, pair) {
+  let #(valid_entries, error_count) =
+    list.fold(entries, #([], 0), fn(acc, pair) {
       let #(valid, errors) = acc
       let #(key, entry) = pair
 
@@ -449,13 +453,13 @@ pub fn verify_index(
         True -> #([#(key, entry), ..valid], errors)
         False -> {
           case fix_errors {
-            True -> #(valid, errors + 1)  // Skip invalid entry
+            True -> #(valid, errors + 1)
+            // Skip invalid entry
             False -> #([#(key, entry), ..valid], errors + 1)
           }
         }
       }
-    }
-  )
+    })
 
   let new_index = dict.from_list(valid_entries)
 
@@ -473,10 +477,7 @@ pub fn verify_index(
 /// Verify a single index entry
 fn verify_index_entry(entry: BlockIndexEntry) -> Bool {
   // Check basic validity
-  entry.height >= 0
-  && entry.num_tx > 0
-  && entry.timestamp > 0
-  && entry.bits > 0
+  entry.height >= 0 && entry.num_tx > 0 && entry.timestamp > 0 && entry.bits > 0
 }
 
 // ============================================================================
@@ -527,9 +528,11 @@ pub fn verify_integrity(
   let #(index_valid, index_issues) = verify_index_integrity(index, chain_height)
 
   // Check chainstate
-  let #(chainstate_valid, chain_issues) = verify_chainstate_integrity(index, chain_height)
+  let #(chainstate_valid, chain_issues) =
+    verify_chainstate_integrity(index, chain_height)
 
-  let all_issues = list.concat([issues, utxo_issues, index_issues, chain_issues])
+  let all_issues =
+    list.concat([issues, utxo_issues, index_issues, chain_issues])
 
   IntegrityResult(
     is_valid: utxo_valid && index_valid && chainstate_valid,
@@ -544,14 +547,15 @@ pub fn verify_integrity(
 /// Verify UTXO set integrity
 fn verify_utxo_integrity(utxo: UtxoView) -> #(Bool, List(IntegrityIssue)) {
   let coins = dict.to_list(utxo.coins)
-  let issues = list.filter_map(coins, fn(pair) {
-    let #(key, coin) = pair
-    // Verify each coin is valid
-    case coin.height >= 0 && oni_storage.coin_value(coin) >= 0 {
-      True -> Error(Nil)
-      False -> Ok(IssueInvalidCoin(key, "Invalid height or value"))
-    }
-  })
+  let issues =
+    list.filter_map(coins, fn(pair) {
+      let #(key, coin) = pair
+      // Verify each coin is valid
+      case coin.height >= 0 && oni_storage.coin_value(coin) >= 0 {
+        True -> Error(Nil)
+        False -> Ok(IssueInvalidCoin(key, "Invalid height or value"))
+      }
+    })
 
   #(list.is_empty(issues), issues)
 }
@@ -564,12 +568,13 @@ fn verify_index_integrity(
   let entries = dict.values(index)
 
   // Check for basic validity
-  let issues = list.filter_map(entries, fn(entry) {
-    case verify_index_entry(entry) {
-      True -> Error(Nil)
-      False -> Ok(IssueCorruptData("block:" <> int.to_string(entry.height)))
-    }
-  })
+  let issues =
+    list.filter_map(entries, fn(entry) {
+      case verify_index_entry(entry) {
+        True -> Error(Nil)
+        False -> Ok(IssueCorruptData("block:" <> int.to_string(entry.height)))
+      }
+    })
 
   #(list.is_empty(issues), issues)
 }
@@ -580,7 +585,8 @@ fn verify_chainstate_integrity(
   chain_height: Int,
 ) -> #(Bool, List(IntegrityIssue)) {
   // Check for gaps in the chain
-  let heights = dict.values(index)
+  let heights =
+    dict.values(index)
     |> list.map(fn(e) { e.height })
     |> list.sort(int.compare)
 
@@ -590,7 +596,11 @@ fn verify_chainstate_integrity(
 }
 
 /// Find gaps in the chain
-fn find_chain_gaps(heights: List(Int), expected: Int, max: Int) -> List(IntegrityIssue) {
+fn find_chain_gaps(
+  heights: List(Int),
+  expected: Int,
+  max: Int,
+) -> List(IntegrityIssue) {
   case heights {
     [] -> {
       case expected <= max {
@@ -646,10 +656,14 @@ pub fn calculate_space_usage(
   let index_count = dict.size(index)
 
   // Estimates based on typical sizes
-  let utxo_size = utxo_count * 50  // ~50 bytes per UTXO
-  let index_size = index_count * 200  // ~200 bytes per index entry
-  let block_size = index_count * 1_500_000  // ~1.5MB average block size
-  let undo_size = index_count * 10_000  // ~10KB per block for undo data
+  let utxo_size = utxo_count * 50
+  // ~50 bytes per UTXO
+  let index_size = index_count * 200
+  // ~200 bytes per index entry
+  let block_size = index_count * 1_500_000
+  // ~1.5MB average block size
+  let undo_size = index_count * 10_000
+  // ~10KB per block for undo data
 
   SpaceStats(
     utxo_size_bytes: utxo_size,
@@ -657,7 +671,8 @@ pub fn calculate_space_usage(
     index_size_bytes: index_size,
     undo_size_bytes: undo_size,
     total_used_bytes: utxo_size + block_size + index_size + undo_size,
-    reclaimable_bytes: 0,  // Would be calculated from fragmentation analysis
+    reclaimable_bytes: 0,
+    // Would be calculated from fragmentation analysis
   )
 }
 
@@ -702,11 +717,7 @@ pub type Scheduler {
 
 /// Create a new scheduler
 pub fn scheduler_new(config: MaintenanceConfig) -> Scheduler {
-  Scheduler(
-    tasks: default_schedule(),
-    current_task: None,
-    config: config,
-  )
+  Scheduler(tasks: default_schedule(), current_task: None, config: config)
 }
 
 /// Default maintenance schedule
@@ -716,7 +727,8 @@ fn default_schedule() -> List(ScheduledTask) {
     ScheduledTask(
       task: TaskVerifyIntegrity,
       scheduled_time: 0,
-      repeat_interval: 86400,  // 24 hours
+      repeat_interval: 86_400,
+      // 24 hours
       last_run: None,
       enabled: True,
     ),
@@ -724,7 +736,8 @@ fn default_schedule() -> List(ScheduledTask) {
     ScheduledTask(
       task: TaskFullMaintenance,
       scheduled_time: 0,
-      repeat_interval: 604800,  // 7 days
+      repeat_interval: 604_800,
+      // 7 days
       last_run: None,
       enabled: True,
     ),
@@ -732,7 +745,7 @@ fn default_schedule() -> List(ScheduledTask) {
     ScheduledTask(
       task: TaskExportStats,
       scheduled_time: 0,
-      repeat_interval: 86400,
+      repeat_interval: 86_400,
       last_run: None,
       enabled: True,
     ),
@@ -763,12 +776,13 @@ pub fn scheduler_task_completed(
   task: MaintenanceTask,
   current_time: Int,
 ) -> Scheduler {
-  let updated_tasks = list.map(scheduler.tasks, fn(t) {
-    case task_matches(t.task, task) {
-      True -> ScheduledTask(..t, last_run: Some(current_time))
-      False -> t
-    }
-  })
+  let updated_tasks =
+    list.map(scheduler.tasks, fn(t) {
+      case task_matches(t.task, task) {
+        True -> ScheduledTask(..t, last_run: Some(current_time))
+        False -> t
+      }
+    })
 
   Scheduler(..scheduler, tasks: updated_tasks, current_task: None)
 }

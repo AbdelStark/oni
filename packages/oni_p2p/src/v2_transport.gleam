@@ -106,10 +106,7 @@ pub type V2Session {
 
 /// V2 packet structure
 pub type V2Packet {
-  V2Packet(
-    packet_type: Int,
-    contents: BitArray,
-  )
+  V2Packet(packet_type: Int, contents: BitArray)
 }
 
 /// Short message type IDs (optimized encoding)
@@ -315,22 +312,24 @@ fn process_ellswift(
       case data {
         <<their_pubkey:bytes-size(64), rest:bits>> -> {
           // Derive shared secret and session keys
-          let shared_secret = ecdh_shared_secret(session.our_privkey, their_pubkey)
+          let shared_secret =
+            ecdh_shared_secret(session.our_privkey, their_pubkey)
 
           // Derive session keys using HKDF
           let #(send_key, recv_key, session_id, garbage_terminator) =
             derive_session_keys(shared_secret, session.is_initiator)
 
-          let new_session = V2Session(
-            ..session,
-            state: AwaitingGarbageTerminator,
-            their_pubkey: Some(their_pubkey),
-            send_key: Some(send_key),
-            recv_key: Some(recv_key),
-            session_id: Some(session_id),
-            send_garbage_terminator: garbage_terminator,
-            recv_buffer: rest,
-          )
+          let new_session =
+            V2Session(
+              ..session,
+              state: AwaitingGarbageTerminator,
+              their_pubkey: Some(their_pubkey),
+              send_key: Some(send_key),
+              recv_key: Some(recv_key),
+              session_id: Some(session_id),
+              send_garbage_terminator: garbage_terminator,
+              recv_buffer: rest,
+            )
 
           // Continue processing if we have more data
           case bit_array.byte_size(rest) > 0 {
@@ -357,7 +356,10 @@ fn process_garbage_terminator(
   case find_garbage_terminator(combined, session.recv_key) {
     None -> {
       // Not found yet, buffer data (up to max garbage size)
-      case bit_array.byte_size(combined) > max_garbage_size + garbage_terminator_size {
+      case
+        bit_array.byte_size(combined)
+        > max_garbage_size + garbage_terminator_size
+      {
         True -> Error(InvalidGarbage)
         False -> Ok(V2Session(..session, recv_buffer: combined))
       }
@@ -367,11 +369,8 @@ fn process_garbage_terminator(
       case verify_garbage_terminator(garbage, session.recv_key) {
         False -> Error(AuthenticationFailed)
         True -> {
-          let new_session = V2Session(
-            ..session,
-            state: AwaitingVersion,
-            recv_buffer: rest,
-          )
+          let new_session =
+            V2Session(..session, state: AwaitingVersion, recv_buffer: rest)
           // Continue to version processing
           case bit_array.byte_size(rest) > 0 {
             True -> process_version(new_session, rest)
@@ -394,7 +393,10 @@ fn process_version(
   case decrypt_packet(combined, session.recv_key, session.recv_counter) {
     Error(e) -> {
       // Not enough data yet
-      case bit_array.byte_size(combined) > max_contents_size + packet_header_size + aead_tag_size {
+      case
+        bit_array.byte_size(combined)
+        > max_contents_size + packet_header_size + aead_tag_size
+      {
         True -> Error(e)
         False -> Ok(V2Session(..session, recv_buffer: combined))
       }
@@ -405,12 +407,13 @@ fn process_version(
         False -> Error(UnsupportedVersion)
         True -> {
           // Parse version contents if needed
-          let new_session = V2Session(
-            ..session,
-            state: Established,
-            recv_counter: session.recv_counter + 1,
-            recv_buffer: rest,
-          )
+          let new_session =
+            V2Session(
+              ..session,
+              state: Established,
+              recv_counter: session.recv_counter + 1,
+              recv_buffer: rest,
+            )
           Ok(new_session)
         }
       }
@@ -450,10 +453,12 @@ fn do_encrypt_packet(
         False -> {
           // Encrypt length (3 bytes) with separate AEAD
           let len_plaintext = <<content_len:24-little>>
-          let len_ciphertext = aead_encrypt(key, session.send_counter, <<>>, len_plaintext)
+          let len_ciphertext =
+            aead_encrypt(key, session.send_counter, <<>>, len_plaintext)
 
           // Encrypt contents
-          let content_ciphertext = aead_encrypt(key, session.send_counter, <<>>, plaintext)
+          let content_ciphertext =
+            aead_encrypt(key, session.send_counter, <<>>, plaintext)
 
           // Combine
           let ciphertext = <<len_ciphertext:bits, content_ciphertext:bits>>
@@ -465,11 +470,12 @@ fn do_encrypt_packet(
             False -> #(key, new_counter)
           }
 
-          let new_session = V2Session(
-            ..session,
-            send_key: Some(new_key),
-            send_counter: final_counter,
-          )
+          let new_session =
+            V2Session(
+              ..session,
+              send_key: Some(new_key),
+              send_counter: final_counter,
+            )
 
           Ok(#(ciphertext, new_session))
         }
@@ -488,7 +494,9 @@ fn decrypt_packet(
     None -> Error(KeyDerivationFailed)
     Some(k) -> {
       // Need at least header (19 bytes) + content AEAD tag (16 bytes)
-      case bit_array.byte_size(ciphertext) >= packet_header_size + aead_tag_size {
+      case
+        bit_array.byte_size(ciphertext) >= packet_header_size + aead_tag_size
+      {
         False -> Error(InvalidPacketLength)
         True -> {
           // Decrypt length
@@ -559,12 +567,13 @@ pub fn recv_packet(
             False -> #(session.recv_key, new_counter)
           }
 
-          let new_session = V2Session(
-            ..session,
-            recv_key: new_key,
-            recv_counter: final_counter,
-            recv_buffer: rest,
-          )
+          let new_session =
+            V2Session(
+              ..session,
+              recv_key: new_key,
+              recv_counter: final_counter,
+              recv_buffer: rest,
+            )
           Ok(#(Some(packet), new_session))
         }
       }
@@ -650,7 +659,11 @@ fn find_garbage_terminator(
         False -> None
         True -> {
           // Try different garbage lengths
-          find_terminator_at_lengths(data, 0, data_len - garbage_terminator_size)
+          find_terminator_at_lengths(
+            data,
+            0,
+            data_len - garbage_terminator_size,
+          )
         }
       }
     }
@@ -689,11 +702,17 @@ fn verify_garbage_terminator(_garbage: BitArray, _key: Option(BitArray)) -> Bool
 }
 
 /// Perform AEAD encryption (ChaCha20-Poly1305)
-fn aead_encrypt(key: BitArray, counter: Int, aad: BitArray, plaintext: BitArray) -> BitArray {
+fn aead_encrypt(
+  key: BitArray,
+  counter: Int,
+  aad: BitArray,
+  plaintext: BitArray,
+) -> BitArray {
   // Placeholder - needs crypto implementation
   // In production: use ChaCha20-Poly1305
   let nonce = <<counter:96-little>>
-  let tag = sha256(<<key:bits, nonce:bits, aad:bits, plaintext:bits>>)
+  let tag =
+    sha256(<<key:bits, nonce:bits, aad:bits, plaintext:bits>>)
     |> bit_array.slice(0, 16)
     |> result.unwrap(<<0:128>>)
   <<plaintext:bits, tag:bits>>
@@ -823,6 +842,8 @@ pub fn create_app_packet(msg_id: ShortMessageId, payload: BitArray) -> V2Packet 
 }
 
 /// Get the message ID from a packet
-pub fn get_packet_message_id(packet: V2Packet) -> Result(ShortMessageId, V2Error) {
+pub fn get_packet_message_id(
+  packet: V2Packet,
+) -> Result(ShortMessageId, V2Error) {
   int_to_short_id(packet.packet_type)
 }

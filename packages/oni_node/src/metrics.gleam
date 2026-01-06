@@ -26,30 +26,17 @@ import gleam/string
 
 /// A Prometheus counter (monotonically increasing)
 pub type Counter {
-  Counter(
-    name: String,
-    help: String,
-    labels: Dict(String, String),
-    value: Int,
-  )
+  Counter(name: String, help: String, labels: Dict(String, String), value: Int)
 }
 
 /// A Prometheus gauge (can increase or decrease)
 pub type Gauge {
-  Gauge(
-    name: String,
-    help: String,
-    labels: Dict(String, String),
-    value: Float,
-  )
+  Gauge(name: String, help: String, labels: Dict(String, String), value: Float)
 }
 
 /// A Prometheus histogram bucket
 pub type HistogramBucket {
-  HistogramBucket(
-    upper_bound: Float,
-    count: Int,
-  )
+  HistogramBucket(upper_bound: Float, count: Int)
 }
 
 /// A Prometheus histogram
@@ -77,18 +64,12 @@ pub type Metric {
 
 /// Registry holding all metrics
 pub type MetricsRegistry {
-  MetricsRegistry(
-    metrics: Dict(String, Metric),
-    prefix: String,
-  )
+  MetricsRegistry(metrics: Dict(String, Metric), prefix: String)
 }
 
 /// Create a new metrics registry
 pub fn registry_new(prefix: String) -> MetricsRegistry {
-  MetricsRegistry(
-    metrics: dict.new(),
-    prefix: prefix,
-  )
+  MetricsRegistry(metrics: dict.new(), prefix: prefix)
 }
 
 /// Create default oni metrics registry
@@ -102,12 +83,7 @@ pub fn default_registry() -> MetricsRegistry {
 
 /// Create a new counter
 pub fn counter_new(name: String, help: String) -> Counter {
-  Counter(
-    name: name,
-    help: help,
-    labels: dict.new(),
-    value: 0,
-  )
+  Counter(name: name, help: help, labels: dict.new(), value: 0)
 }
 
 /// Create a counter with labels
@@ -116,12 +92,7 @@ pub fn counter_with_labels(
   help: String,
   labels: Dict(String, String),
 ) -> Counter {
-  Counter(
-    name: name,
-    help: help,
-    labels: labels,
-    value: 0,
-  )
+  Counter(name: name, help: help, labels: labels, value: 0)
 }
 
 /// Increment a counter by 1
@@ -133,7 +104,8 @@ pub fn counter_inc(counter: Counter) -> Counter {
 pub fn counter_add(counter: Counter, amount: Int) -> Counter {
   case amount > 0 {
     True -> Counter(..counter, value: counter.value + amount)
-    False -> counter  // Counters can only increase
+    False -> counter
+    // Counters can only increase
   }
 }
 
@@ -148,12 +120,7 @@ pub fn counter_value(counter: Counter) -> Int {
 
 /// Create a new gauge
 pub fn gauge_new(name: String, help: String) -> Gauge {
-  Gauge(
-    name: name,
-    help: help,
-    labels: dict.new(),
-    value: 0.0,
-  )
+  Gauge(name: name, help: help, labels: dict.new(), value: 0.0)
 }
 
 /// Create a gauge with labels
@@ -162,12 +129,7 @@ pub fn gauge_with_labels(
   help: String,
   labels: Dict(String, String),
 ) -> Gauge {
-  Gauge(
-    name: name,
-    help: help,
-    labels: labels,
-    value: 0.0,
-  )
+  Gauge(name: name, help: help, labels: labels, value: 0.0)
 }
 
 /// Set gauge value
@@ -215,9 +177,10 @@ pub fn histogram_with_buckets(
   help: String,
   bucket_bounds: List(Float),
 ) -> Histogram {
-  let buckets = list.map(bucket_bounds, fn(bound) {
-    HistogramBucket(upper_bound: bound, count: 0)
-  })
+  let buckets =
+    list.map(bucket_bounds, fn(bound) {
+      HistogramBucket(upper_bound: bound, count: 0)
+    })
 
   Histogram(
     name: name,
@@ -232,12 +195,13 @@ pub fn histogram_with_buckets(
 /// Observe a value in the histogram
 pub fn histogram_observe(histogram: Histogram, value: Float) -> Histogram {
   // Update buckets
-  let new_buckets = list.map(histogram.buckets, fn(bucket) {
-    case value <=. bucket.upper_bound {
-      True -> HistogramBucket(..bucket, count: bucket.count + 1)
-      False -> bucket
-    }
-  })
+  let new_buckets =
+    list.map(histogram.buckets, fn(bucket) {
+      case value <=. bucket.upper_bound {
+        True -> HistogramBucket(..bucket, count: bucket.count + 1)
+        False -> bucket
+      }
+    })
 
   Histogram(
     ..histogram,
@@ -347,7 +311,11 @@ pub fn update_histogram(
       let new_histogram = f(histogram)
       MetricsRegistry(
         ..registry,
-        metrics: dict.insert(registry.metrics, key, MetricHistogram(new_histogram)),
+        metrics: dict.insert(
+          registry.metrics,
+          key,
+          MetricHistogram(new_histogram),
+        ),
       )
     }
     _ -> registry
@@ -362,10 +330,11 @@ pub fn update_histogram(
 pub fn export_prometheus(registry: MetricsRegistry) -> String {
   let entries = dict.to_list(registry.metrics)
 
-  let lines = list.flat_map(entries, fn(entry) {
-    let #(key, metric) = entry
-    export_metric(key, metric)
-  })
+  let lines =
+    list.flat_map(entries, fn(entry) {
+      let #(key, metric) = entry
+      export_metric(key, metric)
+    })
 
   string.join(lines, "\n")
 }
@@ -383,7 +352,8 @@ fn export_metric(name: String, metric: Metric) -> List(String) {
 fn export_counter(name: String, counter: Counter) -> List(String) {
   let help_line = "# HELP " <> name <> " " <> counter.help
   let type_line = "# TYPE " <> name <> " counter"
-  let value_line = format_metric_line(name, counter.labels, int.to_string(counter.value))
+  let value_line =
+    format_metric_line(name, counter.labels, int.to_string(counter.value))
 
   [help_line, type_line, value_line]
 }
@@ -392,7 +362,8 @@ fn export_counter(name: String, counter: Counter) -> List(String) {
 fn export_gauge(name: String, gauge: Gauge) -> List(String) {
   let help_line = "# HELP " <> name <> " " <> gauge.help
   let type_line = "# TYPE " <> name <> " gauge"
-  let value_line = format_metric_line(name, gauge.labels, float.to_string(gauge.value))
+  let value_line =
+    format_metric_line(name, gauge.labels, float.to_string(gauge.value))
 
   [help_line, type_line, value_line]
 }
@@ -403,18 +374,35 @@ fn export_histogram(name: String, histogram: Histogram) -> List(String) {
   let type_line = "# TYPE " <> name <> " histogram"
 
   // Bucket lines
-  let bucket_lines = list.map(histogram.buckets, fn(bucket) {
-    let labels = dict.insert(histogram.labels, "le", float.to_string(bucket.upper_bound))
-    format_metric_line(name <> "_bucket", labels, int.to_string(bucket.count))
-  })
+  let bucket_lines =
+    list.map(histogram.buckets, fn(bucket) {
+      let labels =
+        dict.insert(histogram.labels, "le", float.to_string(bucket.upper_bound))
+      format_metric_line(name <> "_bucket", labels, int.to_string(bucket.count))
+    })
 
   // +Inf bucket (total count)
   let inf_labels = dict.insert(histogram.labels, "le", "+Inf")
-  let inf_line = format_metric_line(name <> "_bucket", inf_labels, int.to_string(histogram.count))
+  let inf_line =
+    format_metric_line(
+      name <> "_bucket",
+      inf_labels,
+      int.to_string(histogram.count),
+    )
 
   // Sum and count lines
-  let sum_line = format_metric_line(name <> "_sum", histogram.labels, float.to_string(histogram.sum))
-  let count_line = format_metric_line(name <> "_count", histogram.labels, int.to_string(histogram.count))
+  let sum_line =
+    format_metric_line(
+      name <> "_sum",
+      histogram.labels,
+      float.to_string(histogram.sum),
+    )
+  let count_line =
+    format_metric_line(
+      name <> "_count",
+      histogram.labels,
+      int.to_string(histogram.count),
+    )
 
   list.flatten([
     [help_line, type_line],
@@ -433,11 +421,12 @@ fn format_metric_line(
     True -> name <> " " <> value
     False -> {
       let label_pairs = dict.to_list(labels)
-      let label_str = list.map(label_pairs, fn(pair) {
-        let #(k, v) = pair
-        k <> "=\"" <> escape_label_value(v) <> "\""
-      })
-      |> string.join(",")
+      let label_str =
+        list.map(label_pairs, fn(pair) {
+          let #(k, v) = pair
+          k <> "=\"" <> escape_label_value(v) <> "\""
+        })
+        |> string.join(",")
 
       name <> "{" <> label_str <> "} " <> value
     }
@@ -465,19 +454,49 @@ pub fn standard_node_metrics() -> MetricsRegistry {
   |> register_gauge(gauge_new("difficulty", "Current mining difficulty"))
   |> register_gauge(gauge_new("chain_work", "Total accumulated proof of work"))
   // Mempool metrics
-  |> register_gauge(gauge_new("mempool_size", "Number of transactions in mempool"))
-  |> register_gauge(gauge_new("mempool_bytes", "Total size of transactions in mempool"))
+  |> register_gauge(gauge_new(
+    "mempool_size",
+    "Number of transactions in mempool",
+  ))
+  |> register_gauge(gauge_new(
+    "mempool_bytes",
+    "Total size of transactions in mempool",
+  ))
   |> register_gauge(gauge_new("mempool_usage", "Memory usage of mempool"))
-  |> register_counter(counter_new("mempool_accepted_total", "Total transactions accepted to mempool"))
-  |> register_counter(counter_new("mempool_rejected_total", "Total transactions rejected from mempool"))
+  |> register_counter(counter_new(
+    "mempool_accepted_total",
+    "Total transactions accepted to mempool",
+  ))
+  |> register_counter(counter_new(
+    "mempool_rejected_total",
+    "Total transactions rejected from mempool",
+  ))
   // Network metrics
   |> register_gauge(gauge_new("peers_connected", "Number of connected peers"))
-  |> register_gauge(gauge_new("peers_inbound", "Number of inbound peer connections"))
-  |> register_gauge(gauge_new("peers_outbound", "Number of outbound peer connections"))
-  |> register_counter(counter_new("bytes_sent_total", "Total bytes sent to peers"))
-  |> register_counter(counter_new("bytes_received_total", "Total bytes received from peers"))
-  |> register_counter(counter_new("messages_sent_total", "Total P2P messages sent"))
-  |> register_counter(counter_new("messages_received_total", "Total P2P messages received"))
+  |> register_gauge(gauge_new(
+    "peers_inbound",
+    "Number of inbound peer connections",
+  ))
+  |> register_gauge(gauge_new(
+    "peers_outbound",
+    "Number of outbound peer connections",
+  ))
+  |> register_counter(counter_new(
+    "bytes_sent_total",
+    "Total bytes sent to peers",
+  ))
+  |> register_counter(counter_new(
+    "bytes_received_total",
+    "Total bytes received from peers",
+  ))
+  |> register_counter(counter_new(
+    "messages_sent_total",
+    "Total P2P messages sent",
+  ))
+  |> register_counter(counter_new(
+    "messages_received_total",
+    "Total P2P messages received",
+  ))
   // Sync metrics
   |> register_gauge(gauge_new("headers_height", "Height of headers chain"))
   |> register_gauge(gauge_new("sync_progress", "IBD sync progress (0.0-1.0)"))
@@ -485,12 +504,27 @@ pub fn standard_node_metrics() -> MetricsRegistry {
   // RPC metrics
   |> register_counter(counter_new("rpc_requests_total", "Total RPC requests"))
   |> register_counter(counter_new("rpc_errors_total", "Total RPC errors"))
-  |> register_histogram(histogram_new("rpc_request_duration_seconds", "RPC request latency"))
+  |> register_histogram(histogram_new(
+    "rpc_request_duration_seconds",
+    "RPC request latency",
+  ))
   // Validation metrics
-  |> register_counter(counter_new("blocks_validated_total", "Total blocks validated"))
-  |> register_counter(counter_new("transactions_validated_total", "Total transactions validated"))
-  |> register_histogram(histogram_new("block_validation_duration_seconds", "Block validation latency"))
-  |> register_histogram(histogram_new("tx_validation_duration_seconds", "Transaction validation latency"))
+  |> register_counter(counter_new(
+    "blocks_validated_total",
+    "Total blocks validated",
+  ))
+  |> register_counter(counter_new(
+    "transactions_validated_total",
+    "Total transactions validated",
+  ))
+  |> register_histogram(histogram_new(
+    "block_validation_duration_seconds",
+    "Block validation latency",
+  ))
+  |> register_histogram(histogram_new(
+    "tx_validation_duration_seconds",
+    "Transaction validation latency",
+  ))
   // Cache metrics
   |> register_gauge(gauge_new("sig_cache_size", "Size of signature cache"))
   |> register_gauge(gauge_new("sig_cache_hit_rate", "Signature cache hit rate"))
@@ -499,7 +533,10 @@ pub fn standard_node_metrics() -> MetricsRegistry {
   // Process metrics
   |> register_gauge(gauge_new("uptime_seconds", "Node uptime in seconds"))
   |> register_gauge(gauge_new("process_memory_bytes", "Memory usage in bytes"))
-  |> register_gauge(gauge_new("process_open_fds", "Number of open file descriptors"))
+  |> register_gauge(gauge_new(
+    "process_open_fds",
+    "Number of open file descriptors",
+  ))
 }
 
 // ============================================================================
@@ -537,13 +574,28 @@ pub fn empty_snapshot() -> MetricsSnapshot {
 /// Format snapshot as JSON-like string
 pub fn snapshot_to_json(snapshot: MetricsSnapshot) -> String {
   "{"
-  <> "\"block_height\":" <> int.to_string(snapshot.block_height) <> ","
-  <> "\"mempool_size\":" <> int.to_string(snapshot.mempool_size) <> ","
-  <> "\"peers_connected\":" <> int.to_string(snapshot.peers_connected) <> ","
-  <> "\"sync_progress\":" <> float.to_string(snapshot.sync_progress) <> ","
-  <> "\"uptime_seconds\":" <> int.to_string(snapshot.uptime_seconds) <> ","
-  <> "\"rpc_requests\":" <> int.to_string(snapshot.rpc_requests) <> ","
-  <> "\"blocks_validated\":" <> int.to_string(snapshot.blocks_validated) <> ","
-  <> "\"sig_cache_hit_rate\":" <> float.to_string(snapshot.sig_cache_hit_rate)
+  <> "\"block_height\":"
+  <> int.to_string(snapshot.block_height)
+  <> ","
+  <> "\"mempool_size\":"
+  <> int.to_string(snapshot.mempool_size)
+  <> ","
+  <> "\"peers_connected\":"
+  <> int.to_string(snapshot.peers_connected)
+  <> ","
+  <> "\"sync_progress\":"
+  <> float.to_string(snapshot.sync_progress)
+  <> ","
+  <> "\"uptime_seconds\":"
+  <> int.to_string(snapshot.uptime_seconds)
+  <> ","
+  <> "\"rpc_requests\":"
+  <> int.to_string(snapshot.rpc_requests)
+  <> ","
+  <> "\"blocks_validated\":"
+  <> int.to_string(snapshot.blocks_validated)
+  <> ","
+  <> "\"sig_cache_hit_rate\":"
+  <> float.to_string(snapshot.sig_cache_hit_rate)
   <> "}"
 }

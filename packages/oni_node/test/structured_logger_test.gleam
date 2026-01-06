@@ -56,7 +56,10 @@ pub fn parse_level_test() {
 }
 
 pub fn level_gte_test() {
-  structured_logger.level_gte(structured_logger.ErrorLevel, structured_logger.Trace)
+  structured_logger.level_gte(
+    structured_logger.ErrorLevel,
+    structured_logger.Trace,
+  )
   |> should.be_true
 
   structured_logger.level_gte(structured_logger.Info, structured_logger.Debug)
@@ -70,7 +73,11 @@ pub fn level_gte_test() {
 }
 
 pub fn new_logger_test() {
-  let log = structured_logger.new_logger(structured_logger.Info, structured_logger.TextFormat)
+  let log =
+    structured_logger.new_logger(
+      structured_logger.Info,
+      structured_logger.TextFormat,
+    )
 
   log.config.min_level
   |> should.equal(structured_logger.Info)
@@ -80,7 +87,11 @@ pub fn new_logger_test() {
 }
 
 pub fn new_logger_json_test() {
-  let log = structured_logger.new_logger(structured_logger.Debug, structured_logger.JsonFormat)
+  let log =
+    structured_logger.new_logger(
+      structured_logger.Debug,
+      structured_logger.JsonFormat,
+    )
 
   log.config.format
   |> should.equal(structured_logger.JsonFormat)
@@ -120,7 +131,11 @@ pub fn debug_config_test() {
 }
 
 pub fn with_category_test() {
-  let log = structured_logger.new_logger(structured_logger.Info, structured_logger.TextFormat)
+  let log =
+    structured_logger.new_logger(
+      structured_logger.Info,
+      structured_logger.TextFormat,
+    )
     |> structured_logger.with_category("net")
 
   log.category
@@ -128,7 +143,11 @@ pub fn with_category_test() {
 }
 
 pub fn with_field_test() {
-  let log = structured_logger.new_logger(structured_logger.Info, structured_logger.TextFormat)
+  let log =
+    structured_logger.new_logger(
+      structured_logger.Info,
+      structured_logger.TextFormat,
+    )
     |> structured_logger.with_field("txid", "abc123")
 
   case dict.get(log.fields, "txid") {
@@ -141,7 +160,11 @@ pub fn with_field_test() {
 }
 
 pub fn with_int_test() {
-  let log = structured_logger.new_logger(structured_logger.Info, structured_logger.TextFormat)
+  let log =
+    structured_logger.new_logger(
+      structured_logger.Info,
+      structured_logger.TextFormat,
+    )
     |> structured_logger.with_int("height", 100)
 
   case dict.get(log.fields, "height") {
@@ -154,7 +177,11 @@ pub fn with_int_test() {
 }
 
 pub fn with_float_test() {
-  let log = structured_logger.new_logger(structured_logger.Info, structured_logger.TextFormat)
+  let log =
+    structured_logger.new_logger(
+      structured_logger.Info,
+      structured_logger.TextFormat,
+    )
     |> structured_logger.with_float("difficulty", 1.5)
 
   case dict.get(log.fields, "difficulty") {
@@ -167,7 +194,11 @@ pub fn with_float_test() {
 }
 
 pub fn with_bool_test() {
-  let log = structured_logger.new_logger(structured_logger.Info, structured_logger.TextFormat)
+  let log =
+    structured_logger.new_logger(
+      structured_logger.Info,
+      structured_logger.TextFormat,
+    )
     |> structured_logger.with_bool("success", True)
 
   case dict.get(log.fields, "success") {
@@ -185,7 +216,11 @@ pub fn with_fields_test() {
     #("field2", structured_logger.IntValue(42)),
   ]
 
-  let log = structured_logger.new_logger(structured_logger.Info, structured_logger.TextFormat)
+  let log =
+    structured_logger.new_logger(
+      structured_logger.Info,
+      structured_logger.TextFormat,
+    )
     |> structured_logger.with_fields(fields)
 
   dict.size(log.fields)
@@ -193,7 +228,11 @@ pub fn with_fields_test() {
 }
 
 pub fn category_logger_test() {
-  let base = structured_logger.new_logger(structured_logger.Info, structured_logger.TextFormat)
+  let base =
+    structured_logger.new_logger(
+      structured_logger.Info,
+      structured_logger.TextFormat,
+    )
   let net_log = structured_logger.category_logger(base, "network")
 
   net_log.category
@@ -201,7 +240,11 @@ pub fn category_logger_test() {
 }
 
 pub fn net_logger_test() {
-  let base = structured_logger.new_logger(structured_logger.Info, structured_logger.TextFormat)
+  let base =
+    structured_logger.new_logger(
+      structured_logger.Info,
+      structured_logger.TextFormat,
+    )
   let log = structured_logger.net_logger(base)
 
   log.category
@@ -209,7 +252,11 @@ pub fn net_logger_test() {
 }
 
 pub fn mempool_logger_test() {
-  let base = structured_logger.new_logger(structured_logger.Info, structured_logger.TextFormat)
+  let base =
+    structured_logger.new_logger(
+      structured_logger.Info,
+      structured_logger.TextFormat,
+    )
   let log = structured_logger.mempool_logger(base)
 
   log.category
@@ -217,7 +264,11 @@ pub fn mempool_logger_test() {
 }
 
 pub fn validation_logger_test() {
-  let base = structured_logger.new_logger(structured_logger.Info, structured_logger.TextFormat)
+  let base =
+    structured_logger.new_logger(
+      structured_logger.Info,
+      structured_logger.TextFormat,
+    )
   let log = structured_logger.validation_logger(base)
 
   log.category
@@ -225,7 +276,11 @@ pub fn validation_logger_test() {
 }
 
 pub fn rpc_logger_test() {
-  let base = structured_logger.new_logger(structured_logger.Info, structured_logger.TextFormat)
+  let base =
+    structured_logger.new_logger(
+      structured_logger.Info,
+      structured_logger.TextFormat,
+    )
   let log = structured_logger.rpc_logger(base)
 
   log.category
@@ -233,7 +288,11 @@ pub fn rpc_logger_test() {
 }
 
 pub fn sync_logger_test() {
-  let base = structured_logger.new_logger(structured_logger.Info, structured_logger.TextFormat)
+  let base =
+    structured_logger.new_logger(
+      structured_logger.Info,
+      structured_logger.TextFormat,
+    )
   let log = structured_logger.sync_logger(base)
 
   log.category
@@ -241,7 +300,11 @@ pub fn sync_logger_test() {
 }
 
 pub fn storage_logger_test() {
-  let base = structured_logger.new_logger(structured_logger.Info, structured_logger.TextFormat)
+  let base =
+    structured_logger.new_logger(
+      structured_logger.Info,
+      structured_logger.TextFormat,
+    )
   let log = structured_logger.storage_logger(base)
 
   log.category
@@ -277,7 +340,11 @@ pub fn bool_field_test() {
 }
 
 pub fn chained_context_test() {
-  let log = structured_logger.new_logger(structured_logger.Info, structured_logger.TextFormat)
+  let log =
+    structured_logger.new_logger(
+      structured_logger.Info,
+      structured_logger.TextFormat,
+    )
     |> structured_logger.with_category("net")
     |> structured_logger.with_field("peer_id", "123")
     |> structured_logger.with_int("port", 8333)

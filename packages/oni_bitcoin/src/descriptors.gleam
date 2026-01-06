@@ -109,10 +109,7 @@ pub type TapTree {
 
 /// A taproot leaf script
 pub type TapScript {
-  TapScript(
-    version: Int,
-    script: Descriptor,
-  )
+  TapScript(version: Int, script: Descriptor)
 }
 
 /// Checksum for descriptor
@@ -322,7 +319,9 @@ fn parse_combo(s: String) -> Result(Descriptor, DescriptorError) {
   }
 }
 
-fn parse_key_list(strs: List(String)) -> Result(List(DescriptorKey), DescriptorError) {
+fn parse_key_list(
+  strs: List(String),
+) -> Result(List(DescriptorKey), DescriptorError) {
   list.try_map(strs, fn(s) { parse_key(string.trim(s)) })
 }
 
@@ -348,10 +347,12 @@ pub fn parse_key(s: String) -> Result(DescriptorKey, DescriptorError) {
     "tprv" <> _ -> parse_extended_key(trimmed, True)
     _ -> {
       // Check for WIF
-      case string.starts_with(trimmed, "5") ||
-           string.starts_with(trimmed, "K") ||
-           string.starts_with(trimmed, "L") ||
-           string.starts_with(trimmed, "c") {
+      case
+        string.starts_with(trimmed, "5")
+        || string.starts_with(trimmed, "K")
+        || string.starts_with(trimmed, "L")
+        || string.starts_with(trimmed, "c")
+      {
         True -> Ok(WifKey(trimmed))
         False -> {
           // Try as raw hex pubkey
@@ -372,7 +373,10 @@ pub fn parse_key(s: String) -> Result(DescriptorKey, DescriptorError) {
   }
 }
 
-fn parse_extended_key(s: String, is_private: Bool) -> Result(DescriptorKey, DescriptorError) {
+fn parse_extended_key(
+  s: String,
+  is_private: Bool,
+) -> Result(DescriptorKey, DescriptorError) {
   // Parse: [fingerprint/path]xpub.../derivation/*
   case string.split_once(s, "[") {
     Error(_) -> {
@@ -403,16 +407,16 @@ fn parse_key_with_derivation(
     [key_part, ..derivation_parts] -> {
       let #(derivation, wildcard) = parse_derivation_path(derivation_parts)
       case is_private {
-        True ->
-          Ok(ExtendedPrivKey(key_part, fingerprint, derivation, wildcard))
-        False ->
-          Ok(ExtendedPubKey(key_part, fingerprint, derivation, wildcard))
+        True -> Ok(ExtendedPrivKey(key_part, fingerprint, derivation, wildcard))
+        False -> Ok(ExtendedPubKey(key_part, fingerprint, derivation, wildcard))
       }
     }
   }
 }
 
-fn parse_derivation_path(parts: List(String)) -> #(List(DerivationStep), Option(Wildcard)) {
+fn parse_derivation_path(
+  parts: List(String),
+) -> #(List(DerivationStep), Option(Wildcard)) {
   parse_derivation_steps(parts, [], None)
 }
 
@@ -431,17 +435,21 @@ fn parse_derivation_steps(
         "*h" -> parse_derivation_steps(rest, acc, Some(HardenedWildcard))
         _ -> {
           // Check for hardened
-          case string.ends_with(trimmed, "'") || string.ends_with(trimmed, "h") {
+          case
+            string.ends_with(trimmed, "'") || string.ends_with(trimmed, "h")
+          {
             True -> {
               let num_str = string.drop_right(trimmed, 1)
               case int.parse(num_str) {
-                Ok(n) -> parse_derivation_steps(rest, [Hardened(n), ..acc], wildcard)
+                Ok(n) ->
+                  parse_derivation_steps(rest, [Hardened(n), ..acc], wildcard)
                 Error(_) -> parse_derivation_steps(rest, acc, wildcard)
               }
             }
             False -> {
               case int.parse(trimmed) {
-                Ok(n) -> parse_derivation_steps(rest, [Normal(n), ..acc], wildcard)
+                Ok(n) ->
+                  parse_derivation_steps(rest, [Normal(n), ..acc], wildcard)
                 Error(_) -> parse_derivation_steps(rest, acc, wildcard)
               }
             }
@@ -503,7 +511,11 @@ fn to_string_inner(descriptor: Descriptor) -> String {
     MultiDescriptor(threshold, keys) ->
       "multi(" <> int.to_string(threshold) <> "," <> keys_to_string(keys) <> ")"
     SortedMultiDescriptor(threshold, keys) ->
-      "sortedmulti(" <> int.to_string(threshold) <> "," <> keys_to_string(keys) <> ")"
+      "sortedmulti("
+      <> int.to_string(threshold)
+      <> ","
+      <> keys_to_string(keys)
+      <> ")"
     AddrDescriptor(addr) -> "addr(" <> addr <> ")"
     RawDescriptor(script) -> "raw(" <> hex_encode(script) <> ")"
     ComboDescriptor(key) -> "combo(" <> key_to_string(key) <> ")"
@@ -594,8 +606,14 @@ pub fn compute_checksum(descriptor: String) -> String {
 fn bytes_to_checksum(bytes: BitArray) -> String {
   case bytes {
     <<a:5, b:5, c:5, d:5, e:5, f:5, g:5, h:5, _:bits>> ->
-      char_at(a) <> char_at(b) <> char_at(c) <> char_at(d) <>
-      char_at(e) <> char_at(f) <> char_at(g) <> char_at(h)
+      char_at(a)
+      <> char_at(b)
+      <> char_at(c)
+      <> char_at(d)
+      <> char_at(e)
+      <> char_at(f)
+      <> char_at(g)
+      <> char_at(h)
     _ -> "00000000"
   }
 }
@@ -651,7 +669,10 @@ pub fn derive_script(
   }
 }
 
-fn derive_pubkey(key: DescriptorKey, _index: Int) -> Result(BitArray, DescriptorError) {
+fn derive_pubkey(
+  key: DescriptorKey,
+  _index: Int,
+) -> Result(BitArray, DescriptorError) {
   case key {
     RawPubKey(bytes, _) -> Ok(bytes)
     ExtendedPubKey(_, _, _, _) -> {
@@ -773,7 +794,11 @@ fn encode_p2sh_address(script_hash: BitArray, network: Network) -> String {
   base58check_encode(<<version:8, script_hash:bits>>)
 }
 
-fn encode_bech32_address(data: BitArray, witness_version: Int, network: Network) -> String {
+fn encode_bech32_address(
+  data: BitArray,
+  witness_version: Int,
+  network: Network,
+) -> String {
   let hrp = case network {
     Mainnet -> "bc"
     Testnet -> "tb"
@@ -782,7 +807,11 @@ fn encode_bech32_address(data: BitArray, witness_version: Int, network: Network)
   bech32_encode(hrp, witness_version, data)
 }
 
-fn encode_bech32m_address(data: BitArray, witness_version: Int, network: Network) -> String {
+fn encode_bech32m_address(
+  data: BitArray,
+  witness_version: Int,
+  network: Network,
+) -> String {
   let hrp = case network {
     Mainnet -> "bc"
     Testnet -> "tb"

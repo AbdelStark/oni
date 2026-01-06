@@ -8,26 +8,26 @@
 // - oni_p2p: networking
 // - oni_rpc: operator interface
 
+import event_router.{type RouterMsg}
 import gleam/erlang/process.{type Subject}
 import gleam/int
 import gleam/io
 import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
 import gleam/result
-import event_router.{type RouterMsg}
 import http_server.{type ServerMsg}
 import node_rpc.{type RpcNodeHandles}
 import oni_bitcoin
 import oni_consensus
 import oni_p2p
 import oni_rpc
+import oni_supervisor.{
+  type ChainstateMsg, type MempoolMsg, type SyncMsg, GetHeight, GetStatus,
+  GetTip,
+}
 import p2p_network.{type ListenerMsg, type PeerEvent}
 import rpc_http
 import rpc_service
-import oni_supervisor.{
-  type ChainstateMsg, type MempoolMsg, type SyncMsg,
-  GetHeight, GetStatus, GetTip,
-}
 
 // ============================================================================
 // Configuration
@@ -76,9 +76,9 @@ pub fn regtest_config() -> NodeConfig {
   NodeConfig(
     network: oni_bitcoin.Regtest,
     data_dir: "~/.oni/regtest",
-    rpc_port: 18443,
+    rpc_port: 18_443,
     rpc_bind: "127.0.0.1",
-    p2p_port: 18444,
+    p2p_port: 18_444,
     p2p_bind: "127.0.0.1",
     max_inbound: 8,
     max_outbound: 4,
@@ -95,9 +95,9 @@ pub fn testnet_config() -> NodeConfig {
   NodeConfig(
     network: oni_bitcoin.Testnet,
     data_dir: "~/.oni/testnet3",
-    rpc_port: 18332,
+    rpc_port: 18_332,
     rpc_bind: "127.0.0.1",
-    p2p_port: 18333,
+    p2p_port: 18_333,
     p2p_bind: "0.0.0.0",
     max_inbound: 117,
     max_outbound: 11,
@@ -157,7 +157,7 @@ pub fn start_with_config(config: NodeConfig) -> Result(NodeState, String) {
   let chainstate_result = oni_supervisor.start_chainstate(config.network)
   use chainstate <- result.try(
     chainstate_result
-    |> result.map_error(fn(_) { "Failed to start chainstate" })
+    |> result.map_error(fn(_) { "Failed to start chainstate" }),
   )
   io.println("  ✓ Chainstate started")
 
@@ -165,7 +165,7 @@ pub fn start_with_config(config: NodeConfig) -> Result(NodeState, String) {
   let mempool_result = oni_supervisor.start_mempool(config.mempool_max_size)
   use mempool <- result.try(
     mempool_result
-    |> result.map_error(fn(_) { "Failed to start mempool" })
+    |> result.map_error(fn(_) { "Failed to start mempool" }),
   )
   io.println("  ✓ Mempool started")
 
@@ -173,23 +173,29 @@ pub fn start_with_config(config: NodeConfig) -> Result(NodeState, String) {
   let sync_result = oni_supervisor.start_sync()
   use sync <- result.try(
     sync_result
-    |> result.map_error(fn(_) { "Failed to start sync coordinator" })
+    |> result.map_error(fn(_) { "Failed to start sync coordinator" }),
   )
   io.println("  ✓ Sync coordinator started")
 
   // Create node handles for RPC adapters
-  let node_handles = oni_supervisor.NodeHandles(
-    chainstate: chainstate,
-    mempool: mempool,
-    sync: sync,
-  )
+  let node_handles =
+    oni_supervisor.NodeHandles(
+      chainstate: chainstate,
+      mempool: mempool,
+      sync: sync,
+    )
 
   // Start RPC adapters and server if enabled
   let #(rpc_handles, rpc_server) = case config.enable_rpc {
     True -> {
       case start_rpc_server(config, node_handles) {
         Ok(#(handles, server)) -> {
-          io.println("  ✓ RPC server started on " <> config.rpc_bind <> ":" <> int.to_string(config.rpc_port))
+          io.println(
+            "  ✓ RPC server started on "
+            <> config.rpc_bind
+            <> ":"
+            <> int.to_string(config.rpc_port),
+          )
           #(Some(handles), Some(server))
         }
         Error(err) -> {
@@ -207,7 +213,12 @@ pub fn start_with_config(config: NodeConfig) -> Result(NodeState, String) {
       case start_p2p_with_router(config, chainstate, mempool, sync) {
         Ok(#(router, listener)) -> {
           io.println("  ✓ Event router started")
-          io.println("  ✓ P2P listener started on " <> config.p2p_bind <> ":" <> int.to_string(config.p2p_port))
+          io.println(
+            "  ✓ P2P listener started on "
+            <> config.p2p_bind
+            <> ":"
+            <> int.to_string(config.p2p_port),
+          )
           #(Some(router), Some(listener))
         }
         Error(err) -> {
@@ -241,44 +252,48 @@ fn start_rpc_server(
   // Create RPC adapter handles
   use rpc_handles <- result.try(
     node_rpc.create_rpc_handles(handles)
-    |> result.map_error(fn(_) { "Failed to create RPC adapters" })
+    |> result.map_error(fn(_) { "Failed to create RPC adapters" }),
   )
 
   // Create RPC config
-  let rpc_config = oni_rpc.RpcConfig(
-    bind_addr: config.rpc_bind,
-    port: config.rpc_port,
-    username: option.unwrap(config.rpc_user, ""),
-    password: option.unwrap(config.rpc_password, ""),
-    allow_anonymous: option.is_none(config.rpc_user),
-    enabled_methods: [],
-    rate_limit_enabled: False,
-  )
+  let rpc_config =
+    oni_rpc.RpcConfig(
+      bind_addr: config.rpc_bind,
+      port: config.rpc_port,
+      username: option.unwrap(config.rpc_user, ""),
+      password: option.unwrap(config.rpc_password, ""),
+      allow_anonymous: option.is_none(config.rpc_user),
+      enabled_methods: [],
+      rate_limit_enabled: False,
+    )
 
   // Create RPC service handles for stateful handlers
-  let rpc_service_handles = rpc_service.NodeHandles(
-    chainstate: rpc_handles.chainstate,
-    mempool: rpc_handles.mempool,
-    sync: rpc_handles.sync,
-  )
+  let rpc_service_handles =
+    rpc_service.NodeHandles(
+      chainstate: rpc_handles.chainstate,
+      mempool: rpc_handles.mempool,
+      sync: rpc_handles.sync,
+    )
 
   // Create RPC service state (contains the RpcServer with handlers)
-  let rpc_service_state = rpc_service.new_with_handles(rpc_config, rpc_service_handles)
+  let rpc_service_state =
+    rpc_service.new_with_handles(rpc_config, rpc_service_handles)
 
   // Configure HTTP server
-  let http_config = http_server.HttpServerConfig(
-    port: config.rpc_port,
-    bind_address: config.rpc_bind,
-    max_connections: 100,
-    connection_timeout_ms: 30_000,
-    request_timeout_ms: 60_000,
-    rpc_config: rpc_http.default_handler_config(),
-  )
+  let http_config =
+    http_server.HttpServerConfig(
+      port: config.rpc_port,
+      bind_address: config.rpc_bind,
+      max_connections: 100,
+      connection_timeout_ms: 30_000,
+      request_timeout_ms: 60_000,
+      rpc_config: rpc_http.default_handler_config(),
+    )
 
   // Start HTTP server with the RpcServer from service state
   use server <- result.try(
     http_server.start(http_config, rpc_service_state.server)
-    |> result.map_error(fn(_) { "Failed to start HTTP server" })
+    |> result.map_error(fn(_) { "Failed to start HTTP server" }),
   )
 
   // Server auto-starts accepting after creation
@@ -297,16 +312,17 @@ fn start_p2p_with_router(
   mempool: Subject(MempoolMsg),
   sync: Subject(SyncMsg),
 ) -> Result(#(Subject(RouterMsg), Subject(ListenerMsg)), String) {
-  let p2p_config = p2p_network.P2PConfig(
-    network: config.network,
-    listen_port: config.p2p_port,
-    bind_address: config.p2p_bind,
-    max_inbound: config.max_inbound,
-    max_outbound: config.max_outbound,
-    connect_timeout_ms: 5000,
-    services: oni_p2p.default_services(),
-    best_height: 0,
-  )
+  let p2p_config =
+    p2p_network.P2PConfig(
+      network: config.network,
+      listen_port: config.p2p_port,
+      bind_address: config.p2p_bind,
+      max_inbound: config.max_inbound,
+      max_outbound: config.max_outbound,
+      connect_timeout_ms: 5000,
+      services: oni_p2p.default_services(),
+      best_height: 0,
+    )
 
   // First start the P2P listener with a temporary handler
   // We need the listener subject to pass to the event router
@@ -314,19 +330,21 @@ fn start_p2p_with_router(
     Error(err) -> Error(err)
     Ok(#(listener, event_handler_subject)) -> {
       // Create router handles
-      let router_handles = event_router.RouterHandles(
-        chainstate: chainstate,
-        mempool: mempool,
-        sync: sync,
-        p2p: listener,
-      )
+      let router_handles =
+        event_router.RouterHandles(
+          chainstate: chainstate,
+          mempool: mempool,
+          sync: sync,
+          p2p: listener,
+        )
 
       // Start the event router
-      let router_config = event_router.RouterConfig(
-        max_pending_blocks: 16,
-        max_pending_txs: 100,
-        debug: False,
-      )
+      let router_config =
+        event_router.RouterConfig(
+          max_pending_blocks: 16,
+          max_pending_txs: 100,
+          debug: False,
+        )
 
       case event_router.start(router_config, router_handles) {
         Error(_) -> {
@@ -366,10 +384,12 @@ fn start_temp_listener(
   p2p_config: p2p_network.P2PConfig,
 ) -> Result(#(Subject(ListenerMsg), Subject(ForwardingHandlerMsg)), String) {
   // Start the forwarding handler actor
-  case actor.start(
-    ForwardingHandlerState(router: None, events_buffered: []),
-    handle_forwarding_msg,
-  ) {
+  case
+    actor.start(
+      ForwardingHandlerState(router: None, events_buffered: []),
+      handle_forwarding_msg,
+    )
+  {
     Error(_) -> Error("Failed to start event handler")
     Ok(handler) -> {
       // Create a subject that converts PeerEvents to ForwardingHandlerMsg
@@ -407,10 +427,9 @@ fn handle_forwarding_msg(
     SetRouterTarget(router) -> {
       // Flush any buffered events to the router
       flush_buffered_events(state.events_buffered, router)
-      actor.continue(ForwardingHandlerState(
-        router: Some(router),
-        events_buffered: [],
-      ))
+      actor.continue(
+        ForwardingHandlerState(router: Some(router), events_buffered: []),
+      )
     }
 
     ForwardEvent(event) -> {
@@ -422,10 +441,12 @@ fn handle_forwarding_msg(
         }
         None -> {
           // Buffer the event until router is set
-          actor.continue(ForwardingHandlerState(
-            ..state,
-            events_buffered: [event, ..state.events_buffered],
-          ))
+          actor.continue(
+            ForwardingHandlerState(..state, events_buffered: [
+              event,
+              ..state.events_buffered
+            ]),
+          )
         }
       }
     }
@@ -589,17 +610,34 @@ pub fn main() {
 
   // Display consensus constants
   io.println("Consensus Parameters:")
-  io.println("  Max Block Weight:     " <> int.to_string(oni_consensus.max_block_weight) <> " WU")
-  io.println("  Max Script Size:      " <> int.to_string(oni_consensus.max_script_size) <> " bytes")
-  io.println("  Max Ops Per Script:   " <> int.to_string(oni_consensus.max_ops_per_script))
-  io.println("  Coinbase Maturity:    " <> int.to_string(oni_consensus.coinbase_maturity) <> " blocks")
+  io.println(
+    "  Max Block Weight:     "
+    <> int.to_string(oni_consensus.max_block_weight)
+    <> " WU",
+  )
+  io.println(
+    "  Max Script Size:      "
+    <> int.to_string(oni_consensus.max_script_size)
+    <> " bytes",
+  )
+  io.println(
+    "  Max Ops Per Script:   "
+    <> int.to_string(oni_consensus.max_ops_per_script),
+  )
+  io.println(
+    "  Coinbase Maturity:    "
+    <> int.to_string(oni_consensus.coinbase_maturity)
+    <> " blocks",
+  )
   io.println("")
 
   // Start the node
   case start_with_config(config) {
     Ok(node) -> {
       io.println("")
-      io.println("═══════════════════════════════════════════════════════════════")
+      io.println(
+        "═══════════════════════════════════════════════════════════════",
+      )
       io.println("Node is running!")
       io.println("")
 
@@ -620,14 +658,26 @@ pub fn main() {
       io.println("")
 
       io.println("RPC interface available at:")
-      io.println("  http://" <> config.rpc_bind <> ":" <> int.to_string(config.rpc_port) <> "/")
+      io.println(
+        "  http://"
+        <> config.rpc_bind
+        <> ":"
+        <> int.to_string(config.rpc_port)
+        <> "/",
+      )
       io.println("")
       io.println("Example commands:")
       io.println("  curl -X POST -H 'Content-Type: application/json' \\")
-      io.println("    -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getblockchaininfo\"}' \\")
-      io.println("    http://127.0.0.1:" <> int.to_string(config.rpc_port) <> "/")
+      io.println(
+        "    -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getblockchaininfo\"}' \\",
+      )
+      io.println(
+        "    http://127.0.0.1:" <> int.to_string(config.rpc_port) <> "/",
+      )
       io.println("")
-      io.println("═══════════════════════════════════════════════════════════════")
+      io.println(
+        "═══════════════════════════════════════════════════════════════",
+      )
       io.println("Press Ctrl+C to stop the node.")
       io.println("")
 
@@ -648,18 +698,46 @@ fn bool_to_string(b: Bool) -> String {
 }
 
 fn print_banner() {
-  io.println("╔═══════════════════════════════════════════════════════════════╗")
-  io.println("║                                                               ║")
-  io.println("║    ██████╗ ███╗   ██╗██╗                                      ║")
-  io.println("║   ██╔═══██╗████╗  ██║██║                                      ║")
-  io.println("║   ██║   ██║██╔██╗ ██║██║                                      ║")
-  io.println("║   ██║   ██║██║╚██╗██║██║                                      ║")
-  io.println("║   ╚██████╔╝██║ ╚████║██║                                      ║")
-  io.println("║    ╚═════╝ ╚═╝  ╚═══╝╚═╝                                      ║")
-  io.println("║                                                               ║")
-  io.println("║   A Bitcoin Full Node Implementation in Gleam                 ║")
-  io.println("║   Version: " <> version <> "                                              ║")
-  io.println("║                                                               ║")
-  io.println("╚═══════════════════════════════════════════════════════════════╝")
+  io.println(
+    "╔═══════════════════════════════════════════════════════════════╗",
+  )
+  io.println(
+    "║                                                               ║",
+  )
+  io.println(
+    "║    ██████╗ ███╗   ██╗██╗                                      ║",
+  )
+  io.println(
+    "║   ██╔═══██╗████╗  ██║██║                                      ║",
+  )
+  io.println(
+    "║   ██║   ██║██╔██╗ ██║██║                                      ║",
+  )
+  io.println(
+    "║   ██║   ██║██║╚██╗██║██║                                      ║",
+  )
+  io.println(
+    "║   ╚██████╔╝██║ ╚████║██║                                      ║",
+  )
+  io.println(
+    "║    ╚═════╝ ╚═╝  ╚═══╝╚═╝                                      ║",
+  )
+  io.println(
+    "║                                                               ║",
+  )
+  io.println(
+    "║   A Bitcoin Full Node Implementation in Gleam                 ║",
+  )
+  io.println(
+    "║   Version: "
+    <> version
+    <> "                                              ║",
+  )
+  io.println(
+    "║                                                               ║",
+  )
+  io.println(
+    "╚═══════════════════════════════════════════════════════════════╝",
+  )
   io.println("")
 }

@@ -98,11 +98,12 @@ fn handle_chainstate_query(
             }
             True -> {
               // Block connects to our tip, try to connect it
-              let connect_result = process.call(
-                state.target,
-                oni_supervisor.ConnectBlock(block, _),
-                60_000,
-              )
+              let connect_result =
+                process.call(
+                  state.target,
+                  oni_supervisor.ConnectBlock(block, _),
+                  60_000,
+                )
               case connect_result {
                 Ok(_) -> {
                   process.send(reply, SubmitBlockAccepted)
@@ -134,10 +135,7 @@ type MempoolAdapterState {
 pub fn start_mempool_adapter(
   mempool: Subject(oni_supervisor.MempoolMsg),
 ) -> Result(Subject(MempoolQuery), actor.StartError) {
-  actor.start(
-    MempoolAdapterState(target: mempool),
-    handle_mempool_query,
-  )
+  actor.start(MempoolAdapterState(target: mempool), handle_mempool_query)
 }
 
 fn handle_mempool_query(
@@ -160,11 +158,12 @@ fn handle_mempool_query(
     QueryBlockTemplate(reply) -> {
       // Get template data from supervisor mempool
       // Use default height=0 and bits (will be overridden by RPC handler)
-      let template_data = process.call(
-        state.target,
-        oni_supervisor.GetTemplateData(0, 0x1d00ffff, _),
-        30_000,
-      )
+      let template_data =
+        process.call(
+          state.target,
+          oni_supervisor.GetTemplateData(0, 0x1d00ffff, _),
+          30_000,
+        )
 
       // Convert to RPC template format
       let result = convert_template_data(template_data)
@@ -174,11 +173,8 @@ fn handle_mempool_query(
 
     SubmitTx(tx, reply) -> {
       // Forward to supervisor mempool's AddTx
-      let add_result = process.call(
-        state.target,
-        oni_supervisor.AddTx(tx, _),
-        30_000,
-      )
+      let add_result =
+        process.call(state.target, oni_supervisor.AddTx(tx, _), 30_000)
 
       // Convert result
       case add_result {
@@ -196,24 +192,26 @@ fn handle_mempool_query(
 
     TestMempoolAccept(_tx, _max_fee_rate, reply) -> {
       // Placeholder - return a basic acceptance result
-      let result = rpc_service.TestAcceptResult(
-        txid: "",
-        allowed: True,
-        vsize: 0,
-        fees: rpc_service.TestAcceptFees(base: 0, effective_feerate: 0.0, effective_includes: []),
-        reject_reason: None,
-      )
+      let result =
+        rpc_service.TestAcceptResult(
+          txid: "",
+          allowed: True,
+          vsize: 0,
+          fees: rpc_service.TestAcceptFees(
+            base: 0,
+            effective_feerate: 0.0,
+            effective_includes: [],
+          ),
+          reject_reason: None,
+        )
       process.send(reply, result)
       actor.continue(state)
     }
 
     EstimateSmartFee(_target_blocks, _mode, reply) -> {
       // Placeholder - return a basic fee estimate
-      let result = rpc_service.FeeEstimateResult(
-        feerate: 0.00001,
-        errors: [],
-        blocks: 1,
-      )
+      let result =
+        rpc_service.FeeEstimateResult(feerate: 0.00001, errors: [], blocks: 1)
       process.send(reply, result)
       actor.continue(state)
     }
@@ -221,18 +219,21 @@ fn handle_mempool_query(
 }
 
 /// Convert supervisor template data to RPC format
-fn convert_template_data(data: oni_supervisor.MempoolTemplateData) -> BlockTemplateData {
-  let txs = list.map(data.transactions, fn(tx) {
-    TemplateTxData(
-      data: tx.data_hex,
-      txid: tx.txid_hex,
-      hash: tx.hash_hex,
-      fee: tx.fee,
-      sigops: tx.sigops,
-      weight: tx.weight,
-      depends: tx.depends,
-    )
-  })
+fn convert_template_data(
+  data: oni_supervisor.MempoolTemplateData,
+) -> BlockTemplateData {
+  let txs =
+    list.map(data.transactions, fn(tx) {
+      TemplateTxData(
+        data: tx.data_hex,
+        txid: tx.txid_hex,
+        hash: tx.hash_hex,
+        fee: tx.fee,
+        sigops: tx.sigops,
+        weight: tx.weight,
+        depends: tx.depends,
+      )
+    })
 
   // Calculate subsidy for height 0 (will be adjusted in RPC)
   let subsidy = 5_000_000_000
@@ -243,7 +244,8 @@ fn convert_template_data(data: oni_supervisor.MempoolTemplateData) -> BlockTempl
     total_fees: data.total_fees,
     weight_used: data.weight_used,
     sigops_used: data.sigops_used,
-    height: 0,  // Will be set by RPC handler
+    height: 0,
+    // Will be set by RPC handler
     bits: 0x1d00ffff,
   )
 }
@@ -261,10 +263,7 @@ type SyncAdapterState {
 pub fn start_sync_adapter(
   sync: Subject(oni_supervisor.SyncMsg),
 ) -> Result(Subject(SyncQuery), actor.StartError) {
-  actor.start(
-    SyncAdapterState(target: sync),
-    handle_sync_query,
-  )
+  actor.start(SyncAdapterState(target: sync), handle_sync_query)
 }
 
 fn handle_sync_query(
@@ -275,12 +274,13 @@ fn handle_sync_query(
     QuerySyncState(reply) -> {
       let status = process.call(state.target, oni_supervisor.GetStatus, 5000)
       let is_syncing = status.state != "idle"
-      let result = SyncState(
-        state: status.state,
-        headers_height: status.headers_height,
-        blocks_height: status.blocks_height,
-        is_syncing: is_syncing,
-      )
+      let result =
+        SyncState(
+          state: status.state,
+          headers_height: status.headers_height,
+          blocks_height: status.blocks_height,
+          is_syncing: is_syncing,
+        )
       process.send(reply, result)
       actor.continue(state)
     }
@@ -348,11 +348,12 @@ pub fn start_node_with_rpc(
           case oni_supervisor.start_sync() {
             Error(_) -> Error("Failed to start sync")
             Ok(sync) -> {
-              let node_handles = oni_supervisor.NodeHandles(
-                chainstate: chainstate,
-                mempool: mempool,
-                sync: sync,
-              )
+              let node_handles =
+                oni_supervisor.NodeHandles(
+                  chainstate: chainstate,
+                  mempool: mempool,
+                  sync: sync,
+                )
 
               // Create RPC handles
               case create_rpc_handles(node_handles) {

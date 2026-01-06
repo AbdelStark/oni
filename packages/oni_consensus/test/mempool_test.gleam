@@ -1,8 +1,8 @@
+import gleam/option.{None, Some}
 import gleeunit
 import gleeunit/should
-import gleam/option.{None, Some}
-import oni_bitcoin
 import mempool
+import oni_bitcoin
 
 pub fn main() {
   gleeunit.main()
@@ -19,14 +19,12 @@ fn make_txid(n: Int) -> oni_bitcoin.Txid {
 }
 
 fn make_outpoint(n: Int, vout: Int) -> oni_bitcoin.OutPoint {
-  oni_bitcoin.OutPoint(
-    txid: make_txid(n),
-    vout: vout,
-  )
+  oni_bitcoin.OutPoint(txid: make_txid(n), vout: vout)
 }
 
 fn make_simple_tx(inputs: List(Int), outputs: Int) -> oni_bitcoin.Transaction {
-  let tx_inputs = inputs
+  let tx_inputs =
+    inputs
     |> list.map(fn(n) {
       oni_bitcoin.TxIn(
         prevout: make_outpoint(n, 0),
@@ -36,7 +34,8 @@ fn make_simple_tx(inputs: List(Int), outputs: Int) -> oni_bitcoin.Transaction {
       )
     })
 
-  let tx_outputs = list.range(0, outputs - 1)
+  let tx_outputs =
+    list.range(0, outputs - 1)
     |> list.map(fn(_) {
       oni_bitcoin.TxOut(
         value: oni_bitcoin.sats(1000),
@@ -205,7 +204,7 @@ pub fn entry_ancestor_score_test() {
   let txid = make_txid(1)
   let fee = oni_bitcoin.sats(1000)
 
-  let entry = mempool.entry_new(tx, txid, fee, 1000, 800000)
+  let entry = mempool.entry_new(tx, txid, fee, 1000, 800_000)
 
   // Should have non-zero score
   let score = mempool.entry_ancestor_score(entry)
@@ -220,7 +219,7 @@ pub fn entry_descendant_score_test() {
   let txid = make_txid(1)
   let fee = oni_bitcoin.sats(1000)
 
-  let entry = mempool.entry_new(tx, txid, fee, 1000, 800000)
+  let entry = mempool.entry_new(tx, txid, fee, 1000, 800_000)
 
   let score = mempool.entry_descendant_score(entry)
   case score >. 0.0 {

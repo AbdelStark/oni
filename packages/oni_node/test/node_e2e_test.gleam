@@ -9,14 +9,14 @@
 //
 // Tests use regtest network for fast execution
 
-import gleeunit
-import gleeunit/should
 import gleam/erlang/process
 import gleam/option.{None, Some}
+import gleeunit
+import gleeunit/should
 import oni_bitcoin
 import oni_node.{
-  type NodeConfig, NodeConfig, get_height, get_info, get_tip,
-  regtest_config, start_with_config, stop,
+  type NodeConfig, NodeConfig, get_height, get_info, get_tip, regtest_config,
+  start_with_config, stop,
 }
 import oni_supervisor
 
@@ -50,21 +50,24 @@ pub fn node_starts_with_regtest_config_test() {
 
 pub fn node_starts_with_custom_config_test() {
   // Create custom config
-  let config = NodeConfig(
-    network: oni_bitcoin.Regtest,
-    data_dir: "/tmp/oni_test",
-    rpc_port: 19999,
-    rpc_bind: "127.0.0.1",
-    p2p_port: 19998,
-    p2p_bind: "127.0.0.1",
-    max_inbound: 4,
-    max_outbound: 2,
-    mempool_max_size: 50_000_000,
-    rpc_user: None,
-    rpc_password: None,
-    enable_rpc: False,  // Disable RPC for simpler test
-    enable_p2p: False,  // Disable P2P for simpler test
-  )
+  let config =
+    NodeConfig(
+      network: oni_bitcoin.Regtest,
+      data_dir: "/tmp/oni_test",
+      rpc_port: 19_999,
+      rpc_bind: "127.0.0.1",
+      p2p_port: 19_998,
+      p2p_bind: "127.0.0.1",
+      max_inbound: 4,
+      max_outbound: 2,
+      mempool_max_size: 50_000_000,
+      rpc_user: None,
+      rpc_password: None,
+      enable_rpc: False,
+      // Disable RPC for simpler test
+      enable_p2p: False,
+      // Disable P2P for simpler test
+    )
 
   let result = start_with_config(config)
   should.be_ok(result)
@@ -72,7 +75,7 @@ pub fn node_starts_with_custom_config_test() {
   case result {
     Ok(node) -> {
       // Verify config was applied
-      should.equal(node.config.rpc_port, 19999)
+      should.equal(node.config.rpc_port, 19_999)
       should.equal(node.config.mempool_max_size, 50_000_000)
       stop(node)
     }
@@ -81,11 +84,8 @@ pub fn node_starts_with_custom_config_test() {
 }
 
 pub fn node_info_returns_correct_data_test() {
-  let config = NodeConfig(
-    ..regtest_config(),
-    enable_rpc: False,
-    enable_p2p: False,
-  )
+  let config =
+    NodeConfig(..regtest_config(), enable_rpc: False, enable_p2p: False)
 
   let assert Ok(node) = start_with_config(config)
 
@@ -106,11 +106,8 @@ pub fn node_info_returns_correct_data_test() {
 // ============================================================================
 
 pub fn chainstate_has_genesis_block_test() {
-  let config = NodeConfig(
-    ..regtest_config(),
-    enable_rpc: False,
-    enable_p2p: False,
-  )
+  let config =
+    NodeConfig(..regtest_config(), enable_rpc: False, enable_p2p: False)
 
   let assert Ok(node) = start_with_config(config)
 
@@ -122,7 +119,10 @@ pub fn chainstate_has_genesis_block_test() {
     Some(hash) -> {
       // Verify it's the regtest genesis hash
       let hex = oni_bitcoin.block_hash_to_hex(hash)
-      should.equal(hex, "0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206")
+      should.equal(
+        hex,
+        "0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206",
+      )
     }
     None -> should.fail()
   }
@@ -131,11 +131,8 @@ pub fn chainstate_has_genesis_block_test() {
 }
 
 pub fn chainstate_connect_block_test() {
-  let config = NodeConfig(
-    ..regtest_config(),
-    enable_rpc: False,
-    enable_p2p: False,
-  )
+  let config =
+    NodeConfig(..regtest_config(), enable_rpc: False, enable_p2p: False)
 
   let assert Ok(node) = start_with_config(config)
 
@@ -147,29 +144,25 @@ pub fn chainstate_connect_block_test() {
   // but we're testing the chainstate connection mechanics
 
   // Create a mock block header
-  let header = oni_bitcoin.BlockHeader(
-    version: 1,
-    prev_block: genesis_hash,
-    merkle_root: oni_bitcoin.Hash256(bytes: <<0:256>>),
-    timestamp: 1296688602,
-    bits: 0x207fffff,  // Regtest PoW limit
-    nonce: 0,
-  )
+  let header =
+    oni_bitcoin.BlockHeader(
+      version: 1,
+      prev_block: genesis_hash,
+      merkle_root: oni_bitcoin.Hash256(bytes: <<0:256>>),
+      timestamp: 1_296_688_602,
+      bits: 0x207fffff,
+      // Regtest PoW limit
+      nonce: 0,
+    )
 
   // Create a coinbase transaction
   let coinbase_tx = create_coinbase_tx(1)
 
-  let block = oni_bitcoin.Block(
-    header: header,
-    transactions: [coinbase_tx],
-  )
+  let block = oni_bitcoin.Block(header: header, transactions: [coinbase_tx])
 
   // Try to connect the block
-  let result = process.call(
-    node.chainstate,
-    oni_supervisor.ConnectBlock(block, _),
-    5000,
-  )
+  let result =
+    process.call(node.chainstate, oni_supervisor.ConnectBlock(block, _), 5000)
 
   // Block should connect (we're not doing full validation in this test)
   case result {
@@ -193,11 +186,8 @@ pub fn chainstate_connect_block_test() {
 // ============================================================================
 
 pub fn mempool_starts_empty_test() {
-  let config = NodeConfig(
-    ..regtest_config(),
-    enable_rpc: False,
-    enable_p2p: False,
-  )
+  let config =
+    NodeConfig(..regtest_config(), enable_rpc: False, enable_p2p: False)
 
   let assert Ok(node) = start_with_config(config)
 
@@ -209,28 +199,18 @@ pub fn mempool_starts_empty_test() {
 }
 
 pub fn mempool_rejects_empty_tx_test() {
-  let config = NodeConfig(
-    ..regtest_config(),
-    enable_rpc: False,
-    enable_p2p: False,
-  )
+  let config =
+    NodeConfig(..regtest_config(), enable_rpc: False, enable_p2p: False)
 
   let assert Ok(node) = start_with_config(config)
 
   // Create an empty transaction (invalid)
-  let empty_tx = oni_bitcoin.Transaction(
-    version: 1,
-    inputs: [],
-    outputs: [],
-    lock_time: 0,
-  )
+  let empty_tx =
+    oni_bitcoin.Transaction(version: 1, inputs: [], outputs: [], lock_time: 0)
 
   // Try to add it
-  let result = process.call(
-    node.mempool,
-    oni_supervisor.AddTx(empty_tx, _),
-    5000,
-  )
+  let result =
+    process.call(node.mempool, oni_supervisor.AddTx(empty_tx, _), 5000)
 
   // Should be rejected
   should.be_error(result)
@@ -239,11 +219,8 @@ pub fn mempool_rejects_empty_tx_test() {
 }
 
 pub fn mempool_accepts_valid_tx_test() {
-  let config = NodeConfig(
-    ..regtest_config(),
-    enable_rpc: False,
-    enable_p2p: False,
-  )
+  let config =
+    NodeConfig(..regtest_config(), enable_rpc: False, enable_p2p: False)
 
   let assert Ok(node) = start_with_config(config)
 
@@ -251,11 +228,7 @@ pub fn mempool_accepts_valid_tx_test() {
   let tx = create_simple_tx()
 
   // Try to add it - basic validation only (no UTXO check in simple mempool)
-  let result = process.call(
-    node.mempool,
-    oni_supervisor.AddTx(tx, _),
-    5000,
-  )
+  let result = process.call(node.mempool, oni_supervisor.AddTx(tx, _), 5000)
 
   // Should be accepted (basic validation passes)
   should.be_ok(result)
@@ -268,29 +241,19 @@ pub fn mempool_accepts_valid_tx_test() {
 }
 
 pub fn mempool_rejects_duplicate_tx_test() {
-  let config = NodeConfig(
-    ..regtest_config(),
-    enable_rpc: False,
-    enable_p2p: False,
-  )
+  let config =
+    NodeConfig(..regtest_config(), enable_rpc: False, enable_p2p: False)
 
   let assert Ok(node) = start_with_config(config)
 
   let tx = create_simple_tx()
 
   // Add the transaction
-  let assert Ok(_) = process.call(
-    node.mempool,
-    oni_supervisor.AddTx(tx, _),
-    5000,
-  )
+  let assert Ok(_) =
+    process.call(node.mempool, oni_supervisor.AddTx(tx, _), 5000)
 
   // Try to add the same transaction again
-  let result = process.call(
-    node.mempool,
-    oni_supervisor.AddTx(tx, _),
-    5000,
-  )
+  let result = process.call(node.mempool, oni_supervisor.AddTx(tx, _), 5000)
 
   // Should be rejected as duplicate
   should.be_error(result)
@@ -303,21 +266,15 @@ pub fn mempool_rejects_duplicate_tx_test() {
 }
 
 pub fn mempool_clear_confirmed_test() {
-  let config = NodeConfig(
-    ..regtest_config(),
-    enable_rpc: False,
-    enable_p2p: False,
-  )
+  let config =
+    NodeConfig(..regtest_config(), enable_rpc: False, enable_p2p: False)
 
   let assert Ok(node) = start_with_config(config)
 
   // Add a transaction
   let tx = create_simple_tx()
-  let assert Ok(_) = process.call(
-    node.mempool,
-    oni_supervisor.AddTx(tx, _),
-    5000,
-  )
+  let assert Ok(_) =
+    process.call(node.mempool, oni_supervisor.AddTx(tx, _), 5000)
 
   // Verify it's in mempool
   let size1 = process.call(node.mempool, oni_supervisor.GetSize, 5000)
@@ -342,11 +299,8 @@ pub fn mempool_clear_confirmed_test() {
 // ============================================================================
 
 pub fn sync_starts_idle_test() {
-  let config = NodeConfig(
-    ..regtest_config(),
-    enable_rpc: False,
-    enable_p2p: False,
-  )
+  let config =
+    NodeConfig(..regtest_config(), enable_rpc: False, enable_p2p: False)
 
   let assert Ok(node) = start_with_config(config)
 
@@ -359,11 +313,8 @@ pub fn sync_starts_idle_test() {
 }
 
 pub fn sync_can_start_syncing_test() {
-  let config = NodeConfig(
-    ..regtest_config(),
-    enable_rpc: False,
-    enable_p2p: False,
-  )
+  let config =
+    NodeConfig(..regtest_config(), enable_rpc: False, enable_p2p: False)
 
   let assert Ok(node) = start_with_config(config)
 
@@ -382,11 +333,8 @@ pub fn sync_can_start_syncing_test() {
 // ============================================================================
 
 pub fn node_stops_gracefully_test() {
-  let config = NodeConfig(
-    ..regtest_config(),
-    enable_rpc: False,
-    enable_p2p: False,
-  )
+  let config =
+    NodeConfig(..regtest_config(), enable_rpc: False, enable_p2p: False)
 
   let assert Ok(node) = start_with_config(config)
 
@@ -396,28 +344,29 @@ pub fn node_stops_gracefully_test() {
 
   // Stop the node
   stop(node)
-
   // Node should be stopped - further queries would fail
   // We can't easily test this without process monitoring
 }
 
 pub fn multiple_nodes_can_run_test() {
   // Start two nodes with different configs
-  let config1 = NodeConfig(
-    ..regtest_config(),
-    rpc_port: 29001,
-    p2p_port: 29002,
-    enable_rpc: False,
-    enable_p2p: False,
-  )
+  let config1 =
+    NodeConfig(
+      ..regtest_config(),
+      rpc_port: 29_001,
+      p2p_port: 29_002,
+      enable_rpc: False,
+      enable_p2p: False,
+    )
 
-  let config2 = NodeConfig(
-    ..regtest_config(),
-    rpc_port: 29003,
-    p2p_port: 29004,
-    enable_rpc: False,
-    enable_p2p: False,
-  )
+  let config2 =
+    NodeConfig(
+      ..regtest_config(),
+      rpc_port: 29_003,
+      p2p_port: 29_004,
+      enable_rpc: False,
+      enable_p2p: False,
+    )
 
   let assert Ok(node1) = start_with_config(config1)
   let assert Ok(node2) = start_with_config(config2)
@@ -438,7 +387,8 @@ pub fn multiple_nodes_can_run_test() {
 /// Create a simple coinbase transaction
 fn create_coinbase_tx(height: Int) -> oni_bitcoin.Transaction {
   // Height bytes in scriptSig (BIP34)
-  let _height = height  // Suppress unused warning
+  let _height = height
+  // Suppress unused warning
 
   oni_bitcoin.Transaction(
     version: 1,
@@ -455,8 +405,9 @@ fn create_coinbase_tx(height: Int) -> oni_bitcoin.Transaction {
     ],
     outputs: [
       oni_bitcoin.TxOut(
-        value: oni_bitcoin.Amount(sats: 50_0000_0000),
-        script_pubkey: oni_bitcoin.Script(bytes: <<0x51>>),  // OP_TRUE
+        value: oni_bitcoin.Amount(sats: 5_000_000_000),
+        script_pubkey: oni_bitcoin.Script(bytes: <<0x51>>),
+        // OP_TRUE
       ),
     ],
     lock_time: 0,
@@ -481,7 +432,8 @@ fn create_simple_tx() -> oni_bitcoin.Transaction {
     outputs: [
       oni_bitcoin.TxOut(
         value: oni_bitcoin.Amount(sats: 1000),
-        script_pubkey: oni_bitcoin.Script(bytes: <<0x00, 0x14, 0:160>>),  // P2WPKH
+        script_pubkey: oni_bitcoin.Script(bytes: <<0x00, 0x14, 0:160>>),
+        // P2WPKH
       ),
     ],
     lock_time: 0,

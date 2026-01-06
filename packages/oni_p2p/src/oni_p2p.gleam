@@ -24,10 +24,10 @@ import oni_bitcoin.{
 // ============================================================================
 
 /// Protocol version (70016 = BIP339 wtxid relay)
-pub const protocol_version = 70016
+pub const protocol_version = 70_016
 
 /// Minimum supported protocol version
-pub const min_protocol_version = 70015
+pub const min_protocol_version = 70_015
 
 /// User agent string
 pub const user_agent = "/oni:0.1.0/"
@@ -125,7 +125,10 @@ pub fn service_flags_add(flags: ServiceFlags, flag: Int) -> ServiceFlags {
 
 /// Default services for a full node
 pub fn default_services() -> ServiceFlags {
-  ServiceFlags(int.bitwise_or(int.bitwise_or(node_network, node_witness), node_bloom))
+  ServiceFlags(int.bitwise_or(
+    int.bitwise_or(node_network, node_witness),
+    node_bloom,
+  ))
 }
 
 // ============================================================================
@@ -134,21 +137,12 @@ pub fn default_services() -> ServiceFlags {
 
 /// Network address with services and port
 pub type NetAddr {
-  NetAddr(
-    services: ServiceFlags,
-    ip: IpAddr,
-    port: Int,
-  )
+  NetAddr(services: ServiceFlags, ip: IpAddr, port: Int)
 }
 
 /// Timestamped network address (for addr messages)
 pub type TimestampedAddr {
-  TimestampedAddr(
-    time: Int,
-    services: ServiceFlags,
-    ip: IpAddr,
-    port: Int,
-  )
+  TimestampedAddr(time: Int, services: ServiceFlags, ip: IpAddr, port: Int)
 }
 
 /// IP address (IPv4 or IPv6)
@@ -171,10 +165,14 @@ pub fn localhost() -> IpAddr {
 pub fn ip_to_string(ip: IpAddr) -> String {
   case ip {
     IPv4(a, b, c, d) ->
-      int.to_string(a) <> "." <> int.to_string(b) <> "." <>
-      int.to_string(c) <> "." <> int.to_string(d)
-    IPv6(bytes) ->
-      "IPv6(" <> oni_bitcoin.hex_encode(bytes) <> ")"
+      int.to_string(a)
+      <> "."
+      <> int.to_string(b)
+      <> "."
+      <> int.to_string(c)
+      <> "."
+      <> int.to_string(d)
+    IPv6(bytes) -> "IPv6(" <> oni_bitcoin.hex_encode(bytes) <> ")"
   }
 }
 
@@ -184,8 +182,7 @@ pub fn encode_ip(ip: IpAddr) -> BitArray {
     IPv4(a, b, c, d) ->
       // IPv4-mapped IPv6 address: ::ffff:a.b.c.d
       <<0:80, 0xFF:8, 0xFF:8, a:8, b:8, c:8, d:8>>
-    IPv6(bytes) ->
-      bytes
+    IPv6(bytes) -> bytes
   }
 }
 
@@ -193,15 +190,47 @@ pub fn encode_ip(ip: IpAddr) -> BitArray {
 pub fn decode_ip(bytes: BitArray) -> Result(IpAddr, String) {
   case bytes {
     // IPv4-mapped IPv6
-    <<0:80, 0xFF:8, 0xFF:8, a:8, b:8, c:8, d:8>> ->
-      Ok(IPv4(a, b, c, d))
+    <<0:80, 0xFF:8, 0xFF:8, a:8, b:8, c:8, d:8>> -> Ok(IPv4(a, b, c, d))
     // Pure IPv6
-    <<b0:8, b1:8, b2:8, b3:8, b4:8, b5:8, b6:8, b7:8,
-      b8:8, b9:8, b10:8, b11:8, b12:8, b13:8, b14:8, b15:8>> ->
-      Ok(IPv6(<<b0:8, b1:8, b2:8, b3:8, b4:8, b5:8, b6:8, b7:8,
-                b8:8, b9:8, b10:8, b11:8, b12:8, b13:8, b14:8, b15:8>>))
-    _ ->
-      Error("Invalid IP address bytes")
+    <<
+      b0:8,
+      b1:8,
+      b2:8,
+      b3:8,
+      b4:8,
+      b5:8,
+      b6:8,
+      b7:8,
+      b8:8,
+      b9:8,
+      b10:8,
+      b11:8,
+      b12:8,
+      b13:8,
+      b14:8,
+      b15:8,
+    >> ->
+      Ok(
+        IPv6(<<
+          b0:8,
+          b1:8,
+          b2:8,
+          b3:8,
+          b4:8,
+          b5:8,
+          b6:8,
+          b7:8,
+          b8:8,
+          b9:8,
+          b10:8,
+          b11:8,
+          b12:8,
+          b13:8,
+          b14:8,
+          b15:8,
+        >>),
+      )
+    _ -> Error("Invalid IP address bytes")
   }
 }
 
@@ -220,11 +249,12 @@ pub fn decode_netaddr(bytes: BitArray) -> Result(#(NetAddr, BitArray), String) {
     <<services:64-little, ip:128-bits, port:16-big, rest:bits>> -> {
       case decode_ip(<<ip:128-bits>>) {
         Ok(ip_addr) -> {
-          let addr = NetAddr(
-            services: service_flags_from_int(services),
-            ip: ip_addr,
-            port: port,
-          )
+          let addr =
+            NetAddr(
+              services: service_flags_from_int(services),
+              ip: ip_addr,
+              port: port,
+            )
           Ok(#(addr, rest))
         }
         Error(e) -> Error(e)
@@ -322,10 +352,11 @@ pub fn encode_inv_item(item: InvItem) -> BitArray {
 pub fn decode_inv_item(bytes: BitArray) -> Result(#(InvItem, BitArray), String) {
   case bytes {
     <<inv_type:32-little, hash:256-bits, rest:bits>> -> {
-      let item = InvItem(
-        inv_type: inv_type_from_int(inv_type),
-        hash: oni_bitcoin.Hash256(<<hash:256-bits>>),
-      )
+      let item =
+        InvItem(
+          inv_type: inv_type_from_int(inv_type),
+          hash: oni_bitcoin.Hash256(<<hash:256-bits>>),
+        )
       Ok(#(item, rest))
     }
     _ -> Error("Insufficient bytes for inventory item")
@@ -335,14 +366,17 @@ pub fn decode_inv_item(bytes: BitArray) -> Result(#(InvItem, BitArray), String) 
 /// Encode a list of inventory items
 pub fn encode_inv_list(items: List(InvItem)) -> BitArray {
   let count = oni_bitcoin.compact_size_encode(list.length(items))
-  let items_data = list.fold(items, <<>>, fn(acc, item) {
-    bit_array.append(acc, encode_inv_item(item))
-  })
+  let items_data =
+    list.fold(items, <<>>, fn(acc, item) {
+      bit_array.append(acc, encode_inv_item(item))
+    })
   bit_array.append(count, items_data)
 }
 
 /// Decode a list of inventory items
-pub fn decode_inv_list(bytes: BitArray) -> Result(#(List(InvItem), BitArray), String) {
+pub fn decode_inv_list(
+  bytes: BitArray,
+) -> Result(#(List(InvItem), BitArray), String) {
   case oni_bitcoin.compact_size_decode(bytes) {
     Error(e) -> Error(e)
     Ok(#(count, rest)) -> {
@@ -364,7 +398,8 @@ fn decode_inv_items(
     _ -> {
       case decode_inv_item(bytes) {
         Error(e) -> Error(e)
-        Ok(#(item, rest)) -> decode_inv_items(rest, remaining - 1, [item, ..acc])
+        Ok(#(item, rest)) ->
+          decode_inv_items(rest, remaining - 1, [item, ..acc])
       }
     }
   }
@@ -413,7 +448,12 @@ pub type Message {
   MsgReject(message: String, code: Int, reason: String, data: BitArray)
 
   // BIP152 Compact Blocks
-  MsgCmpctBlock(header: BlockHeaderNet, nonce: Int, short_ids: List(BitArray), prefilled_txs: List(PrefilledTx))
+  MsgCmpctBlock(
+    header: BlockHeaderNet,
+    nonce: Int,
+    short_ids: List(BitArray),
+    prefilled_txs: List(PrefilledTx),
+  )
   MsgGetBlockTxn(block_hash: BlockHash, indexes: List(Int))
   MsgBlockTxn(block_hash: BlockHash, txs: List(Transaction))
 
@@ -480,12 +520,7 @@ pub fn version_message(
 
 /// Message header structure
 pub type MessageHeader {
-  MessageHeader(
-    magic: Int,
-    command: String,
-    length: Int,
-    checksum: BitArray,
-  )
+  MessageHeader(magic: Int, command: String, length: Int, checksum: BitArray)
 }
 
 /// Network magic bytes
@@ -528,7 +563,8 @@ fn strip_null_bytes(bytes: BitArray) -> BitArray {
 fn strip_null_bytes_acc(bytes: BitArray, acc: BitArray) -> BitArray {
   case bytes {
     <<0:8, _rest:bits>> -> acc
-    <<b:8, rest:bits>> -> strip_null_bytes_acc(rest, bit_array.append(acc, <<b:8>>))
+    <<b:8, rest:bits>> ->
+      strip_null_bytes_acc(rest, bit_array.append(acc, <<b:8>>))
     _ -> acc
   }
 }
@@ -567,7 +603,10 @@ fn encode_message_payload(msg: Message) -> #(String, BitArray) {
     MsgPong(nonce) -> #("pong", <<nonce:64-little>>)
     MsgSendHeaders -> #("sendheaders", <<>>)
     MsgSendCmpct(announce, version) -> {
-      let flag = case announce { True -> 1 False -> 0 }
+      let flag = case announce {
+        True -> 1
+        False -> 0
+      }
       #("sendcmpct", <<flag:8, version:64-little>>)
     }
     MsgFeeFilter(fee_rate) -> #("feefilter", <<fee_rate:64-little>>)
@@ -579,12 +618,20 @@ fn encode_message_payload(msg: Message) -> #(String, BitArray) {
     MsgInv(items) -> #("inv", encode_inv_list(items))
     MsgGetData(items) -> #("getdata", encode_inv_list(items))
     MsgNotFound(items) -> #("notfound", encode_inv_list(items))
-    MsgGetBlocks(locators, stop) -> #("getblocks", encode_get_blocks(locators, stop))
-    MsgGetHeaders(locators, stop) -> #("getheaders", encode_get_blocks(locators, stop))
+    MsgGetBlocks(locators, stop) -> #(
+      "getblocks",
+      encode_get_blocks(locators, stop),
+    )
+    MsgGetHeaders(locators, stop) -> #(
+      "getheaders",
+      encode_get_blocks(locators, stop),
+    )
     MsgHeaders(headers) -> #("headers", encode_headers(headers))
     MsgMempool -> #("mempool", <<>>)
-    MsgReject(message, code, reason, data) ->
-      #("reject", encode_reject(message, code, reason, data))
+    MsgReject(message, code, reason, data) -> #(
+      "reject",
+      encode_reject(message, code, reason, data),
+    )
     MsgUnknown(command, payload) -> #(command, payload)
     // These require full block/tx encoding
     MsgBlock(_) -> #("block", <<>>)
@@ -599,7 +646,10 @@ fn encode_message_payload(msg: Message) -> #(String, BitArray) {
 fn encode_version_payload(v: VersionPayload) -> BitArray {
   let ua_bytes = bit_array.from_string(v.user_agent)
   let ua_len = oni_bitcoin.compact_size_encode(bit_array.byte_size(ua_bytes))
-  let relay_byte = case v.relay { True -> 1 False -> 0 }
+  let relay_byte = case v.relay {
+    True -> 1
+    False -> 0
+  }
 
   bit_array.concat([
     <<v.version:32-little>>,
@@ -618,9 +668,10 @@ fn encode_version_payload(v: VersionPayload) -> BitArray {
 /// Encode timestamped address list
 fn encode_addr_list(addrs: List(TimestampedAddr)) -> BitArray {
   let count = oni_bitcoin.compact_size_encode(list.length(addrs))
-  let addrs_data = list.fold(addrs, <<>>, fn(acc, addr) {
-    bit_array.append(acc, encode_timestamped_addr(addr))
-  })
+  let addrs_data =
+    list.fold(addrs, <<>>, fn(acc, addr) {
+      bit_array.append(acc, encode_timestamped_addr(addr))
+    })
   bit_array.append(count, addrs_data)
 }
 
@@ -634,40 +685,59 @@ fn encode_timestamped_addr(addr: TimestampedAddr) -> BitArray {
 }
 
 /// Encode getblocks/getheaders payload
-fn encode_get_blocks(locators: List(BlockHash), stop_hash: BlockHash) -> BitArray {
+fn encode_get_blocks(
+  locators: List(BlockHash),
+  stop_hash: BlockHash,
+) -> BitArray {
   let version = <<protocol_version:32-little>>
   let count = oni_bitcoin.compact_size_encode(list.length(locators))
-  let locators_data = list.fold(locators, <<>>, fn(acc, hash) {
-    bit_array.append(acc, hash.hash.bytes)
-  })
+  let locators_data =
+    list.fold(locators, <<>>, fn(acc, hash) {
+      bit_array.append(acc, hash.hash.bytes)
+    })
   bit_array.concat([version, count, locators_data, stop_hash.hash.bytes])
 }
 
 /// Encode headers message
 fn encode_headers(headers: List(BlockHeaderNet)) -> BitArray {
   let count = oni_bitcoin.compact_size_encode(list.length(headers))
-  let headers_data = list.fold(headers, <<>>, fn(acc, header) {
-    let encoded = <<
-      header.version:32-little,
-      header.prev_block.hash.bytes:bits,
-      header.merkle_root.bytes:bits,
-      header.timestamp:32-little,
-      header.bits:32-little,
-      header.nonce:32-little,
-      0:8,  // tx_count (always 0 in headers message)
-    >>
-    bit_array.append(acc, encoded)
-  })
+  let headers_data =
+    list.fold(headers, <<>>, fn(acc, header) {
+      let encoded = <<
+        header.version:32-little,
+        header.prev_block.hash.bytes:bits,
+        header.merkle_root.bytes:bits,
+        header.timestamp:32-little,
+        header.bits:32-little,
+        header.nonce:32-little,
+        0:8,
+        // tx_count (always 0 in headers message)
+      >>
+      bit_array.append(acc, encoded)
+    })
   bit_array.append(count, headers_data)
 }
 
 /// Encode reject message
-fn encode_reject(message: String, code: Int, reason: String, data: BitArray) -> BitArray {
+fn encode_reject(
+  message: String,
+  code: Int,
+  reason: String,
+  data: BitArray,
+) -> BitArray {
   let msg_bytes = bit_array.from_string(message)
   let msg_len = oni_bitcoin.compact_size_encode(bit_array.byte_size(msg_bytes))
   let reason_bytes = bit_array.from_string(reason)
-  let reason_len = oni_bitcoin.compact_size_encode(bit_array.byte_size(reason_bytes))
-  bit_array.concat([msg_len, msg_bytes, <<code:8>>, reason_len, reason_bytes, data])
+  let reason_len =
+    oni_bitcoin.compact_size_encode(bit_array.byte_size(reason_bytes))
+  bit_array.concat([
+    msg_len,
+    msg_bytes,
+    <<code:8>>,
+    reason_len,
+    reason_bytes,
+    data,
+  ])
 }
 
 // ============================================================================
@@ -682,7 +752,13 @@ pub fn decode_message(
   let expected_magic = network_magic(network)
 
   case bytes {
-    <<magic:32-little, command:96-bits, length:32-little, checksum:32-bits, rest:bits>> -> {
+    <<
+      magic:32-little,
+      command:96-bits,
+      length:32-little,
+      checksum:32-bits,
+      rest:bits,
+    >> -> {
       // Check magic
       case magic == expected_magic {
         False -> Error(InvalidMessage("Wrong network magic"))
@@ -696,7 +772,8 @@ pub fn decode_message(
                 False -> Error(InvalidMessage("Insufficient payload"))
                 True -> {
                   case bit_array.slice(rest, 0, length) {
-                    Error(_) -> Error(InvalidMessage("Failed to extract payload"))
+                    Error(_) ->
+                      Error(InvalidMessage("Failed to extract payload"))
                     Ok(payload) -> {
                       // Verify checksum
                       let expected_checksum = message_checksum(payload)
@@ -710,8 +787,11 @@ pub fn decode_message(
                             Error(e) -> Error(e)
                             Ok(msg) -> {
                               // Calculate remaining bytes
-                              let remaining_size = bit_array.byte_size(rest) - length
-                              case bit_array.slice(rest, length, remaining_size) {
+                              let remaining_size =
+                                bit_array.byte_size(rest) - length
+                              case
+                                bit_array.slice(rest, length, remaining_size)
+                              {
                                 Error(_) -> Ok(#(msg, <<>>))
                                 Ok(remaining) -> Ok(#(msg, remaining))
                               }
@@ -733,7 +813,10 @@ pub fn decode_message(
 }
 
 /// Decode message payload based on command
-fn decode_message_payload(command: String, payload: BitArray) -> Result(Message, P2PError) {
+fn decode_message_payload(
+  command: String,
+  payload: BitArray,
+) -> Result(Message, P2PError) {
   case command {
     "version" -> decode_version_message(payload)
     "verack" -> Ok(MsgVerack)
@@ -775,30 +858,34 @@ fn decode_version_message(payload: BitArray) -> Result(Message, P2PError) {
                     Ok(#(user_agent_str, rest5)) -> {
                       case rest5 {
                         <<start_height:32-little>> -> {
-                          Ok(MsgVersion(VersionPayload(
-                            version: version,
-                            services: service_flags_from_int(services),
-                            timestamp: timestamp,
-                            addr_recv: addr_recv,
-                            addr_from: addr_from,
-                            nonce: nonce,
-                            user_agent: user_agent_str,
-                            start_height: start_height,
-                            relay: True,
-                          )))
+                          Ok(
+                            MsgVersion(VersionPayload(
+                              version: version,
+                              services: service_flags_from_int(services),
+                              timestamp: timestamp,
+                              addr_recv: addr_recv,
+                              addr_from: addr_from,
+                              nonce: nonce,
+                              user_agent: user_agent_str,
+                              start_height: start_height,
+                              relay: True,
+                            )),
+                          )
                         }
                         <<start_height:32-little, relay:8, _rest:bits>> -> {
-                          Ok(MsgVersion(VersionPayload(
-                            version: version,
-                            services: service_flags_from_int(services),
-                            timestamp: timestamp,
-                            addr_recv: addr_recv,
-                            addr_from: addr_from,
-                            nonce: nonce,
-                            user_agent: user_agent_str,
-                            start_height: start_height,
-                            relay: relay != 0,
-                          )))
+                          Ok(
+                            MsgVersion(VersionPayload(
+                              version: version,
+                              services: service_flags_from_int(services),
+                              timestamp: timestamp,
+                              addr_recv: addr_recv,
+                              addr_from: addr_from,
+                              nonce: nonce,
+                              user_agent: user_agent_str,
+                              start_height: start_height,
+                              relay: relay != 0,
+                            )),
+                          )
                         }
                         _ -> Error(InvalidMessage("Invalid version payload"))
                       }
@@ -842,7 +929,8 @@ fn decode_varstr(bytes: BitArray) -> Result(#(String, BitArray), String) {
 fn decode_ping(payload: BitArray) -> Result(Message, P2PError) {
   case payload {
     <<nonce:64-little, _rest:bits>> -> Ok(MsgPing(nonce))
-    <<>> -> Ok(MsgPing(0))  // Old clients may send empty ping
+    <<>> -> Ok(MsgPing(0))
+    // Old clients may send empty ping
     _ -> Error(InvalidMessage("Invalid ping payload"))
   }
 }
@@ -895,16 +983,23 @@ fn decode_timestamped_addrs(
     0 -> Ok(list.reverse(acc))
     _ -> {
       case bytes {
-        <<time:32-little, services:64-little, ip:128-bits, port:16-big, rest:bits>> -> {
+        <<
+          time:32-little,
+          services:64-little,
+          ip:128-bits,
+          port:16-big,
+          rest:bits,
+        >> -> {
           case decode_ip(<<ip:128-bits>>) {
             Error(e) -> Error(e)
             Ok(ip_addr) -> {
-              let addr = TimestampedAddr(
-                time: time,
-                services: service_flags_from_int(services),
-                ip: ip_addr,
-                port: port,
-              )
+              let addr =
+                TimestampedAddr(
+                  time: time,
+                  services: service_flags_from_int(services),
+                  ip: ip_addr,
+                  port: port,
+                )
               decode_timestamped_addrs(rest, remaining - 1, [addr, ..acc])
             }
           }
@@ -952,7 +1047,9 @@ fn decode_getblocks(payload: BitArray) -> Result(Message, P2PError) {
                     <<stop_hash:256-bits, _rest:bits>> -> {
                       Ok(MsgGetBlocks(
                         locators,
-                        oni_bitcoin.BlockHash(oni_bitcoin.Hash256(<<stop_hash:256-bits>>)),
+                        oni_bitcoin.BlockHash(
+                          oni_bitcoin.Hash256(<<stop_hash:256-bits>>),
+                        ),
                       ))
                     }
                     _ -> Error(InvalidMessage("Missing stop hash"))
@@ -984,7 +1081,9 @@ fn decode_getheaders(payload: BitArray) -> Result(Message, P2PError) {
                     <<stop_hash:256-bits, _rest:bits>> -> {
                       Ok(MsgGetHeaders(
                         locators,
-                        oni_bitcoin.BlockHash(oni_bitcoin.Hash256(<<stop_hash:256-bits>>)),
+                        oni_bitcoin.BlockHash(
+                          oni_bitcoin.Hash256(<<stop_hash:256-bits>>),
+                        ),
                       ))
                     }
                     _ -> Error(InvalidMessage("Missing stop hash"))
@@ -1010,7 +1109,8 @@ fn decode_block_hashes(
     _ -> {
       case bytes {
         <<hash:256-bits, rest:bits>> -> {
-          let block_hash = oni_bitcoin.BlockHash(oni_bitcoin.Hash256(<<hash:256-bits>>))
+          let block_hash =
+            oni_bitcoin.BlockHash(oni_bitcoin.Hash256(<<hash:256-bits>>))
           decode_block_hashes(rest, remaining - 1, [block_hash, ..acc])
         }
         _ -> Error("Insufficient bytes for block hash")
@@ -1045,16 +1145,27 @@ fn decode_headers_list(
     0 -> Ok(list.reverse(acc))
     _ -> {
       case bytes {
-        <<version:32-little, prev_block:256-bits, merkle_root:256-bits,
-          timestamp:32-little, bits:32-little, nonce:32-little, _tx_count:8, rest:bits>> -> {
-          let header = BlockHeaderNet(
-            version: version,
-            prev_block: oni_bitcoin.BlockHash(oni_bitcoin.Hash256(<<prev_block:256-bits>>)),
-            merkle_root: oni_bitcoin.Hash256(<<merkle_root:256-bits>>),
-            timestamp: timestamp,
-            bits: bits,
-            nonce: nonce,
-          )
+        <<
+          version:32-little,
+          prev_block:256-bits,
+          merkle_root:256-bits,
+          timestamp:32-little,
+          bits:32-little,
+          nonce:32-little,
+          _tx_count:8,
+          rest:bits,
+        >> -> {
+          let header =
+            BlockHeaderNet(
+              version: version,
+              prev_block: oni_bitcoin.BlockHash(
+                oni_bitcoin.Hash256(<<prev_block:256-bits>>),
+              ),
+              merkle_root: oni_bitcoin.Hash256(<<merkle_root:256-bits>>),
+              timestamp: timestamp,
+              bits: bits,
+              nonce: nonce,
+            )
           decode_headers_list(rest, remaining - 1, [header, ..acc])
         }
         _ -> Error("Invalid header bytes")
@@ -1243,14 +1354,15 @@ pub fn addrman_add(
       manager
     }
     Error(_) -> {
-      let entry = AddrEntry(
-        addr: addr,
-        source: source,
-        last_success: 0,
-        last_try: 0 - time_penalty,
-        attempts: 0,
-        ref_count: 1,
-      )
+      let entry =
+        AddrEntry(
+          addr: addr,
+          source: source,
+          last_success: 0,
+          last_try: 0 - time_penalty,
+          attempts: 0,
+          ref_count: 1,
+        )
       AddrManager(
         ..manager,
         addrs: dict.insert(manager.addrs, key, entry),
@@ -1272,10 +1384,7 @@ pub fn addrman_good(
     Error(_) -> manager
     Ok(entry) -> {
       let updated = AddrEntry(..entry, last_success: time, attempts: 0)
-      AddrManager(
-        ..manager,
-        addrs: dict.insert(manager.addrs, key, updated),
-      )
+      AddrManager(..manager, addrs: dict.insert(manager.addrs, key, updated))
     }
   }
 }
@@ -1290,11 +1399,9 @@ pub fn addrman_attempt(
   case dict.get(manager.addrs, key) {
     Error(_) -> manager
     Ok(entry) -> {
-      let updated = AddrEntry(..entry, last_try: time, attempts: entry.attempts + 1)
-      AddrManager(
-        ..manager,
-        addrs: dict.insert(manager.addrs, key, updated),
-      )
+      let updated =
+        AddrEntry(..entry, last_try: time, attempts: entry.attempts + 1)
+      AddrManager(..manager, addrs: dict.insert(manager.addrs, key, updated))
     }
   }
 }
@@ -1469,25 +1576,19 @@ pub fn handle_wtxidrelay() -> HandleResult {
 
 /// Create inventory items for blocks
 pub fn create_block_inv(hashes: List(BlockHash)) -> Message {
-  let items = list.map(hashes, fn(hash) {
-    InvItem(InvBlock, hash.hash)
-  })
+  let items = list.map(hashes, fn(hash) { InvItem(InvBlock, hash.hash) })
   MsgInv(items)
 }
 
 /// Create inventory items for transactions
 pub fn create_tx_inv(txids: List(Txid)) -> Message {
-  let items = list.map(txids, fn(txid) {
-    InvItem(InvTx, txid.hash)
-  })
+  let items = list.map(txids, fn(txid) { InvItem(InvTx, txid.hash) })
   MsgInv(items)
 }
 
 /// Create getdata for blocks
 pub fn create_getdata_blocks(hashes: List(BlockHash)) -> Message {
-  let items = list.map(hashes, fn(hash) {
-    InvItem(InvBlock, hash.hash)
-  })
+  let items = list.map(hashes, fn(hash) { InvItem(InvBlock, hash.hash) })
   MsgGetData(items)
 }
 
@@ -1497,9 +1598,7 @@ pub fn create_getdata_txs(txids: List(Txid), witness: Bool) -> Message {
     True -> InvWitnessTx
     False -> InvTx
   }
-  let items = list.map(txids, fn(txid) {
-    InvItem(inv_type, txid.hash)
-  })
+  let items = list.map(txids, fn(txid) { InvItem(inv_type, txid.hash) })
   MsgGetData(items)
 }
 
@@ -1546,7 +1645,8 @@ pub fn get_dns_seeds(network: Network) -> List(String) {
     Mainnet -> mainnet_dns_seeds
     Testnet -> testnet_dns_seeds
     Signet -> signet_dns_seeds
-    Regtest -> []  // No DNS seeds for regtest
+    Regtest -> []
+    // No DNS seeds for regtest
   }
 }
 
@@ -1554,19 +1654,15 @@ pub fn get_dns_seeds(network: Network) -> List(String) {
 pub fn get_default_port(network: Network) -> Int {
   case network {
     Mainnet -> 8333
-    Testnet -> 18333
-    Signet -> 38333
-    Regtest -> 18444
+    Testnet -> 18_333
+    Signet -> 38_333
+    Regtest -> 18_444
   }
 }
 
 /// Peer address discovered from DNS
 pub type DnsAddress {
-  DnsAddress(
-    ip: String,
-    port: Int,
-    source_seed: String,
-  )
+  DnsAddress(ip: String, port: Int, source_seed: String)
 }
 
 /// DNS lookup result (placeholder - actual implementation needs native code)
@@ -1661,7 +1757,11 @@ pub fn calculate_peer_score(score: PeerScore) -> Int {
   // Penalty for misbehavior
   let misbehavior_penalty = score.misbehavior_count * 20
 
-  base + service_bonus + latency_penalty + reliability_bonus - misbehavior_penalty
+  base
+  + service_bonus
+  + latency_penalty
+  + reliability_bonus
+  - misbehavior_penalty
 }
 
 /// Default peer score for new peer
@@ -1759,12 +1859,18 @@ pub fn slots_add_inbound(slots: ConnectionSlots) -> ConnectionSlots {
 
 /// Remove outbound connection
 pub fn slots_remove_outbound(slots: ConnectionSlots) -> ConnectionSlots {
-  ConnectionSlots(..slots, current_outbound: int.max(0, slots.current_outbound - 1))
+  ConnectionSlots(
+    ..slots,
+    current_outbound: int.max(0, slots.current_outbound - 1),
+  )
 }
 
 /// Remove inbound connection
 pub fn slots_remove_inbound(slots: ConnectionSlots) -> ConnectionSlots {
-  ConnectionSlots(..slots, current_inbound: int.max(0, slots.current_inbound - 1))
+  ConnectionSlots(
+    ..slots,
+    current_inbound: int.max(0, slots.current_inbound - 1),
+  )
 }
 
 /// Get total connection count

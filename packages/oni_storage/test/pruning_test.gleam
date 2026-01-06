@@ -1,10 +1,10 @@
 // pruning_test.gleam - Tests for block pruning
 
+import gleam/option.{None, Some}
 import gleeunit
 import gleeunit/should
-import gleam/option.{None, Some}
-import pruning
 import oni_storage
+import pruning
 
 pub fn main() {
   gleeunit.main()
@@ -21,7 +21,8 @@ pub fn default_config_disabled_test() {
 }
 
 pub fn pruned_config_enabled_test() {
-  let config = pruning.pruned_config(1000)  // 1000 MB
+  let config = pruning.pruned_config(1000)
+  // 1000 MB
   should.equal(config.enabled, True)
   should.equal(config.target_size, 1000 * 1024 * 1024)
   should.equal(config.min_blocks_to_keep, 288)
@@ -38,34 +39,40 @@ pub fn validate_disabled_config_test() {
 }
 
 pub fn validate_enabled_config_ok_test() {
-  let config = pruning.PruningConfig(
-    enabled: True,
-    target_size: 600_000_000,  // 600 MB
-    min_blocks_to_keep: 288,
-    prune_undo_data: True,
-  )
+  let config =
+    pruning.PruningConfig(
+      enabled: True,
+      target_size: 600_000_000,
+      // 600 MB
+      min_blocks_to_keep: 288,
+      prune_undo_data: True,
+    )
   let result = pruning.validate_config(config)
   should.equal(result, Ok(Nil))
 }
 
 pub fn validate_min_blocks_too_low_test() {
-  let config = pruning.PruningConfig(
-    enabled: True,
-    target_size: 600_000_000,
-    min_blocks_to_keep: 100,  // Too low
-    prune_undo_data: True,
-  )
+  let config =
+    pruning.PruningConfig(
+      enabled: True,
+      target_size: 600_000_000,
+      min_blocks_to_keep: 100,
+      // Too low
+      prune_undo_data: True,
+    )
   let result = pruning.validate_config(config)
   should.be_error(result)
 }
 
 pub fn validate_target_size_too_small_test() {
-  let config = pruning.PruningConfig(
-    enabled: True,
-    target_size: 100_000_000,  // 100 MB - too small
-    min_blocks_to_keep: 288,
-    prune_undo_data: True,
-  )
+  let config =
+    pruning.PruningConfig(
+      enabled: True,
+      target_size: 100_000_000,
+      // 100 MB - too small
+      min_blocks_to_keep: 288,
+      prune_undo_data: True,
+    )
   let result = pruning.validate_config(config)
   should.be_error(result)
 }
@@ -131,7 +138,8 @@ pub fn calculate_prune_range_with_work_test() {
   case result {
     Some(#(start, end)) -> {
       should.equal(start, 1)
-      should.equal(end, 712)  // 1000 - 288
+      should.equal(end, 712)
+      // 1000 - 288
     }
     None -> should.fail()
   }
@@ -142,45 +150,48 @@ pub fn calculate_prune_range_with_work_test() {
 // ============================================================================
 
 pub fn is_block_pruned_not_pruned_test() {
-  let chainstate = oni_storage.Chainstate(
-    best_block: create_zero_hash(),
-    best_height: 1000,
-    total_tx: 0,
-    total_coins: 0,
-    total_amount: 0,
-    pruned: False,
-    pruned_height: None,
-  )
+  let chainstate =
+    oni_storage.Chainstate(
+      best_block: create_zero_hash(),
+      best_height: 1000,
+      total_tx: 0,
+      total_coins: 0,
+      total_amount: 0,
+      pruned: False,
+      pruned_height: None,
+    )
 
   let result = pruning.is_block_pruned(chainstate, 100)
   should.equal(result, False)
 }
 
 pub fn is_block_pruned_yes_test() {
-  let chainstate = oni_storage.Chainstate(
-    best_block: create_zero_hash(),
-    best_height: 1000,
-    total_tx: 0,
-    total_coins: 0,
-    total_amount: 0,
-    pruned: True,
-    pruned_height: Some(500),
-  )
+  let chainstate =
+    oni_storage.Chainstate(
+      best_block: create_zero_hash(),
+      best_height: 1000,
+      total_tx: 0,
+      total_coins: 0,
+      total_amount: 0,
+      pruned: True,
+      pruned_height: Some(500),
+    )
 
   let result = pruning.is_block_pruned(chainstate, 100)
   should.equal(result, True)
 }
 
 pub fn is_block_pruned_no_above_height_test() {
-  let chainstate = oni_storage.Chainstate(
-    best_block: create_zero_hash(),
-    best_height: 1000,
-    total_tx: 0,
-    total_coins: 0,
-    total_amount: 0,
-    pruned: True,
-    pruned_height: Some(500),
-  )
+  let chainstate =
+    oni_storage.Chainstate(
+      best_block: create_zero_hash(),
+      best_height: 1000,
+      total_tx: 0,
+      total_coins: 0,
+      total_amount: 0,
+      pruned: True,
+      pruned_height: Some(500),
+    )
 
   let result = pruning.is_block_pruned(chainstate, 600)
   should.equal(result, False)
@@ -206,7 +217,8 @@ pub fn get_stats_test() {
 
   should.equal(stats.enabled, True)
   should.equal(stats.highest_height, 1000)
-  should.equal(stats.lowest_height, 0)  // No pruning yet, genesis is available
+  should.equal(stats.lowest_height, 0)
+  // No pruning yet, genesis is available
 }
 
 // ============================================================================
@@ -234,45 +246,48 @@ pub fn format_bytes_gb_test() {
 // ============================================================================
 
 pub fn can_serve_block_not_pruned_test() {
-  let chainstate = oni_storage.Chainstate(
-    best_block: create_zero_hash(),
-    best_height: 1000,
-    total_tx: 0,
-    total_coins: 0,
-    total_amount: 0,
-    pruned: False,
-    pruned_height: None,
-  )
+  let chainstate =
+    oni_storage.Chainstate(
+      best_block: create_zero_hash(),
+      best_height: 1000,
+      total_tx: 0,
+      total_coins: 0,
+      total_amount: 0,
+      pruned: False,
+      pruned_height: None,
+    )
 
   let result = pruning.can_serve_block(chainstate, 100)
   should.equal(result, True)
 }
 
 pub fn can_serve_block_pruned_available_test() {
-  let chainstate = oni_storage.Chainstate(
-    best_block: create_zero_hash(),
-    best_height: 1000,
-    total_tx: 0,
-    total_coins: 0,
-    total_amount: 0,
-    pruned: True,
-    pruned_height: Some(500),
-  )
+  let chainstate =
+    oni_storage.Chainstate(
+      best_block: create_zero_hash(),
+      best_height: 1000,
+      total_tx: 0,
+      total_coins: 0,
+      total_amount: 0,
+      pruned: True,
+      pruned_height: Some(500),
+    )
 
   let result = pruning.can_serve_block(chainstate, 600)
   should.equal(result, True)
 }
 
 pub fn can_serve_block_pruned_not_available_test() {
-  let chainstate = oni_storage.Chainstate(
-    best_block: create_zero_hash(),
-    best_height: 1000,
-    total_tx: 0,
-    total_coins: 0,
-    total_amount: 0,
-    pruned: True,
-    pruned_height: Some(500),
-  )
+  let chainstate =
+    oni_storage.Chainstate(
+      best_block: create_zero_hash(),
+      best_height: 1000,
+      total_tx: 0,
+      total_coins: 0,
+      total_amount: 0,
+      pruned: True,
+      pruned_height: Some(500),
+    )
 
   let result = pruning.can_serve_block(chainstate, 400)
   should.equal(result, False)
@@ -298,8 +313,8 @@ fn create_test_chainstate(height: Int) -> oni_storage.Chainstate {
 
 fn create_zero_hash() -> oni_bitcoin.BlockHash {
   let bytes = <<
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0,
   >>
   oni_bitcoin.BlockHash(hash: oni_bitcoin.Hash256(bytes: bytes))
 }

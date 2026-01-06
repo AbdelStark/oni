@@ -1,7 +1,7 @@
 import gleeunit
 import gleeunit/should
-import oni_p2p
 import oni_bitcoin
+import oni_p2p
 
 pub fn main() {
   gleeunit.main()
@@ -49,7 +49,8 @@ pub fn ip_encode_decode_ipv4_test() {
 
   // Decode should give back same IP
   case oni_p2p.decode_ip(encoded) {
-    Ok(decoded) -> oni_p2p.ip_to_string(decoded) |> should.equal("192.168.1.100")
+    Ok(decoded) ->
+      oni_p2p.ip_to_string(decoded) |> should.equal("192.168.1.100")
     Error(_) -> should.fail()
   }
 }
@@ -65,7 +66,8 @@ pub fn service_flags_test() {
 }
 
 pub fn service_flags_has_test() {
-  let flags = oni_p2p.service_flags_from_int(oni_p2p.node_network + oni_p2p.node_witness)
+  let flags =
+    oni_p2p.service_flags_from_int(oni_p2p.node_network + oni_p2p.node_witness)
 
   oni_p2p.service_flags_has(flags, oni_p2p.node_network)
   |> should.be_true
@@ -157,11 +159,8 @@ pub fn network_magic_signet_test() {
 
 pub fn peer_info_new_test() {
   let ip = oni_p2p.ipv4(10, 0, 0, 1)
-  let addr = oni_p2p.NetAddr(
-    services: oni_p2p.default_services(),
-    ip: ip,
-    port: 8333,
-  )
+  let addr =
+    oni_p2p.NetAddr(services: oni_p2p.default_services(), ip: ip, port: 8333)
   let id = oni_p2p.peer_id("test-peer")
   let peer = oni_p2p.peer_info_new(id, addr, False)
 
@@ -172,11 +171,8 @@ pub fn peer_info_new_test() {
 
 pub fn peer_set_state_test() {
   let ip = oni_p2p.localhost()
-  let addr = oni_p2p.NetAddr(
-    services: oni_p2p.default_services(),
-    ip: ip,
-    port: 8333,
-  )
+  let addr =
+    oni_p2p.NetAddr(services: oni_p2p.default_services(), ip: ip, port: 8333)
   let id = oni_p2p.peer_id("test")
   let peer = oni_p2p.peer_info_new(id, addr, True)
 
@@ -186,11 +182,8 @@ pub fn peer_set_state_test() {
 
 pub fn peer_misbehaving_test() {
   let ip = oni_p2p.localhost()
-  let addr = oni_p2p.NetAddr(
-    services: oni_p2p.default_services(),
-    ip: ip,
-    port: 8333,
-  )
+  let addr =
+    oni_p2p.NetAddr(services: oni_p2p.default_services(), ip: ip, port: 8333)
   let id = oni_p2p.peer_id("test")
   let peer = oni_p2p.peer_info_new(id, addr, False)
 
@@ -217,11 +210,12 @@ pub fn addrman_new_test() {
 pub fn addrman_add_test() {
   let manager = oni_p2p.addrman_new()
 
-  let addr = oni_p2p.NetAddr(
-    services: oni_p2p.default_services(),
-    ip: oni_p2p.ipv4(1, 2, 3, 4),
-    port: 8333,
-  )
+  let addr =
+    oni_p2p.NetAddr(
+      services: oni_p2p.default_services(),
+      ip: oni_p2p.ipv4(1, 2, 3, 4),
+      port: 8333,
+    )
   let source = oni_p2p.localhost()
 
   let updated = oni_p2p.addrman_add(manager, addr, source, 0)
@@ -236,21 +230,24 @@ pub fn addrman_multiple_addrs_test() {
   let manager = oni_p2p.addrman_new()
   let source = oni_p2p.localhost()
 
-  let addr1 = oni_p2p.NetAddr(
-    services: oni_p2p.default_services(),
-    ip: oni_p2p.ipv4(1, 1, 1, 1),
-    port: 8333,
-  )
-  let addr2 = oni_p2p.NetAddr(
-    services: oni_p2p.default_services(),
-    ip: oni_p2p.ipv4(2, 2, 2, 2),
-    port: 8333,
-  )
-  let addr3 = oni_p2p.NetAddr(
-    services: oni_p2p.default_services(),
-    ip: oni_p2p.ipv4(3, 3, 3, 3),
-    port: 8333,
-  )
+  let addr1 =
+    oni_p2p.NetAddr(
+      services: oni_p2p.default_services(),
+      ip: oni_p2p.ipv4(1, 1, 1, 1),
+      port: 8333,
+    )
+  let addr2 =
+    oni_p2p.NetAddr(
+      services: oni_p2p.default_services(),
+      ip: oni_p2p.ipv4(2, 2, 2, 2),
+      port: 8333,
+    )
+  let addr3 =
+    oni_p2p.NetAddr(
+      services: oni_p2p.default_services(),
+      ip: oni_p2p.ipv4(3, 3, 3, 3),
+      port: 8333,
+    )
 
   let m1 = oni_p2p.addrman_add(manager, addr1, source, 0)
   let m2 = oni_p2p.addrman_add(m1, addr2, source, 0)
@@ -265,13 +262,15 @@ pub fn addrman_multiple_addrs_test() {
 
 pub fn handshake_initiate_test() {
   let services = oni_p2p.default_services()
-  let addr = oni_p2p.NetAddr(
-    services: services,
-    ip: oni_p2p.ipv4(1, 2, 3, 4),
-    port: 8333,
-  )
+  let addr =
+    oni_p2p.NetAddr(
+      services: services,
+      ip: oni_p2p.ipv4(1, 2, 3, 4),
+      port: 8333,
+    )
 
-  let msgs = oni_p2p.handshake_initiate(services, 1234567890, addr, 12345, 800000)
+  let msgs =
+    oni_p2p.handshake_initiate(services, 1_234_567_890, addr, 12_345, 800_000)
 
   // Should contain exactly one version message
   case msgs {
@@ -282,23 +281,21 @@ pub fn handshake_initiate_test() {
 
 pub fn handshake_on_version_test() {
   let services = oni_p2p.default_services()
-  let addr = oni_p2p.NetAddr(
-    services: services,
-    ip: oni_p2p.localhost(),
-    port: 8333,
-  )
+  let addr =
+    oni_p2p.NetAddr(services: services, ip: oni_p2p.localhost(), port: 8333)
 
-  let payload = oni_p2p.VersionPayload(
-    version: oni_p2p.protocol_version,
-    services: services,
-    timestamp: 1234567890,
-    addr_recv: addr,
-    addr_from: addr,
-    nonce: 12345,
-    user_agent: "/test:1.0/",
-    start_height: 800000,
-    relay: True,
-  )
+  let payload =
+    oni_p2p.VersionPayload(
+      version: oni_p2p.protocol_version,
+      services: services,
+      timestamp: 1_234_567_890,
+      addr_recv: addr,
+      addr_from: addr,
+      nonce: 12_345,
+      user_agent: "/test:1.0/",
+      start_height: 800_000,
+      relay: True,
+    )
 
   case oni_p2p.handshake_on_version(payload) {
     Ok(msgs) -> {
@@ -314,24 +311,23 @@ pub fn handshake_on_version_test() {
 
 pub fn handshake_old_version_rejected_test() {
   let services = oni_p2p.default_services()
-  let addr = oni_p2p.NetAddr(
-    services: services,
-    ip: oni_p2p.localhost(),
-    port: 8333,
-  )
+  let addr =
+    oni_p2p.NetAddr(services: services, ip: oni_p2p.localhost(), port: 8333)
 
   // Old protocol version should be rejected
-  let payload = oni_p2p.VersionPayload(
-    version: 60000,  // Too old
-    services: services,
-    timestamp: 1234567890,
-    addr_recv: addr,
-    addr_from: addr,
-    nonce: 12345,
-    user_agent: "/old:0.1/",
-    start_height: 800000,
-    relay: True,
-  )
+  let payload =
+    oni_p2p.VersionPayload(
+      version: 60_000,
+      // Too old
+      services: services,
+      timestamp: 1_234_567_890,
+      addr_recv: addr,
+      addr_from: addr,
+      nonce: 12_345,
+      user_agent: "/old:0.1/",
+      start_height: 800_000,
+      relay: True,
+    )
 
   case oni_p2p.handshake_on_version(payload) {
     Ok(_) -> should.fail()

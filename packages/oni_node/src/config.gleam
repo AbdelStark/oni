@@ -290,11 +290,13 @@ pub fn default_rpc_config() -> RpcConfig {
 pub fn default_mempool_config() -> MempoolConfig {
   MempoolConfig(
     max_size_mb: 300,
-    max_age_hours: 336,  // 14 days
+    max_age_hours: 336,
+    // 14 days
     min_relay_fee_sat_vb: 1,
     enable_rbf: True,
     max_orphans: 100,
-    orphan_expiry_secs: 1200,  // 20 minutes
+    orphan_expiry_secs: 1200,
+    // 20 minutes
   )
 }
 
@@ -318,7 +320,8 @@ pub fn default_performance_config() -> PerformanceConfig {
     sig_cache_size: 100_000,
     script_cache_size: 100_000,
     block_index_cache_size: 10_000,
-    validation_threads: 0,  // 0 = auto-detect
+    validation_threads: 0,
+    // 0 = auto-detect
     download_window: 1024,
     use_checkpoints: True,
     assume_valid: None,
@@ -332,7 +335,7 @@ pub fn development_config() -> NodeConfig {
     network: oni_bitcoin.Regtest,
     network_config: NetworkConfig(
       ..default_network_config(),
-      listen_port: 18444,
+      listen_port: 18_444,
       max_inbound: 8,
       max_outbound: 4,
       dns_seeds: [],
@@ -344,17 +347,11 @@ pub fn development_config() -> NodeConfig {
     ),
     rpc_config: RpcConfig(
       ..default_rpc_config(),
-      port: 18443,
+      port: 18_443,
       allow_anonymous: True,
     ),
-    mempool_config: MempoolConfig(
-      ..default_mempool_config(),
-      max_size_mb: 50,
-    ),
-    logging_config: LoggingConfig(
-      ..default_logging_config(),
-      level: LogDebug,
-    ),
+    mempool_config: MempoolConfig(..default_mempool_config(), max_size_mb: 50),
+    logging_config: LoggingConfig(..default_logging_config(), level: LogDebug),
     performance_config: PerformanceConfig(
       ..default_performance_config(),
       sig_cache_size: 10_000,
@@ -370,7 +367,7 @@ pub fn testing_config() -> NodeConfig {
     network: oni_bitcoin.Regtest,
     network_config: NetworkConfig(
       ..default_network_config(),
-      listen_port: 18555,
+      listen_port: 18_555,
       max_inbound: 4,
       max_outbound: 2,
       dns_seeds: [],
@@ -381,15 +378,8 @@ pub fn testing_config() -> NodeConfig {
       data_dir: "./data-test",
       db_cache_mb: 50,
     ),
-    rpc_config: RpcConfig(
-      ..default_rpc_config(),
-      port: 18554,
-      enabled: False,
-    ),
-    mempool_config: MempoolConfig(
-      ..default_mempool_config(),
-      max_size_mb: 10,
-    ),
+    rpc_config: RpcConfig(..default_rpc_config(), port: 18_554, enabled: False),
+    mempool_config: MempoolConfig(..default_mempool_config(), max_size_mb: 10),
     logging_config: LoggingConfig(
       ..default_logging_config(),
       level: LogWarn,
@@ -412,18 +402,21 @@ pub fn production_config() -> NodeConfig {
     storage_config: StorageConfig(
       ..default_storage_config(),
       data_dir: "/var/lib/oni",
-      db_cache_mb: 4096,  // 4GB cache for production
+      db_cache_mb: 4096,
+      // 4GB cache for production
     ),
     rpc_config: RpcConfig(
       ..default_rpc_config(),
-      allow_anonymous: False,  // Require auth in production
+      allow_anonymous: False,
+      // Require auth in production
       cors_enabled: False,
     ),
     mempool_config: default_mempool_config(),
     logging_config: LoggingConfig(
       ..default_logging_config(),
       level: LogInfo,
-      format: LogJson,  // Structured logging for production
+      format: LogJson,
+      // Structured logging for production
       log_to_file: True,
       log_file_path: "/var/log/oni/oni.log",
     ),
@@ -441,7 +434,8 @@ pub fn config_for_environment(env: Environment) -> NodeConfig {
   case env {
     Development -> development_config()
     Testing -> testing_config()
-    Staging -> production_config()  // Staging uses prod config with staging network
+    Staging -> production_config()
+    // Staging uses prod config with staging network
     Production -> production_config()
   }
 }
@@ -456,8 +450,11 @@ pub type ConfigError {
 }
 
 /// Validate a complete configuration
-pub fn validate_config(config: NodeConfig) -> Result(NodeConfig, List(ConfigError)) {
-  let errors = []
+pub fn validate_config(
+  config: NodeConfig,
+) -> Result(NodeConfig, List(ConfigError)) {
+  let errors =
+    []
     |> validate_network_config(config.network_config)
     |> validate_storage_config(config.storage_config)
     |> validate_rpc_config(config.rpc_config, config.environment)
@@ -488,7 +485,10 @@ fn validate_storage_config(
   errors
   |> check_non_empty("storage.data_dir", config.data_dir)
   |> check_positive("storage.db_cache_mb", config.db_cache_mb)
-  |> check_non_negative("storage.prune_target_blocks", config.prune_target_blocks)
+  |> check_non_negative(
+    "storage.prune_target_blocks",
+    config.prune_target_blocks,
+  )
 }
 
 fn validate_rpc_config(
@@ -496,7 +496,8 @@ fn validate_rpc_config(
   config: RpcConfig,
   env: Environment,
 ) -> List(ConfigError) {
-  let base_errors = errors
+  let base_errors =
+    errors
     |> check_port("rpc.port", config.port)
     |> check_positive("rpc.max_connections", config.max_connections)
     |> check_positive("rpc.timeout_ms", config.timeout_ms)
@@ -521,7 +522,10 @@ fn validate_mempool_config(
   errors
   |> check_positive("mempool.max_size_mb", config.max_size_mb)
   |> check_positive("mempool.max_age_hours", config.max_age_hours)
-  |> check_non_negative("mempool.min_relay_fee_sat_vb", config.min_relay_fee_sat_vb)
+  |> check_non_negative(
+    "mempool.min_relay_fee_sat_vb",
+    config.min_relay_fee_sat_vb,
+  )
 }
 
 fn validate_performance_config(
@@ -531,37 +535,68 @@ fn validate_performance_config(
   errors
   |> check_positive("performance.sig_cache_size", config.sig_cache_size)
   |> check_positive("performance.script_cache_size", config.script_cache_size)
-  |> check_non_negative("performance.validation_threads", config.validation_threads)
+  |> check_non_negative(
+    "performance.validation_threads",
+    config.validation_threads,
+  )
   |> check_positive("performance.download_window", config.download_window)
 }
 
 // Validation helpers
 
-fn check_port(errors: List(ConfigError), field: String, value: Int) -> List(ConfigError) {
-  case value >= 1 && value <= 65535 {
+fn check_port(
+  errors: List(ConfigError),
+  field: String,
+  value: Int,
+) -> List(ConfigError) {
+  case value >= 1 && value <= 65_535 {
     True -> errors
-    False -> [ConfigError(field: field, message: "Port must be between 1 and 65535"), ..errors]
+    False -> [
+      ConfigError(field: field, message: "Port must be between 1 and 65535"),
+      ..errors
+    ]
   }
 }
 
-fn check_positive(errors: List(ConfigError), field: String, value: Int) -> List(ConfigError) {
+fn check_positive(
+  errors: List(ConfigError),
+  field: String,
+  value: Int,
+) -> List(ConfigError) {
   case value > 0 {
     True -> errors
-    False -> [ConfigError(field: field, message: "Value must be positive"), ..errors]
+    False -> [
+      ConfigError(field: field, message: "Value must be positive"),
+      ..errors
+    ]
   }
 }
 
-fn check_non_negative(errors: List(ConfigError), field: String, value: Int) -> List(ConfigError) {
+fn check_non_negative(
+  errors: List(ConfigError),
+  field: String,
+  value: Int,
+) -> List(ConfigError) {
   case value >= 0 {
     True -> errors
-    False -> [ConfigError(field: field, message: "Value must be non-negative"), ..errors]
+    False -> [
+      ConfigError(field: field, message: "Value must be non-negative"),
+      ..errors
+    ]
   }
 }
 
-fn check_non_empty(errors: List(ConfigError), field: String, value: String) -> List(ConfigError) {
+fn check_non_empty(
+  errors: List(ConfigError),
+  field: String,
+  value: String,
+) -> List(ConfigError) {
   case string.length(value) > 0 {
     True -> errors
-    False -> [ConfigError(field: field, message: "Value must not be empty"), ..errors]
+    False -> [
+      ConfigError(field: field, message: "Value must not be empty"),
+      ..errors
+    ]
   }
 }
 
@@ -601,11 +636,25 @@ pub fn config_summary(config: NodeConfig) -> String {
     oni_bitcoin.Regtest -> "regtest"
   }
 
-  "Environment: " <> environment_to_string(config.environment) <> "\n" <>
-  "Network: " <> network_name <> "\n" <>
-  "P2P Port: " <> int.to_string(config.network_config.listen_port) <> "\n" <>
-  "RPC Port: " <> int.to_string(config.rpc_config.port) <> "\n" <>
-  "Data Dir: " <> config.storage_config.data_dir <> "\n" <>
-  "DB Cache: " <> int.to_string(config.storage_config.db_cache_mb) <> " MB\n" <>
-  "Sig Cache: " <> int.to_string(config.performance_config.sig_cache_size) <> " entries"
+  "Environment: "
+  <> environment_to_string(config.environment)
+  <> "\n"
+  <> "Network: "
+  <> network_name
+  <> "\n"
+  <> "P2P Port: "
+  <> int.to_string(config.network_config.listen_port)
+  <> "\n"
+  <> "RPC Port: "
+  <> int.to_string(config.rpc_config.port)
+  <> "\n"
+  <> "Data Dir: "
+  <> config.storage_config.data_dir
+  <> "\n"
+  <> "DB Cache: "
+  <> int.to_string(config.storage_config.db_cache_mb)
+  <> " MB\n"
+  <> "Sig Cache: "
+  <> int.to_string(config.performance_config.sig_cache_size)
+  <> " entries"
 }

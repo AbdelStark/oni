@@ -44,10 +44,7 @@ pub type SnapshotMetadata {
 
 /// Known snapshot for a network
 pub type KnownSnapshot {
-  KnownSnapshot(
-    metadata: SnapshotMetadata,
-    network: Network,
-  )
+  KnownSnapshot(metadata: SnapshotMetadata, network: Network)
 }
 
 /// Network type
@@ -116,13 +113,17 @@ pub fn mainnet_snapshots() -> List(KnownSnapshot) {
   [
     KnownSnapshot(
       metadata: SnapshotMetadata(
-        block_hash: create_block_hash("000000000000000000035c3f2816b3c6e92a61e7f5c7f3f7c5e3f2a1b0c9d8e7"),
-        height: 820000,
+        block_hash: create_block_hash(
+          "000000000000000000035c3f2816b3c6e92a61e7f5c7f3f7c5e3f2a1b0c9d8e7",
+        ),
+        height: 820_000,
         num_utxos: 95_000_000,
         num_txs: 45_000_000,
         total_amount: 1_940_000_000_000_000,
-        muhash: <<0:256>>,  // Placeholder
-        snapshot_hash: <<0:256>>,  // Placeholder
+        muhash: <<0:256>>,
+        // Placeholder
+        snapshot_hash: <<0:256>>,
+        // Placeholder
       ),
       network: Mainnet,
     ),
@@ -134,7 +135,9 @@ pub fn testnet_snapshots() -> List(KnownSnapshot) {
   [
     KnownSnapshot(
       metadata: SnapshotMetadata(
-        block_hash: create_block_hash("00000000000000015dc777b3ff2611091336355d3f0ee9766a2e7dfcadb0d89e"),
+        block_hash: create_block_hash(
+          "00000000000000015dc777b3ff2611091336355d3f0ee9766a2e7dfcadb0d89e",
+        ),
         height: 2_500_000,
         num_utxos: 30_000_000,
         num_txs: 15_000_000,
@@ -170,17 +173,21 @@ pub fn find_snapshot_at_height(
 /// Find the latest known snapshot
 pub fn find_latest_snapshot(network: Network) -> Option(KnownSnapshot) {
   let snapshots = get_known_snapshots(network)
-  list.fold(snapshots, None, fn(acc: Option(KnownSnapshot), snap: KnownSnapshot) {
-    case acc {
-      None -> Some(snap)
-      Some(current) -> {
-        case snap.metadata.height > current.metadata.height {
-          True -> Some(snap)
-          False -> acc
+  list.fold(
+    snapshots,
+    None,
+    fn(acc: Option(KnownSnapshot), snap: KnownSnapshot) {
+      case acc {
+        None -> Some(snap)
+        Some(current) -> {
+          case snap.metadata.height > current.metadata.height {
+            True -> Some(snap)
+            False -> acc
+          }
         }
       }
-    }
-  })
+    },
+  )
 }
 
 // ============================================================================
@@ -279,7 +286,9 @@ pub type SnapshotHeader {
 }
 
 /// Snapshot magic bytes
-pub const snapshot_magic = 0x55_54_58_4F  // "UTXO"
+pub const snapshot_magic = 0x55_54_58_4F
+
+// "UTXO"
 
 /// Current snapshot version
 pub const snapshot_version = 1
@@ -298,10 +307,19 @@ pub fn serialize_header(header: SnapshotHeader) -> BitArray {
 }
 
 /// Parse snapshot header
-pub fn parse_header(data: BitArray) -> Result(#(SnapshotHeader, BitArray), SnapshotError) {
+pub fn parse_header(
+  data: BitArray,
+) -> Result(#(SnapshotHeader, BitArray), SnapshotError) {
   case data {
-    <<magic:32-big, version:16-little, network:8, hash:bytes-size(32),
-      height:32-little, num_utxos:64-little, rest:bits>> -> {
+    <<
+      magic:32-big,
+      version:16-little,
+      network:8,
+      hash:bytes-size(32),
+      height:32-little,
+      num_utxos:64-little,
+      rest:bits,
+    >> -> {
       // Verify magic
       case magic == snapshot_magic {
         False -> Error(InvalidFormat)
@@ -310,14 +328,15 @@ pub fn parse_header(data: BitArray) -> Result(#(SnapshotHeader, BitArray), Snaps
           case version == snapshot_version {
             False -> Error(UnsupportedVersion)
             True -> {
-              let header = SnapshotHeader(
-                magic: magic,
-                version: version,
-                network: network,
-                block_hash: create_block_hash_from_bytes(hash),
-                height: height,
-                num_utxos: num_utxos,
-              )
+              let header =
+                SnapshotHeader(
+                  magic: magic,
+                  version: version,
+                  network: network,
+                  block_hash: create_block_hash_from_bytes(hash),
+                  height: height,
+                  num_utxos: num_utxos,
+                )
               Ok(#(header, rest))
             }
           }
@@ -330,10 +349,7 @@ pub fn parse_header(data: BitArray) -> Result(#(SnapshotHeader, BitArray), Snaps
 
 /// Coin serialization format (compact)
 pub type SerializedCoin {
-  SerializedCoin(
-    outpoint: OutPoint,
-    coin: Coin,
-  )
+  SerializedCoin(outpoint: OutPoint, coin: Coin)
 }
 
 /// Serialize a coin entry
@@ -360,7 +376,9 @@ pub fn serialize_coin(outpoint: OutPoint, coin: Coin) -> BitArray {
 }
 
 /// Parse a coin entry
-pub fn parse_coin(data: BitArray) -> Result(#(OutPoint, Coin, BitArray), SnapshotError) {
+pub fn parse_coin(
+  data: BitArray,
+) -> Result(#(OutPoint, Coin, BitArray), SnapshotError) {
   case data {
     <<txid_bytes:bytes-size(32), vout:32-little, rest1:bits>> -> {
       case parse_varint(rest1) {
@@ -384,8 +402,10 @@ pub fn parse_coin(data: BitArray) -> Result(#(OutPoint, Coin, BitArray), Snapsho
                         Ok(a) -> a
                         Error(_) -> oni_bitcoin.Amount(0)
                       }
-                      let output = oni_bitcoin.TxOut(value: amount, script_pubkey: script)
-                      let coin = oni_storage.coin_new(output, height, is_coinbase)
+                      let output =
+                        oni_bitcoin.TxOut(value: amount, script_pubkey: script)
+                      let coin =
+                        oni_storage.coin_new(output, height, is_coinbase)
 
                       Ok(#(outpoint, coin, remaining))
                     }
@@ -422,7 +442,9 @@ pub fn new_validator(metadata: SnapshotMetadata) -> BackgroundValidator {
     snapshot_metadata: metadata,
     current_height: 0,
     blocks_validated: 0,
-    last_validated_hash: create_block_hash("0000000000000000000000000000000000000000000000000000000000000000"),
+    last_validated_hash: create_block_hash(
+      "0000000000000000000000000000000000000000000000000000000000000000",
+    ),
   )
 }
 
@@ -446,7 +468,9 @@ pub fn is_caught_up(validator: BackgroundValidator) -> Bool {
 }
 
 /// Get validation progress
-pub fn get_validation_progress(validator: BackgroundValidator) -> ValidationProgress {
+pub fn get_validation_progress(
+  validator: BackgroundValidator,
+) -> ValidationProgress {
   ValidationProgress(
     current_height: validator.current_height,
     snapshot_height: validator.snapshot_metadata.height,
@@ -479,7 +503,8 @@ pub fn verify_snapshot(
 
 /// Create new MuHash accumulator
 fn muhash_new() -> MuHasher {
-  MuHasher(<<0:3072>>)  // 3072-bit state for secp256k1 field
+  MuHasher(<<0:3072>>)
+  // 3072-bit state for secp256k1 field
 }
 
 /// Add element to MuHash
@@ -529,10 +554,7 @@ pub fn new_download(expected_hash: BitArray, total_bytes: Int) -> DownloadState 
 }
 
 /// Process downloaded chunk
-pub fn process_chunk(
-  state: DownloadState,
-  chunk: BitArray,
-) -> DownloadState {
+pub fn process_chunk(state: DownloadState, chunk: BitArray) -> DownloadState {
   DownloadState(
     ..state,
     bytes_downloaded: state.bytes_downloaded + bit_array.byte_size(chunk),

@@ -14,8 +14,8 @@ import gleam/option.{type Option, None, Some}
 import gleam/set.{type Set}
 import oni_bitcoin.{type BlockHash, type Hash256, type Txid}
 import oni_p2p.{
-  type InvItem, type InvType, type Message, type PeerId,
-  InvBlock, InvTx, InvWitnessTx, MsgGetData, MsgInv,
+  type InvItem, type InvType, type Message, type PeerId, InvBlock, InvTx,
+  InvWitnessTx, MsgGetData, MsgInv,
 }
 
 // ============================================================================
@@ -124,10 +124,11 @@ pub fn tx_relay_get_inv(
         Error(_) -> set.new()
       }
 
-      let to_announce = list.filter(relay.announce_queue, fn(txid) {
-        let key = oni_bitcoin.hash256_to_hex(txid.hash)
-        !set.contains(already_announced, key)
-      })
+      let to_announce =
+        list.filter(relay.announce_queue, fn(txid) {
+          let key = oni_bitcoin.hash256_to_hex(txid.hash)
+          !set.contains(already_announced, key)
+        })
 
       case list.is_empty(to_announce) {
         True -> #(relay, None)
@@ -136,23 +137,25 @@ pub fn tx_relay_get_inv(
           let batch = list.take(to_announce, max_inv_batch)
 
           // Create inv message
-          let items = list.map(batch, fn(txid) {
-            oni_p2p.InvItem(InvTx, txid.hash)
-          })
+          let items =
+            list.map(batch, fn(txid) { oni_p2p.InvItem(InvTx, txid.hash) })
           let msg = MsgInv(items)
 
           // Update announced set
-          let new_announced_set = list.fold(batch, already_announced, fn(acc, txid) {
-            set.insert(acc, oni_bitcoin.hash256_to_hex(txid.hash))
-          })
-          let new_announced = dict.insert(relay.announced, peer_key, new_announced_set)
+          let new_announced_set =
+            list.fold(batch, already_announced, fn(acc, txid) {
+              set.insert(acc, oni_bitcoin.hash256_to_hex(txid.hash))
+            })
+          let new_announced =
+            dict.insert(relay.announced, peer_key, new_announced_set)
 
           // Update relay state
-          let new_relay = TxRelay(
-            ..relay,
-            announced: new_announced,
-            last_announce_time: current_time,
-          )
+          let new_relay =
+            TxRelay(
+              ..relay,
+              announced: new_announced,
+              last_announce_time: current_time,
+            )
 
           #(new_relay, Some(msg))
         }
@@ -170,12 +173,13 @@ pub fn tx_relay_on_inv(
   let peer_key = oni_p2p.peer_id_to_string(peer)
 
   // Filter to just transaction items
-  let tx_items = list.filter(items, fn(item) {
-    case item.inv_type {
-      InvTx | InvWitnessTx -> True
-      _ -> False
-    }
-  })
+  let tx_items =
+    list.filter(items, fn(item) {
+      case item.inv_type {
+        InvTx | InvWitnessTx -> True
+        _ -> False
+      }
+    })
 
   // Track what peer has announced
   let current_announced = case dict.get(relay.peer_announced, peer_key) {
@@ -183,29 +187,29 @@ pub fn tx_relay_on_inv(
     Error(_) -> set.new()
   }
 
-  let #(new_announced, to_request) = list.fold(
-    tx_items,
-    #(current_announced, []),
-    fn(acc, item) {
+  let #(new_announced, to_request) =
+    list.fold(tx_items, #(current_announced, []), fn(acc, item) {
       let #(announced, requests) = acc
       let key = oni_bitcoin.hash256_to_hex(item.hash)
 
       case set.contains(announced, key) {
-        True -> acc  // Already know about this
+        True -> acc
+        // Already know about this
         False -> {
           let new_announced = set.insert(announced, key)
           // Limit per-peer tracking
           let limited = case set.size(new_announced) > max_tx_inv_per_peer {
-            True -> set.new()  // Reset if too many
+            True -> set.new()
+            // Reset if too many
             False -> new_announced
           }
           #(limited, [item, ..requests])
         }
       }
-    }
-  )
+    })
 
-  let new_peer_announced = dict.insert(relay.peer_announced, peer_key, new_announced)
+  let new_peer_announced =
+    dict.insert(relay.peer_announced, peer_key, new_announced)
   let new_relay = TxRelay(..relay, peer_announced: new_peer_announced)
 
   #(new_relay, list.reverse(to_request))
@@ -222,7 +226,8 @@ pub fn tx_relay_create_getdata(
   let peer_key = oni_p2p.peer_id_to_string(peer)
 
   // Check in-flight limit
-  let current_in_flight = count_in_flight_for_peer(relay.pending_requests, peer_key)
+  let current_in_flight =
+    count_in_flight_for_peer(relay.pending_requests, peer_key)
   case current_in_flight >= max_in_flight_per_peer {
     True -> #(relay, None)
     False -> {
@@ -233,24 +238,27 @@ pub fn tx_relay_create_getdata(
         True -> #(relay, None)
         False -> {
           // Convert to witness type if requested
-          let request_items = list.map(batch, fn(item) {
-            case witness && item.inv_type == InvTx {
-              True -> oni_p2p.InvItem(InvWitnessTx, item.hash)
-              False -> item
-            }
-          })
+          let request_items =
+            list.map(batch, fn(item) {
+              case witness && item.inv_type == InvTx {
+                True -> oni_p2p.InvItem(InvWitnessTx, item.hash)
+                False -> item
+              }
+            })
 
           // Track pending requests
-          let new_pending = list.fold(request_items, relay.pending_requests, fn(acc, item) {
-            let key = oni_bitcoin.hash256_to_hex(item.hash)
-            let request = PendingRequest(
-              hash: item.hash,
-              peer: peer,
-              requested_at: current_time,
-              inv_type: item.inv_type,
-            )
-            dict.insert(acc, key, request)
-          })
+          let new_pending =
+            list.fold(request_items, relay.pending_requests, fn(acc, item) {
+              let key = oni_bitcoin.hash256_to_hex(item.hash)
+              let request =
+                PendingRequest(
+                  hash: item.hash,
+                  peer: peer,
+                  requested_at: current_time,
+                  inv_type: item.inv_type,
+                )
+              dict.insert(acc, key, request)
+            })
 
           let msg = MsgGetData(request_items)
           let new_relay = TxRelay(..relay, pending_requests: new_pending)
@@ -271,9 +279,10 @@ pub fn tx_relay_complete_request(relay: TxRelay, hash: Hash256) -> TxRelay {
 /// Remove timed out requests
 pub fn tx_relay_expire_requests(relay: TxRelay, current_time: Int) -> TxRelay {
   let cutoff = current_time - request_timeout_ms
-  let new_pending = dict.filter(relay.pending_requests, fn(_key, req) {
-    req.requested_at > cutoff
-  })
+  let new_pending =
+    dict.filter(relay.pending_requests, fn(_key, req) {
+      req.requested_at > cutoff
+    })
   TxRelay(..relay, pending_requests: new_pending)
 }
 
@@ -286,9 +295,10 @@ pub fn tx_relay_peer_disconnected(relay: TxRelay, peer: PeerId) -> TxRelay {
   let new_peer_announced = dict.delete(relay.peer_announced, peer_key)
 
   // Remove pending requests for this peer
-  let new_pending = dict.filter(relay.pending_requests, fn(_key, req) {
-    oni_p2p.peer_id_to_string(req.peer) != peer_key
-  })
+  let new_pending =
+    dict.filter(relay.pending_requests, fn(_key, req) {
+      oni_p2p.peer_id_to_string(req.peer) != peer_key
+    })
 
   TxRelay(
     ..relay,
@@ -298,7 +308,10 @@ pub fn tx_relay_peer_disconnected(relay: TxRelay, peer: PeerId) -> TxRelay {
   )
 }
 
-fn count_in_flight_for_peer(pending: Dict(String, PendingRequest), peer_key: String) -> Int {
+fn count_in_flight_for_peer(
+  pending: Dict(String, PendingRequest),
+  peer_key: String,
+) -> Int {
   dict.fold(pending, 0, fn(acc, _key, req) {
     case oni_p2p.peer_id_to_string(req.peer) == peer_key {
       True -> acc + 1
@@ -330,7 +343,10 @@ pub fn block_relay_announce(relay: BlockRelay, hash: BlockHash) -> BlockRelay {
 /// Enable compact blocks for a peer
 pub fn block_relay_enable_compact(relay: BlockRelay, peer: PeerId) -> BlockRelay {
   let peer_key = oni_p2p.peer_id_to_string(peer)
-  BlockRelay(..relay, compact_block_peers: set.insert(relay.compact_block_peers, peer_key))
+  BlockRelay(
+    ..relay,
+    compact_block_peers: set.insert(relay.compact_block_peers, peer_key),
+  )
 }
 
 /// Check if peer supports compact blocks
@@ -351,25 +367,27 @@ pub fn block_relay_get_inv(
     Error(_) -> set.new()
   }
 
-  let to_announce = list.filter(relay.announce_queue, fn(hash) {
-    let key = oni_bitcoin.hash256_to_hex(hash.hash)
-    !set.contains(already_announced, key)
-  })
+  let to_announce =
+    list.filter(relay.announce_queue, fn(hash) {
+      let key = oni_bitcoin.hash256_to_hex(hash.hash)
+      !set.contains(already_announced, key)
+    })
 
   case list.is_empty(to_announce) {
     True -> #(relay, None)
     False -> {
       let batch = list.take(to_announce, max_inv_batch)
 
-      let items = list.map(batch, fn(hash) {
-        oni_p2p.InvItem(InvBlock, hash.hash)
-      })
+      let items =
+        list.map(batch, fn(hash) { oni_p2p.InvItem(InvBlock, hash.hash) })
       let msg = MsgInv(items)
 
-      let new_announced_set = list.fold(batch, already_announced, fn(acc, hash) {
-        set.insert(acc, oni_bitcoin.hash256_to_hex(hash.hash))
-      })
-      let new_announced = dict.insert(relay.announced, peer_key, new_announced_set)
+      let new_announced_set =
+        list.fold(batch, already_announced, fn(acc, hash) {
+          set.insert(acc, oni_bitcoin.hash256_to_hex(hash.hash))
+        })
+      let new_announced =
+        dict.insert(relay.announced, peer_key, new_announced_set)
 
       let new_relay = BlockRelay(..relay, announced: new_announced)
 
@@ -386,22 +404,21 @@ pub fn block_relay_on_inv(
 ) -> #(BlockRelay, List(InvItem)) {
   let peer_key = oni_p2p.peer_id_to_string(peer)
 
-  let block_items = list.filter(items, fn(item) {
-    case item.inv_type {
-      InvBlock -> True
-      _ -> False
-    }
-  })
+  let block_items =
+    list.filter(items, fn(item) {
+      case item.inv_type {
+        InvBlock -> True
+        _ -> False
+      }
+    })
 
   let current_announced = case dict.get(relay.peer_announced, peer_key) {
     Ok(s) -> s
     Error(_) -> set.new()
   }
 
-  let #(new_announced, to_request) = list.fold(
-    block_items,
-    #(current_announced, []),
-    fn(acc, item) {
+  let #(new_announced, to_request) =
+    list.fold(block_items, #(current_announced, []), fn(acc, item) {
       let #(announced, requests) = acc
       let key = oni_bitcoin.hash256_to_hex(item.hash)
 
@@ -416,10 +433,10 @@ pub fn block_relay_on_inv(
           #(limited, [item, ..requests])
         }
       }
-    }
-  )
+    })
 
-  let new_peer_announced = dict.insert(relay.peer_announced, peer_key, new_announced)
+  let new_peer_announced =
+    dict.insert(relay.peer_announced, peer_key, new_announced)
   let new_relay = BlockRelay(..relay, peer_announced: new_peer_announced)
 
   #(new_relay, list.reverse(to_request))
@@ -434,7 +451,8 @@ pub fn block_relay_create_getdata(
 ) -> #(BlockRelay, Option(Message)) {
   let peer_key = oni_p2p.peer_id_to_string(peer)
 
-  let current_in_flight = count_in_flight_for_peer(relay.pending_requests, peer_key)
+  let current_in_flight =
+    count_in_flight_for_peer(relay.pending_requests, peer_key)
   case current_in_flight >= max_in_flight_per_peer {
     True -> #(relay, None)
     False -> {
@@ -444,16 +462,18 @@ pub fn block_relay_create_getdata(
       case list.is_empty(batch) {
         True -> #(relay, None)
         False -> {
-          let new_pending = list.fold(batch, relay.pending_requests, fn(acc, item) {
-            let key = oni_bitcoin.hash256_to_hex(item.hash)
-            let request = PendingRequest(
-              hash: item.hash,
-              peer: peer,
-              requested_at: current_time,
-              inv_type: item.inv_type,
-            )
-            dict.insert(acc, key, request)
-          })
+          let new_pending =
+            list.fold(batch, relay.pending_requests, fn(acc, item) {
+              let key = oni_bitcoin.hash256_to_hex(item.hash)
+              let request =
+                PendingRequest(
+                  hash: item.hash,
+                  peer: peer,
+                  requested_at: current_time,
+                  inv_type: item.inv_type,
+                )
+              dict.insert(acc, key, request)
+            })
 
           let msg = MsgGetData(batch)
           let new_relay = BlockRelay(..relay, pending_requests: new_pending)
@@ -466,22 +486,32 @@ pub fn block_relay_create_getdata(
 }
 
 /// Mark block request as completed
-pub fn block_relay_complete_request(relay: BlockRelay, hash: Hash256) -> BlockRelay {
+pub fn block_relay_complete_request(
+  relay: BlockRelay,
+  hash: Hash256,
+) -> BlockRelay {
   let key = oni_bitcoin.hash256_to_hex(hash)
-  BlockRelay(..relay, pending_requests: dict.delete(relay.pending_requests, key))
+  BlockRelay(
+    ..relay,
+    pending_requests: dict.delete(relay.pending_requests, key),
+  )
 }
 
 /// Clear state for disconnected peer
-pub fn block_relay_peer_disconnected(relay: BlockRelay, peer: PeerId) -> BlockRelay {
+pub fn block_relay_peer_disconnected(
+  relay: BlockRelay,
+  peer: PeerId,
+) -> BlockRelay {
   let peer_key = oni_p2p.peer_id_to_string(peer)
 
   let new_announced = dict.delete(relay.announced, peer_key)
   let new_peer_announced = dict.delete(relay.peer_announced, peer_key)
   let new_compact = set.delete(relay.compact_block_peers, peer_key)
 
-  let new_pending = dict.filter(relay.pending_requests, fn(_key, req) {
-    oni_p2p.peer_id_to_string(req.peer) != peer_key
-  })
+  let new_pending =
+    dict.filter(relay.pending_requests, fn(_key, req) {
+      oni_p2p.peer_id_to_string(req.peer) != peer_key
+    })
 
   BlockRelay(
     ..relay,
@@ -526,10 +556,8 @@ pub fn handle_notfound(
   block_relay: BlockRelay,
   items: List(InvItem),
 ) -> #(TxRelay, BlockRelay) {
-  let #(new_tx_relay, new_block_relay) = list.fold(
-    items,
-    #(tx_relay, block_relay),
-    fn(acc, item) {
+  let #(new_tx_relay, new_block_relay) =
+    list.fold(items, #(tx_relay, block_relay), fn(acc, item) {
       let #(tr, br) = acc
       case item.inv_type {
         InvTx | InvWitnessTx -> {
@@ -540,8 +568,7 @@ pub fn handle_notfound(
         }
         _ -> acc
       }
-    }
-  )
+    })
 
   #(new_tx_relay, new_block_relay)
 }

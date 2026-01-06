@@ -19,9 +19,7 @@ import gleam/bit_array
 import gleam/int
 import gleam/list
 import gleam/result
-import oni_bitcoin.{
-  type OutPoint, type Transaction, type TxIn, type TxOut,
-}
+import oni_bitcoin.{type OutPoint, type Transaction, type TxIn, type TxOut}
 
 // ============================================================================
 // Constants
@@ -111,8 +109,7 @@ pub fn error_to_string(err: PolicyError) -> String {
   case err {
     TxTooLarge(weight) ->
       "Transaction weight " <> int.to_string(weight) <> " exceeds limit"
-    TooManySigops(count) ->
-      "Too many sigops: " <> int.to_string(count)
+    TooManySigops(count) -> "Too many sigops: " <> int.to_string(count)
     NonStandardVersion(version) ->
       "Non-standard version: " <> int.to_string(version)
     NonStandardInput(idx, reason) ->
@@ -120,11 +117,17 @@ pub fn error_to_string(err: PolicyError) -> String {
     NonStandardOutput(idx, reason) ->
       "Non-standard output " <> int.to_string(idx) <> ": " <> reason
     DustOutput(idx, value, threshold) ->
-      "Dust output " <> int.to_string(idx) <> ": " <>
-      int.to_string(value) <> " < " <> int.to_string(threshold)
+      "Dust output "
+      <> int.to_string(idx)
+      <> ": "
+      <> int.to_string(value)
+      <> " < "
+      <> int.to_string(threshold)
     InsufficientFee(fee, required) ->
-      "Insufficient fee: " <> int.to_string(fee) <>
-      " < required " <> int.to_string(required)
+      "Insufficient fee: "
+      <> int.to_string(fee)
+      <> " < required "
+      <> int.to_string(required)
     InvalidFee -> "Invalid fee calculation"
     DuplicateInput(_) -> "Duplicate input"
     EmptyInputs -> "Transaction has no inputs"
@@ -164,9 +167,11 @@ pub fn default_policy_config() -> PolicyConfig {
   PolicyConfig(
     min_relay_fee_sat_vbyte: 1,
     permit_bare_multisig: False,
-    max_data_carrier_size: 83,  // OP_RETURN data limit
+    max_data_carrier_size: 83,
+    // OP_RETURN data limit
     accept_non_standard: False,
-    dust_relay_fee_sat_vbyte: 3,  // Used for dust threshold calculation
+    dust_relay_fee_sat_vbyte: 3,
+    // Used for dust threshold calculation
   )
 }
 
@@ -251,7 +256,10 @@ fn check_not_empty(tx: Transaction) -> Result(Nil, PolicyError) {
 }
 
 /// Check transaction version is standard
-fn check_version(tx: Transaction, config: PolicyConfig) -> Result(Nil, PolicyError) {
+fn check_version(
+  tx: Transaction,
+  config: PolicyConfig,
+) -> Result(Nil, PolicyError) {
   case config.accept_non_standard {
     True -> Ok(Nil)
     False -> {
@@ -287,16 +295,15 @@ fn check_duplicate_inputs_acc(
     [input, ..rest] -> {
       case list.any(seen, fn(op) { outpoint_equal(op, input.prevout) }) {
         True -> Error(DuplicateInput(input.prevout))
-        False ->
-          check_duplicate_inputs_acc(rest, [input.prevout, ..seen])
+        False -> check_duplicate_inputs_acc(rest, [input.prevout, ..seen])
       }
     }
   }
 }
 
 fn outpoint_equal(a: OutPoint, b: OutPoint) -> Bool {
-  oni_bitcoin.txid_to_hex(a.txid) == oni_bitcoin.txid_to_hex(b.txid) &&
-    a.vout == b.vout
+  oni_bitcoin.txid_to_hex(a.txid) == oni_bitcoin.txid_to_hex(b.txid)
+  && a.vout == b.vout
 }
 
 /// Check all inputs are standard
@@ -391,7 +398,8 @@ fn get_push_size(
         False -> Error(Nil)
         True -> {
           let push_data = bit_array.slice(data, 0, n)
-          let remaining = bit_array.slice(data, n, bit_array.byte_size(data) - n)
+          let remaining =
+            bit_array.slice(data, n, bit_array.byte_size(data) - n)
           case push_data, remaining {
             Ok(pd), Ok(rem) -> Ok(#(pd, rem))
             _, _ -> Error(Nil)
@@ -407,7 +415,8 @@ fn get_push_size(
             False -> Error(Nil)
             True -> {
               let push_data = bit_array.slice(rest, 0, size)
-              let remaining = bit_array.slice(rest, size, bit_array.byte_size(rest) - size)
+              let remaining =
+                bit_array.slice(rest, size, bit_array.byte_size(rest) - size)
               case push_data, remaining {
                 Ok(pd), Ok(rem) -> Ok(#(pd, rem))
                 _, _ -> Error(Nil)
@@ -426,7 +435,8 @@ fn get_push_size(
             False -> Error(Nil)
             True -> {
               let push_data = bit_array.slice(rest, 0, size)
-              let remaining = bit_array.slice(rest, size, bit_array.byte_size(rest) - size)
+              let remaining =
+                bit_array.slice(rest, size, bit_array.byte_size(rest) - size)
               case push_data, remaining {
                 Ok(pd), Ok(rem) -> Ok(#(pd, rem))
                 _, _ -> Error(Nil)
@@ -445,7 +455,8 @@ fn get_push_size(
             False -> Error(Nil)
             True -> {
               let push_data = bit_array.slice(rest, 0, size)
-              let remaining = bit_array.slice(rest, size, bit_array.byte_size(rest) - size)
+              let remaining =
+                bit_array.slice(rest, size, bit_array.byte_size(rest) - size)
               case push_data, remaining {
                 Ok(pd), Ok(rem) -> Ok(#(pd, rem))
                 _, _ -> Error(Nil)
@@ -488,7 +499,10 @@ fn check_outputs_standard_acc(
 }
 
 /// Check if an output is standard
-fn is_output_standard(output: TxOut, config: PolicyConfig) -> Result(Nil, String) {
+fn is_output_standard(
+  output: TxOut,
+  config: PolicyConfig,
+) -> Result(Nil, String) {
   let script_bytes = output.script_pubkey.bytes
   let script_size = bit_array.byte_size(script_bytes)
 
@@ -503,7 +517,8 @@ fn is_output_standard(output: TxOut, config: PolicyConfig) -> Result(Nil, String
         OutputP2WPKH -> Ok(Nil)
         OutputP2WSH -> Ok(Nil)
         OutputP2TR -> Ok(Nil)
-        OutputOpReturn -> Ok(Nil)  // OP_RETURN is standard but has count limits
+        OutputOpReturn -> Ok(Nil)
+        // OP_RETURN is standard but has count limits
         OutputBareMultisig -> {
           case config.permit_bare_multisig {
             True -> Ok(Nil)
@@ -511,7 +526,8 @@ fn is_output_standard(output: TxOut, config: PolicyConfig) -> Result(Nil, String
           }
         }
         OutputNonStandard -> Error("Non-standard script")
-        OutputWitnessUnknown -> Ok(Nil)  // Future witness versions are standard
+        OutputWitnessUnknown -> Ok(Nil)
+        // Future witness versions are standard
       }
     }
   }
@@ -552,8 +568,9 @@ pub fn classify_output_type(script: BitArray) -> OutputType {
     <<0x6A, _rest:bits>> -> OutputOpReturn
 
     // Future witness versions (OP_2 through OP_16 + push)
-    <<version:8, size:8, _data:bits>> if version >= 0x52 && version <= 0x60 && size >= 2 && size <= 40 ->
-      OutputWitnessUnknown
+    <<version:8, size:8, _data:bits>>
+      if version >= 0x52 && version <= 0x60 && size >= 2 && size <= 40
+    -> OutputWitnessUnknown
 
     // Check for bare multisig pattern (simplified)
     _ -> {
@@ -572,7 +589,8 @@ fn is_bare_multisig(script: BitArray) -> Bool {
     <<first:8, _middle:bits>> if first >= 0x51 && first <= 0x60 -> {
       let size = bit_array.byte_size(script)
       case bit_array.slice(script, size - 1, 1) {
-        Ok(<<0xAE>>) -> True  // OP_CHECKMULTISIG
+        Ok(<<0xAE>>) -> True
+        // OP_CHECKMULTISIG
         _ -> False
       }
     }
@@ -621,12 +639,18 @@ fn get_dust_threshold(output_type: OutputType, config: PolicyConfig) -> Int {
   // Dust = (input_size + 32 + 4 + 1 + 107 + 4) * dust_relay_fee / 1000
   // Where 107 is the typical P2PKH scriptSig size
   let base_spend_size = case output_type {
-    OutputP2PKH -> 148  // 32+4+1+107+4
-    OutputP2SH -> 91    // Depends on redeemScript, use typical
-    OutputP2WPKH -> 68  // Witness discount
-    OutputP2WSH -> 104  // Larger witness
-    OutputP2TR -> 58    // Schnorr signature is smaller
-    _ -> 148  // Default to P2PKH size
+    OutputP2PKH -> 148
+    // 32+4+1+107+4
+    OutputP2SH -> 91
+    // Depends on redeemScript, use typical
+    OutputP2WPKH -> 68
+    // Witness discount
+    OutputP2WSH -> 104
+    // Larger witness
+    OutputP2TR -> 58
+    // Schnorr signature is smaller
+    _ -> 148
+    // Default to P2PKH size
   }
 
   // Dust threshold = size * 3 (default dustRelayFee)
@@ -638,12 +662,13 @@ fn check_op_return_policy(
   tx: Transaction,
   _config: PolicyConfig,
 ) -> Result(Nil, PolicyError) {
-  let op_return_count = list.fold(tx.outputs, 0, fn(count, output) {
-    case classify_output_type(output.script_pubkey.bytes) {
-      OutputOpReturn -> count + 1
-      _ -> count
-    }
-  })
+  let op_return_count =
+    list.fold(tx.outputs, 0, fn(count, output) {
+      case classify_output_type(output.script_pubkey.bytes) {
+        OutputOpReturn -> count + 1
+        _ -> count
+      }
+    })
 
   case op_return_count > 1 {
     True -> Error(MultipleOpReturn)
@@ -663,7 +688,8 @@ pub fn calculate_weight(tx: Transaction) -> Int {
   let witness_size = calculate_witness_size(tx)
 
   case witness_size > 0 {
-    True -> base_size * 3 + base_size + witness_size + 2  // +2 for marker and flag
+    True -> base_size * 3 + base_size + witness_size + 2
+    // +2 for marker and flag
     False -> base_size * 4
   }
 }
@@ -678,20 +704,26 @@ pub fn calculate_vsize(tx: Transaction) -> Int {
 /// Calculate base transaction size (without witness)
 fn calculate_base_size(tx: Transaction) -> Int {
   // Version (4) + input count (varint) + inputs + output count (varint) + outputs + locktime (4)
-  let input_size = list.fold(tx.inputs, 0, fn(acc, input) {
-    let script_size = bit_array.byte_size(input.script_sig.bytes)
-    // Previous outpoint (36) + script length (varint) + script + sequence (4)
-    acc + 36 + varint_size(script_size) + script_size + 4
-  })
+  let input_size =
+    list.fold(tx.inputs, 0, fn(acc, input) {
+      let script_size = bit_array.byte_size(input.script_sig.bytes)
+      // Previous outpoint (36) + script length (varint) + script + sequence (4)
+      acc + 36 + varint_size(script_size) + script_size + 4
+    })
 
-  let output_size = list.fold(tx.outputs, 0, fn(acc, output) {
-    let script_size = bit_array.byte_size(output.script_pubkey.bytes)
-    // Value (8) + script length (varint) + script
-    acc + 8 + varint_size(script_size) + script_size
-  })
+  let output_size =
+    list.fold(tx.outputs, 0, fn(acc, output) {
+      let script_size = bit_array.byte_size(output.script_pubkey.bytes)
+      // Value (8) + script length (varint) + script
+      acc + 8 + varint_size(script_size) + script_size
+    })
 
-  4 + varint_size(list.length(tx.inputs)) + input_size +
-    varint_size(list.length(tx.outputs)) + output_size + 4
+  4
+  + varint_size(list.length(tx.inputs))
+  + input_size
+  + varint_size(list.length(tx.outputs))
+  + output_size
+  + 4
 }
 
 /// Calculate witness data size
@@ -700,9 +732,12 @@ fn calculate_witness_size(tx: Transaction) -> Int {
     case input.witness {
       [] -> acc
       witness_stack -> {
-        let stack_size = list.fold(witness_stack, 0, fn(wacc, item) {
-          wacc + varint_size(bit_array.byte_size(item)) + bit_array.byte_size(item)
-        })
+        let stack_size =
+          list.fold(witness_stack, 0, fn(wacc, item) {
+            wacc
+            + varint_size(bit_array.byte_size(item))
+            + bit_array.byte_size(item)
+          })
         acc + varint_size(list.length(witness_stack)) + stack_size
       }
     }

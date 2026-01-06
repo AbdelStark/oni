@@ -13,10 +13,10 @@ import gleam/dict.{type Dict}
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
-import oni_bitcoin.{type BlockHash, type Block}
+import oni_bitcoin.{type Block, type BlockHash}
 import oni_p2p.{
-  type BlockHeaderNet, type Message, type PeerId,
-  InvBlock, MsgGetData, MsgGetHeaders,
+  type BlockHeaderNet, type Message, type PeerId, InvBlock, MsgGetData,
+  MsgGetHeaders,
 }
 
 // ============================================================================
@@ -106,12 +106,7 @@ pub type BlocksSyncState {
 
 /// Information about a block being downloaded
 pub type BlockInFlight {
-  BlockInFlight(
-    hash: BlockHash,
-    height: Int,
-    peer: PeerId,
-    requested_at: Int,
-  )
+  BlockInFlight(hash: BlockHash, height: Int, peer: PeerId, requested_at: Int)
 }
 
 /// Create initial sync state
@@ -138,10 +133,7 @@ pub type BlockLocator {
 
 /// Build a block locator starting from a chain of headers
 /// Uses exponential backoff: 10 most recent, then 2^n steps back
-pub fn build_locator(
-  chain: List(BlockHash),
-  tip_height: Int,
-) -> BlockLocator {
+pub fn build_locator(chain: List(BlockHash), tip_height: Int) -> BlockLocator {
   let hashes = build_locator_hashes(chain, tip_height, 0, 1, [])
   BlockLocator(hashes: hashes)
 }
@@ -172,7 +164,13 @@ fn build_locator_hashes(
           }
           let next_height = current_height - next_step_size
 
-          build_locator_hashes(chain, next_height, next_step, next_step_size, new_acc)
+          build_locator_hashes(
+            chain,
+            next_height,
+            next_step,
+            next_step_size,
+            new_acc,
+          )
         }
       }
     }
@@ -268,11 +266,12 @@ pub fn header_chain_add(
               let chainwork = chain.total_work + work
 
               // Create entry
-              let entry = HeaderEntry(
-                header: header,
-                height: height,
-                chainwork: chainwork,
-              )
+              let entry =
+                HeaderEntry(
+                  header: header,
+                  height: height,
+                  chainwork: chainwork,
+                )
 
               let key = oni_bitcoin.hash256_to_hex(header_hash.hash)
 
@@ -314,7 +313,8 @@ fn target_from_bits(bits: Int) -> Int {
 
   // Handle negative flag (if mantissa has bit 23 set)
   let mantissa_adj = case int.bitwise_and(bits, 0x00800000) != 0 {
-    True -> 0  // Invalid: negative target
+    True -> 0
+    // Invalid: negative target
     False -> mantissa
   }
 
@@ -330,31 +330,70 @@ fn target_from_bits(bits: Int) -> Int {
 fn hash_to_uint256(bytes: BitArray) -> Int {
   // Read as 32 little-endian bytes, convert to single value
   case bytes {
-    <<b0:8, b1:8, b2:8, b3:8, b4:8, b5:8, b6:8, b7:8,
-      b8:8, b9:8, b10:8, b11:8, b12:8, b13:8, b14:8, b15:8,
-      b16:8, b17:8, b18:8, b19:8, b20:8, b21:8, b22:8, b23:8,
-      b24:8, b25:8, b26:8, b27:8, b28:8, b29:8, b30:8, b31:8>> -> {
+    <<
+      b0:8,
+      b1:8,
+      b2:8,
+      b3:8,
+      b4:8,
+      b5:8,
+      b6:8,
+      b7:8,
+      b8:8,
+      b9:8,
+      b10:8,
+      b11:8,
+      b12:8,
+      b13:8,
+      b14:8,
+      b15:8,
+      b16:8,
+      b17:8,
+      b18:8,
+      b19:8,
+      b20:8,
+      b21:8,
+      b22:8,
+      b23:8,
+      b24:8,
+      b25:8,
+      b26:8,
+      b27:8,
+      b28:8,
+      b29:8,
+      b30:8,
+      b31:8,
+    >> -> {
       // For PoW comparison, the hash is treated as a little-endian 256-bit number
       // Higher bytes have more weight in the comparison
       // So b31 is the most significant byte
-      let msb = b31 * pow2(248) + b30 * pow2(240) + b29 * pow2(232) + b28 * pow2(224)
-      let next = b27 * pow2(216) + b26 * pow2(208) + b25 * pow2(200) + b24 * pow2(192)
-      let mid1 = b23 * pow2(184) + b22 * pow2(176) + b21 * pow2(168) + b20 * pow2(160)
-      let mid2 = b19 * pow2(152) + b18 * pow2(144) + b17 * pow2(136) + b16 * pow2(128)
-      let mid3 = b15 * pow2(120) + b14 * pow2(112) + b13 * pow2(104) + b12 * pow2(96)
+      let msb =
+        b31 * pow2(248) + b30 * pow2(240) + b29 * pow2(232) + b28 * pow2(224)
+      let next =
+        b27 * pow2(216) + b26 * pow2(208) + b25 * pow2(200) + b24 * pow2(192)
+      let mid1 =
+        b23 * pow2(184) + b22 * pow2(176) + b21 * pow2(168) + b20 * pow2(160)
+      let mid2 =
+        b19 * pow2(152) + b18 * pow2(144) + b17 * pow2(136) + b16 * pow2(128)
+      let mid3 =
+        b15 * pow2(120) + b14 * pow2(112) + b13 * pow2(104) + b12 * pow2(96)
       let mid4 = b11 * pow2(88) + b10 * pow2(80) + b9 * pow2(72) + b8 * pow2(64)
       let low1 = b7 * pow2(56) + b6 * pow2(48) + b5 * pow2(40) + b4 * pow2(32)
       let low2 = b3 * pow2(24) + b2 * pow2(16) + b1 * pow2(8) + b0
       msb + next + mid1 + mid2 + mid3 + mid4 + low1 + low2
     }
-    _ -> 0  // Invalid hash length
+    _ -> 0
+    // Invalid hash length
   }
 }
 
 /// Validate header timestamp
 /// - Must be greater than median of last 11 blocks
 /// - Must not be more than 2 hours in the future
-fn validate_timestamp(timestamp: Int, chain: HeaderChain) -> Result(Nil, SyncError) {
+fn validate_timestamp(
+  timestamp: Int,
+  chain: HeaderChain,
+) -> Result(Nil, SyncError) {
   // Get median time past
   let mtp = median_time_past(chain)
 
@@ -374,18 +413,20 @@ fn median_time_past(chain: HeaderChain) -> Int {
   let last_headers = list.take(list.reverse(chain.best_chain), 11)
 
   // Get timestamps
-  let timestamps = list.filter_map(last_headers, fn(hash) {
-    let key = oni_bitcoin.hash256_to_hex(hash.hash)
-    case dict.get(chain.headers, key) {
-      Ok(entry) -> Ok(entry.header.timestamp)
-      Error(_) -> Error(Nil)
-    }
-  })
+  let timestamps =
+    list.filter_map(last_headers, fn(hash) {
+      let key = oni_bitcoin.hash256_to_hex(hash.hash)
+      case dict.get(chain.headers, key) {
+        Ok(entry) -> Ok(entry.header.timestamp)
+        Error(_) -> Error(Nil)
+      }
+    })
 
   // Sort and get median
   let sorted = list.sort(timestamps, int.compare)
   case list.length(sorted) {
-    0 -> 0  // Genesis block case
+    0 -> 0
+    // Genesis block case
     n -> {
       let mid = n / 2
       case list_nth(sorted, mid) {
@@ -497,11 +538,7 @@ pub type DownloadManager {
 
 /// Request for a block
 pub type BlockRequest {
-  BlockRequest(
-    hash: BlockHash,
-    height: Int,
-    priority: Int,
-  )
+  BlockRequest(hash: BlockHash, height: Int, priority: Int)
 }
 
 /// In-flight request with timing information
@@ -569,10 +606,11 @@ pub fn download_manager_next_for_peer(
   }
 
   // Calculate how many more we can assign
-  let available = int.min(
-    max_blocks_in_flight_per_peer - peer_count,
-    max_blocks_in_flight - manager.total_in_flight,
-  )
+  let available =
+    int.min(
+      max_blocks_in_flight_per_peer - peer_count,
+      max_blocks_in_flight - manager.total_in_flight,
+    )
   let to_assign = int.min(available, max_count)
 
   case to_assign <= 0 {
@@ -582,33 +620,43 @@ pub fn download_manager_next_for_peer(
       let #(assigned, remaining) = list.split(manager.queue, to_assign)
 
       // Update in-flight tracking with timing information
-      let new_in_flight = list.fold(assigned, manager.in_flight, fn(acc, req) {
-        let key = oni_bitcoin.hash256_to_hex(req.hash.hash)
-        let in_flight_req = InFlightRequest(
-          request: req,
-          peer: peer_key,
-          requested_at: current_time,
-          size_hint: 0,  // Unknown until received
-        )
-        dict.insert(acc, key, in_flight_req)
-      })
+      let new_in_flight =
+        list.fold(assigned, manager.in_flight, fn(acc, req) {
+          let key = oni_bitcoin.hash256_to_hex(req.hash.hash)
+          let in_flight_req =
+            InFlightRequest(
+              request: req,
+              peer: peer_key,
+              requested_at: current_time,
+              size_hint: 0,
+              // Unknown until received
+            )
+          dict.insert(acc, key, in_flight_req)
+        })
 
       // Update peer assignments
       let new_peer_hashes = list.map(assigned, fn(req) { req.hash })
-      let new_peer_assignments = case dict.get(manager.peer_assignments, peer_key) {
+      let new_peer_assignments = case
+        dict.get(manager.peer_assignments, peer_key)
+      {
         Ok(existing) ->
-          dict.insert(manager.peer_assignments, peer_key, list.append(existing, new_peer_hashes))
+          dict.insert(
+            manager.peer_assignments,
+            peer_key,
+            list.append(existing, new_peer_hashes),
+          )
         Error(_) ->
           dict.insert(manager.peer_assignments, peer_key, new_peer_hashes)
       }
 
-      let new_manager = DownloadManager(
-        ..manager,
-        queue: remaining,
-        in_flight: new_in_flight,
-        peer_assignments: new_peer_assignments,
-        total_in_flight: manager.total_in_flight + list.length(assigned),
-      )
+      let new_manager =
+        DownloadManager(
+          ..manager,
+          queue: remaining,
+          in_flight: new_in_flight,
+          peer_assignments: new_peer_assignments,
+          total_in_flight: manager.total_in_flight + list.length(assigned),
+        )
 
       #(new_manager, assigned)
     }
@@ -630,9 +678,10 @@ pub fn download_manager_complete(
   let new_completed = dict.insert(manager.completed, key, block)
 
   // Remove from peer assignments (simplified)
-  let new_peer_assignments = dict.map_values(manager.peer_assignments, fn(_peer, hashes) {
-    list.filter(hashes, fn(h) { !block_hash_eq(h, hash) })
-  })
+  let new_peer_assignments =
+    dict.map_values(manager.peer_assignments, fn(_peer, hashes) {
+      list.filter(hashes, fn(h) { !block_hash_eq(h, hash) })
+    })
 
   DownloadManager(
     ..manager,
@@ -663,7 +712,8 @@ pub fn download_manager_check_stalls(
   current_time: Int,
 ) -> #(DownloadManager, List(BlockRequest)) {
   // Find requests that have been in-flight longer than stall_timeout_ms
-  let #(stalled, active) = dict.to_list(manager.in_flight)
+  let #(stalled, active) =
+    dict.to_list(manager.in_flight)
     |> list.partition(fn(entry) {
       let #(_key, req) = entry
       current_time - req.requested_at > stall_timeout_ms
@@ -673,37 +723,42 @@ pub fn download_manager_check_stalls(
     True -> #(manager, [])
     False -> {
       // Extract the requests to be reassigned
-      let stalled_requests = list.map(stalled, fn(entry) {
-        let #(_key, in_flight) = entry
-        in_flight.request
-      })
+      let stalled_requests =
+        list.map(stalled, fn(entry) {
+          let #(_key, in_flight) = entry
+          in_flight.request
+        })
 
       // Remove stalled from in-flight
       let new_in_flight = dict.from_list(active)
 
       // Add back to queue with higher priority (lower height = higher priority)
-      let prioritized = list.map(stalled_requests, fn(req) {
-        BlockRequest(..req, priority: req.height)
-      })
+      let prioritized =
+        list.map(stalled_requests, fn(req) {
+          BlockRequest(..req, priority: req.height)
+        })
 
-      let new_queue = list.append(prioritized, manager.queue)
+      let new_queue =
+        list.append(prioritized, manager.queue)
         |> list.sort(fn(a, b) { int.compare(a.priority, b.priority) })
 
       // Update peer assignments
       let stalled_hashes = list.map(stalled_requests, fn(r) { r.hash })
-      let new_peer_assignments = dict.map_values(manager.peer_assignments, fn(_peer, hashes) {
-        list.filter(hashes, fn(h) {
-          !list.any(stalled_hashes, fn(sh) { block_hash_eq(h, sh) })
+      let new_peer_assignments =
+        dict.map_values(manager.peer_assignments, fn(_peer, hashes) {
+          list.filter(hashes, fn(h) {
+            !list.any(stalled_hashes, fn(sh) { block_hash_eq(h, sh) })
+          })
         })
-      })
 
-      let new_manager = DownloadManager(
-        ..manager,
-        queue: new_queue,
-        in_flight: new_in_flight,
-        peer_assignments: new_peer_assignments,
-        total_in_flight: dict.size(new_in_flight),
-      )
+      let new_manager =
+        DownloadManager(
+          ..manager,
+          queue: new_queue,
+          in_flight: new_in_flight,
+          peer_assignments: new_peer_assignments,
+          total_in_flight: dict.size(new_in_flight),
+        )
 
       #(new_manager, stalled_requests)
     }
@@ -766,10 +821,12 @@ pub fn peer_is_healthy(perf: PeerPerformance) -> Bool {
   // Peer is healthy if:
   // 1. Has a reasonable speed OR hasn't been tested yet
   // 2. Doesn't have too many timeouts relative to successes
-  let speed_ok = perf.avg_speed >= min_peer_download_speed || perf.completed_requests < 3
+  let speed_ok =
+    perf.avg_speed >= min_peer_download_speed || perf.completed_requests < 3
   let timeout_ratio_ok = case perf.completed_requests + perf.timeout_requests {
     0 -> True
-    total -> perf.timeout_requests * 100 / total < 25  // Less than 25% timeouts
+    total -> perf.timeout_requests * 100 / total < 25
+    // Less than 25% timeouts
   }
   speed_ok && timeout_ratio_ok
 }
@@ -821,25 +878,28 @@ pub fn sync_start_headers(
   timestamp: Int,
 ) -> #(SyncCoordinator, List(Message)) {
   // Build locator from current chain
-  let locator = build_locator(coord.header_chain.best_chain, coord.header_chain.tip_height)
+  let locator =
+    build_locator(coord.header_chain.best_chain, coord.header_chain.tip_height)
 
   // Create getheaders message
   let stop_hash = oni_bitcoin.BlockHash(oni_bitcoin.Hash256(<<0:256>>))
   let msg = MsgGetHeaders(locator.hashes, stop_hash)
 
   // Update state
-  let headers_state = HeadersSyncState(
-    sync_peer: peer,
-    last_header_hash: coord.genesis_hash,
-    headers_received: 0,
-    expecting_more: True,
-  )
+  let headers_state =
+    HeadersSyncState(
+      sync_peer: peer,
+      last_header_hash: coord.genesis_hash,
+      headers_received: 0,
+      expecting_more: True,
+    )
 
-  let new_coord = SyncCoordinator(
-    ..coord,
-    state: SyncHeaders(headers_state),
-    sync_start_time: timestamp,
-  )
+  let new_coord =
+    SyncCoordinator(
+      ..coord,
+      state: SyncHeaders(headers_state),
+      sync_start_time: timestamp,
+    )
 
   #(new_coord, [msg])
 }
@@ -853,8 +913,12 @@ pub fn sync_on_headers(
   case coord.state {
     SyncHeaders(headers_state) -> {
       // Verify this is from our sync peer
-      case oni_p2p.peer_id_to_string(peer) == oni_p2p.peer_id_to_string(headers_state.sync_peer) {
-        False -> Ok(#(coord, []))  // Ignore headers from other peers
+      case
+        oni_p2p.peer_id_to_string(peer)
+        == oni_p2p.peer_id_to_string(headers_state.sync_peer)
+      {
+        False -> Ok(#(coord, []))
+        // Ignore headers from other peers
         True -> {
           // Add headers to chain
           case add_headers_to_chain(coord.header_chain, headers) {
@@ -869,21 +933,25 @@ pub fn sync_on_headers(
               case expecting_more {
                 True -> {
                   // Request more headers
-                  let locator = build_locator(new_chain.best_chain, new_chain.tip_height)
-                  let stop_hash = oni_bitcoin.BlockHash(oni_bitcoin.Hash256(<<0:256>>))
+                  let locator =
+                    build_locator(new_chain.best_chain, new_chain.tip_height)
+                  let stop_hash =
+                    oni_bitcoin.BlockHash(oni_bitcoin.Hash256(<<0:256>>))
                   let msg = MsgGetHeaders(locator.hashes, stop_hash)
 
-                  let new_state = HeadersSyncState(
-                    ..headers_state,
-                    headers_received: new_received,
-                    expecting_more: True,
-                  )
+                  let new_state =
+                    HeadersSyncState(
+                      ..headers_state,
+                      headers_received: new_received,
+                      expecting_more: True,
+                    )
 
-                  let new_coord = SyncCoordinator(
-                    ..coord,
-                    state: SyncHeaders(new_state),
-                    header_chain: new_chain,
-                  )
+                  let new_coord =
+                    SyncCoordinator(
+                      ..coord,
+                      state: SyncHeaders(new_state),
+                      header_chain: new_chain,
+                    )
 
                   Ok(#(new_coord, [msg]))
                 }
@@ -898,7 +966,8 @@ pub fn sync_on_headers(
         }
       }
     }
-    _ -> Ok(#(coord, []))  // Ignore if not in headers sync
+    _ -> Ok(#(coord, []))
+    // Ignore if not in headers sync
   }
 }
 
@@ -927,14 +996,15 @@ fn start_block_download(
   let requests = create_block_requests(header_chain, 0)
   let download_manager = download_manager_add(coord.download_manager, requests)
 
-  let blocks_state = BlocksSyncState(
-    next_height_to_request: 0,
-    next_height_to_process: 0,
-    target_height: header_chain.tip_height,
-    blocks_in_flight: dict.new(),
-    downloaded_blocks: dict.new(),
-    peer_in_flight: dict.new(),
-  )
+  let blocks_state =
+    BlocksSyncState(
+      next_height_to_request: 0,
+      next_height_to_process: 0,
+      target_height: header_chain.tip_height,
+      blocks_in_flight: dict.new(),
+      downloaded_blocks: dict.new(),
+      peer_in_flight: dict.new(),
+    )
 
   SyncCoordinator(
     ..coord,
@@ -964,13 +1034,17 @@ fn create_requests_loop(
       case list_at(hashes, current_height) {
         Error(_) -> list.reverse(acc)
         Ok(hash) -> {
-          let request = BlockRequest(
-            hash: hash,
-            height: current_height,
-            // Higher priority for lower heights (process in order)
-            priority: max_height - current_height,
-          )
-          create_requests_loop(hashes, current_height + 1, max_height, [request, ..acc])
+          let request =
+            BlockRequest(
+              hash: hash,
+              height: current_height,
+              // Higher priority for lower heights (process in order)
+              priority: max_height - current_height,
+            )
+          create_requests_loop(hashes, current_height + 1, max_height, [
+            request,
+            ..acc
+          ])
         }
       }
     }
@@ -986,26 +1060,25 @@ pub fn sync_get_blocks_for_peer(
 ) -> #(SyncCoordinator, List(Message)) {
   case coord.state {
     SyncBlocks(_) -> {
-      let #(new_dm, requests) = download_manager_next_for_peer(
-        coord.download_manager,
-        peer,
-        max_blocks_in_flight_per_peer,
-        current_time,
-      )
+      let #(new_dm, requests) =
+        download_manager_next_for_peer(
+          coord.download_manager,
+          peer,
+          max_blocks_in_flight_per_peer,
+          current_time,
+        )
 
       case list.is_empty(requests) {
         True -> #(coord, [])
         False -> {
           // Create getdata message
-          let items = list.map(requests, fn(req) {
-            oni_p2p.InvItem(InvBlock, req.hash.hash)
-          })
+          let items =
+            list.map(requests, fn(req) {
+              oni_p2p.InvItem(InvBlock, req.hash.hash)
+            })
           let msg = MsgGetData(items)
 
-          let new_coord = SyncCoordinator(
-            ..coord,
-            download_manager: new_dm,
-          )
+          let new_coord = SyncCoordinator(..coord, download_manager: new_dm)
 
           #(new_coord, [msg])
         }
@@ -1021,17 +1094,12 @@ pub fn sync_check_stalls(
   coord: SyncCoordinator,
   current_time: Int,
 ) -> #(SyncCoordinator, Int) {
-  let #(new_dm, stalled) = download_manager_check_stalls(
-    coord.download_manager,
-    current_time,
-  )
+  let #(new_dm, stalled) =
+    download_manager_check_stalls(coord.download_manager, current_time)
 
   let stall_count = list.length(stalled)
 
-  let new_coord = SyncCoordinator(
-    ..coord,
-    download_manager: new_dm,
-  )
+  let new_coord = SyncCoordinator(..coord, download_manager: new_dm)
 
   #(new_coord, stall_count)
 }
@@ -1065,13 +1133,18 @@ pub fn sync_progress(coord: SyncCoordinator) -> Float {
   case coord.state {
     SyncHeaders(state) -> {
       // Estimate based on headers received
-      let estimated_total = 850_000.0  // Approximate mainnet height
+      let estimated_total = 850_000.0
+      // Approximate mainnet height
       int.to_float(state.headers_received) /. estimated_total *. 50.0
     }
     SyncBlocks(state) -> {
       let total = state.target_height
       case total > 0 {
-        True -> 50.0 +. int.to_float(coord.blocks_processed) /. int.to_float(total) *. 50.0
+        True ->
+          50.0
+          +. int.to_float(coord.blocks_processed)
+          /. int.to_float(total)
+          *. 50.0
         False -> 50.0
       }
     }
@@ -1152,7 +1225,8 @@ pub fn calculate_reorg(
     None -> None
     Some(#(_ancestor, height)) -> {
       // Blocks to disconnect (from current tip back to ancestor)
-      let to_disconnect = list.drop(current_chain, height + 1)
+      let to_disconnect =
+        list.drop(current_chain, height + 1)
         |> list.reverse
 
       // Blocks to connect (from ancestor to new tip)

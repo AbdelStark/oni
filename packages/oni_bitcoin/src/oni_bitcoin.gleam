@@ -93,7 +93,8 @@ pub fn block_hash_from_bytes(bytes: BitArray) -> Result(BlockHash, String) {
 /// Create a BlockHash from hex (display order)
 pub fn block_hash_from_hex(hex: String) -> Result(BlockHash, String) {
   case hex_decode(hex) {
-    Ok(bytes) -> hash256_from_bytes(reverse_bytes(bytes)) |> result.map(BlockHash)
+    Ok(bytes) ->
+      hash256_from_bytes(reverse_bytes(bytes)) |> result.map(BlockHash)
     Error(e) -> Error(e)
   }
 }
@@ -214,11 +215,7 @@ pub type TxIn {
 }
 
 /// Create a TxIn
-pub fn txin_new(
-  prevout: OutPoint,
-  script_sig: Script,
-  sequence: Int,
-) -> TxIn {
+pub fn txin_new(prevout: OutPoint, script_sig: Script, sequence: Int) -> TxIn {
   TxIn(prevout, script_sig, sequence, [])
 }
 
@@ -342,10 +339,38 @@ pub fn mainnet_params() -> NetworkParams {
   // Mainnet genesis hash in internal byte order (little-endian)
   // Display: 000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f
   let genesis_bytes = <<
-    0x6f, 0xe2, 0x8c, 0x0a, 0xb6, 0xf1, 0xb3, 0x72,
-    0xc1, 0xa6, 0xa2, 0x46, 0xae, 0x63, 0xf7, 0x4f,
-    0x93, 0x1e, 0x83, 0x65, 0xe1, 0x5a, 0x08, 0x9c,
-    0x68, 0xd6, 0x19, 0x00, 0x00, 0x00, 0x00, 0x00
+    0x6f,
+    0xe2,
+    0x8c,
+    0x0a,
+    0xb6,
+    0xf1,
+    0xb3,
+    0x72,
+    0xc1,
+    0xa6,
+    0xa2,
+    0x46,
+    0xae,
+    0x63,
+    0xf7,
+    0x4f,
+    0x93,
+    0x1e,
+    0x83,
+    0x65,
+    0xe1,
+    0x5a,
+    0x08,
+    0x9c,
+    0x68,
+    0xd6,
+    0x19,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
   >>
   let assert Ok(genesis) = block_hash_from_bytes(genesis_bytes)
 
@@ -364,10 +389,38 @@ pub fn testnet_params() -> NetworkParams {
   // Testnet genesis hash in internal byte order (little-endian)
   // Display: 000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943
   let genesis_bytes = <<
-    0x43, 0x49, 0x7f, 0xd7, 0xf8, 0x26, 0x95, 0x71,
-    0x08, 0xf4, 0xa3, 0x0f, 0xd9, 0xce, 0xc3, 0xae,
-    0xba, 0x79, 0x97, 0x20, 0x84, 0xe9, 0x0e, 0xad,
-    0x01, 0xea, 0x33, 0x09, 0x00, 0x00, 0x00, 0x00
+    0x43,
+    0x49,
+    0x7f,
+    0xd7,
+    0xf8,
+    0x26,
+    0x95,
+    0x71,
+    0x08,
+    0xf4,
+    0xa3,
+    0x0f,
+    0xd9,
+    0xce,
+    0xc3,
+    0xae,
+    0xba,
+    0x79,
+    0x97,
+    0x20,
+    0x84,
+    0xe9,
+    0x0e,
+    0xad,
+    0x01,
+    0xea,
+    0x33,
+    0x09,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
   >>
   let assert Ok(genesis) = block_hash_from_bytes(genesis_bytes)
 
@@ -376,7 +429,7 @@ pub fn testnet_params() -> NetworkParams {
     p2pkh_prefix: 0x6F,
     p2sh_prefix: 0xC4,
     bech32_hrp: "tb",
-    default_port: 18333,
+    default_port: 18_333,
     genesis_hash: genesis,
   )
 }
@@ -386,10 +439,38 @@ pub fn regtest_params() -> NetworkParams {
   // Regtest genesis hash in internal byte order (little-endian)
   // Display: 0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206
   let genesis_bytes = <<
-    0x06, 0x22, 0x6e, 0x46, 0x11, 0x1a, 0x0b, 0x59,
-    0xca, 0xaf, 0x12, 0x60, 0x43, 0xeb, 0x5b, 0xbf,
-    0x28, 0xc3, 0x4f, 0x3a, 0x5e, 0x33, 0x2a, 0x1f,
-    0xc7, 0xb2, 0xb7, 0x3c, 0xf1, 0x88, 0x91, 0x0f
+    0x06,
+    0x22,
+    0x6e,
+    0x46,
+    0x11,
+    0x1a,
+    0x0b,
+    0x59,
+    0xca,
+    0xaf,
+    0x12,
+    0x60,
+    0x43,
+    0xeb,
+    0x5b,
+    0xbf,
+    0x28,
+    0xc3,
+    0x4f,
+    0x3a,
+    0x5e,
+    0x33,
+    0x2a,
+    0x1f,
+    0xc7,
+    0xb2,
+    0xb7,
+    0x3c,
+    0xf1,
+    0x88,
+    0x91,
+    0x0f,
   >>
   let assert Ok(genesis) = block_hash_from_bytes(genesis_bytes)
 
@@ -398,7 +479,7 @@ pub fn regtest_params() -> NetworkParams {
     p2pkh_prefix: 0x6F,
     p2sh_prefix: 0xC4,
     bech32_hrp: "bcrt",
-    default_port: 18444,
+    default_port: 18_444,
     genesis_hash: genesis,
   )
 }
@@ -420,7 +501,11 @@ fn do_hex_encode(_str: String, bytes: BitArray, acc: String) -> String {
     <<b:8, rest:bits>> -> {
       let hi = int.to_base16(b / 16)
       let lo = int.to_base16(b % 16)
-      do_hex_encode("", rest, acc <> string.lowercase(hi) <> string.lowercase(lo))
+      do_hex_encode(
+        "",
+        rest,
+        acc <> string.lowercase(hi) <> string.lowercase(lo),
+      )
     }
     _ -> acc
   }
@@ -499,7 +584,9 @@ pub fn wtxid_to_hex(wtxid: Wtxid) -> String {
 }
 
 /// Decode a bech32/bech32m address to version and program
-pub fn decode_bech32_address(address: String) -> Result(#(Int, BitArray), String) {
+pub fn decode_bech32_address(
+  address: String,
+) -> Result(#(Int, BitArray), String) {
   case bech32_decode(address) {
     Error(e) -> Error(e)
     Ok(#(_hrp, data, _variant)) -> {
@@ -524,7 +611,12 @@ fn convert_bits_5to8(input: List(Int)) -> Result(BitArray, String) {
   Ok(result)
 }
 
-fn do_convert_bits_5to8(input: List(Int), acc: Int, bits: Int, result: BitArray) -> BitArray {
+fn do_convert_bits_5to8(
+  input: List(Int),
+  acc: Int,
+  bits: Int,
+  result: BitArray,
+) -> BitArray {
   case input {
     [] -> {
       // If we have remaining bits, ignore padding
@@ -541,7 +633,12 @@ fn do_convert_bits_5to8(input: List(Int), acc: Int, bits: Int, result: BitArray)
           let shift = new_bits - 8
           let byte = new_acc / { 1 * power_of_2(shift) }
           let remaining = new_acc % { 1 * power_of_2(shift) }
-          do_convert_bits_5to8(rest, remaining, shift, bit_array.append(result, <<byte:8>>))
+          do_convert_bits_5to8(
+            rest,
+            remaining,
+            shift,
+            bit_array.append(result, <<byte:8>>),
+          )
         }
         False -> do_convert_bits_5to8(rest, new_acc, new_bits, result)
       }
@@ -626,8 +723,11 @@ pub fn compact_size_encode(n: Int) -> BitArray {
 pub fn compact_size_decode(bytes: BitArray) -> Result(#(Int, BitArray), String) {
   case bytes {
     <<0xFF:8, n:64-little, rest:bits>> -> Ok(#(n, rest))
+    <<0xFF:8, _:bits>> -> Error("Insufficient bytes for 8-byte CompactSize")
     <<0xFE:8, n:32-little, rest:bits>> -> Ok(#(n, rest))
+    <<0xFE:8, _:bits>> -> Error("Insufficient bytes for 4-byte CompactSize")
     <<0xFD:8, n:16-little, rest:bits>> -> Ok(#(n, rest))
+    <<0xFD:8, _:bits>> -> Error("Insufficient bytes for 2-byte CompactSize")
     <<n:8, rest:bits>> -> Ok(#(n, rest))
     _ -> Error("Insufficient bytes for CompactSize")
   }
@@ -724,20 +824,19 @@ pub type XOnlyPubKey {
 pub fn pubkey_from_bytes(bytes: BitArray) -> Result(PubKey, CryptoError) {
   case bytes {
     // Compressed with even Y (33 bytes: 0x02 + 32 bytes)
-    <<0x02:8, _x:256-bits>> ->
-      Ok(CompressedPubKey(bytes))
+    <<0x02:8, _x:256-bits>> -> Ok(CompressedPubKey(bytes))
     // Compressed with odd Y (33 bytes: 0x03 + 32 bytes)
-    <<0x03:8, _x:256-bits>> ->
-      Ok(CompressedPubKey(bytes))
+    <<0x03:8, _x:256-bits>> -> Ok(CompressedPubKey(bytes))
     // Uncompressed (65 bytes: 0x04 + 64 bytes)
-    <<0x04:8, _xy:512-bits>> ->
-      Ok(UncompressedPubKey(bytes))
+    <<0x04:8, _xy:512-bits>> -> Ok(UncompressedPubKey(bytes))
     _ -> Error(InvalidPublicKey)
   }
 }
 
 /// Parse an x-only public key from bytes (32 bytes)
-pub fn xonly_pubkey_from_bytes(bytes: BitArray) -> Result(XOnlyPubKey, CryptoError) {
+pub fn xonly_pubkey_from_bytes(
+  bytes: BitArray,
+) -> Result(XOnlyPubKey, CryptoError) {
   case bit_array.byte_size(bytes) {
     32 -> Ok(XOnlyPubKey(bytes))
     _ -> Error(InvalidPublicKey)
@@ -802,7 +901,9 @@ pub fn signature_from_der(der: BitArray) -> Result(Signature, CryptoError) {
 }
 
 /// Parse a Schnorr signature from bytes (64 bytes)
-pub fn schnorr_sig_from_bytes(bytes: BitArray) -> Result(SchnorrSig, CryptoError) {
+pub fn schnorr_sig_from_bytes(
+  bytes: BitArray,
+) -> Result(SchnorrSig, CryptoError) {
   case bit_array.byte_size(bytes) {
     64 -> Ok(SchnorrSig(bytes))
     _ -> Error(InvalidSignature)
@@ -920,13 +1021,10 @@ fn erlang_ecdsa_verify(
   pubkey: BitArray,
 ) -> Bool {
   // Call Erlang's crypto:verify/5
-  erlang_crypto_verify(
-    ecdsa_atom(),
-    sha256_atom(),
-    message,
-    signature,
-    #(pubkey, secp256k1_atom()),
-  )
+  erlang_crypto_verify(ecdsa_atom(), sha256_atom(), message, signature, #(
+    pubkey,
+    secp256k1_atom(),
+  ))
 }
 
 @external(erlang, "crypto", "verify")
@@ -1001,7 +1099,8 @@ pub fn encode_tx(tx: Transaction) -> BitArray {
 
       bit_array.concat([
         <<tx.version:32-little>>,
-        <<0x00:8, 0x01:8>>,  // SegWit marker and flag
+        <<0x00:8, 0x01:8>>,
+        // SegWit marker and flag
         compact_size_encode(list.length(tx.inputs)),
         inputs_data,
         compact_size_encode(list.length(tx.outputs)),
@@ -1017,13 +1116,14 @@ fn encode_inputs(inputs: List(TxIn)) -> BitArray {
   list.fold(inputs, <<>>, fn(acc, input) {
     let script = script_to_bytes(input.script_sig)
     let script_len = compact_size_encode(bit_array.byte_size(script))
-    let input_data = bit_array.concat([
-      input.prevout.txid.hash.bytes,
-      <<input.prevout.vout:32-little>>,
-      script_len,
-      script,
-      <<input.sequence:32-little>>,
-    ])
+    let input_data =
+      bit_array.concat([
+        input.prevout.txid.hash.bytes,
+        <<input.prevout.vout:32-little>>,
+        script_len,
+        script,
+        <<input.sequence:32-little>>,
+      ])
     bit_array.append(acc, input_data)
   })
 }
@@ -1033,11 +1133,12 @@ fn encode_outputs(outputs: List(TxOut)) -> BitArray {
     let script = script_to_bytes(output.script_pubkey)
     let script_len = compact_size_encode(bit_array.byte_size(script))
     let value = amount_to_sats(output.value)
-    let output_data = bit_array.concat([
-      <<value:64-little>>,
-      script_len,
-      script,
-    ])
+    let output_data =
+      bit_array.concat([
+        <<value:64-little>>,
+        script_len,
+        script,
+      ])
     bit_array.append(acc, output_data)
   })
 }
@@ -1046,10 +1147,11 @@ fn encode_witnesses(inputs: List(TxIn)) -> BitArray {
   list.fold(inputs, <<>>, fn(acc, input) {
     let witness = input.witness
     let count = compact_size_encode(list.length(witness))
-    let witness_data = list.fold(witness, <<>>, fn(wacc, item) {
-      let item_len = compact_size_encode(bit_array.byte_size(item))
-      bit_array.concat([wacc, item_len, item])
-    })
+    let witness_data =
+      list.fold(witness, <<>>, fn(wacc, item) {
+        let item_len = compact_size_encode(bit_array.byte_size(item))
+        bit_array.concat([wacc, item_len, item])
+      })
     bit_array.concat([acc, count, witness_data])
   })
 }
@@ -1075,7 +1177,10 @@ pub fn decode_tx(bytes: BitArray) -> Result(#(Transaction, BitArray), String) {
   }
 }
 
-fn decode_tx_legacy(version: Int, bytes: BitArray) -> Result(#(Transaction, BitArray), String) {
+fn decode_tx_legacy(
+  version: Int,
+  bytes: BitArray,
+) -> Result(#(Transaction, BitArray), String) {
   // Decode inputs
   case compact_size_decode(bytes) {
     Error(e) -> Error(e)
@@ -1093,12 +1198,13 @@ fn decode_tx_legacy(version: Int, bytes: BitArray) -> Result(#(Transaction, BitA
                   // Decode locktime
                   case after_outputs {
                     <<lock_time:32-little, remaining:bits>> -> {
-                      let tx = Transaction(
-                        version: version,
-                        inputs: inputs,
-                        outputs: outputs,
-                        lock_time: lock_time,
-                      )
+                      let tx =
+                        Transaction(
+                          version: version,
+                          inputs: inputs,
+                          outputs: outputs,
+                          lock_time: lock_time,
+                        )
                       Ok(#(tx, remaining))
                     }
                     _ -> Error("Insufficient bytes for locktime")
@@ -1113,7 +1219,10 @@ fn decode_tx_legacy(version: Int, bytes: BitArray) -> Result(#(Transaction, BitA
   }
 }
 
-fn decode_tx_segwit(version: Int, bytes: BitArray) -> Result(#(Transaction, BitArray), String) {
+fn decode_tx_segwit(
+  version: Int,
+  bytes: BitArray,
+) -> Result(#(Transaction, BitArray), String) {
   // Decode inputs
   case compact_size_decode(bytes) {
     Error(e) -> Error(e)
@@ -1136,13 +1245,15 @@ fn decode_tx_segwit(version: Int, bytes: BitArray) -> Result(#(Transaction, BitA
                       case after_witnesses {
                         <<lock_time:32-little, remaining:bits>> -> {
                           // Attach witnesses to inputs
-                          let inputs_with_witness = attach_witnesses(inputs, witnesses)
-                          let tx = Transaction(
-                            version: version,
-                            inputs: inputs_with_witness,
-                            outputs: outputs,
-                            lock_time: lock_time,
-                          )
+                          let inputs_with_witness =
+                            attach_witnesses(inputs, witnesses)
+                          let tx =
+                            Transaction(
+                              version: version,
+                              inputs: inputs_with_witness,
+                              outputs: outputs,
+                              lock_time: lock_time,
+                            )
                           Ok(#(tx, remaining))
                         }
                         _ -> Error("Insufficient bytes for locktime")
@@ -1159,7 +1270,11 @@ fn decode_tx_segwit(version: Int, bytes: BitArray) -> Result(#(Transaction, BitA
   }
 }
 
-fn decode_inputs(bytes: BitArray, count: Int, acc: List(TxIn)) -> Result(#(List(TxIn), BitArray), String) {
+fn decode_inputs(
+  bytes: BitArray,
+  count: Int,
+  acc: List(TxIn),
+) -> Result(#(List(TxIn), BitArray), String) {
   case count {
     0 -> Ok(#(list.reverse(acc), bytes))
     _ -> {
@@ -1205,7 +1320,11 @@ fn decode_input(bytes: BitArray) -> Result(#(TxIn, BitArray), String) {
   }
 }
 
-fn decode_outputs(bytes: BitArray, count: Int, acc: List(TxOut)) -> Result(#(List(TxOut), BitArray), String) {
+fn decode_outputs(
+  bytes: BitArray,
+  count: Int,
+  acc: List(TxOut),
+) -> Result(#(List(TxOut), BitArray), String) {
   case count {
     0 -> Ok(#(list.reverse(acc), bytes))
     _ -> {
@@ -1259,19 +1378,26 @@ fn decode_output(bytes: BitArray) -> Result(#(TxOut, BitArray), String) {
   }
 }
 
-fn decode_all_witnesses(bytes: BitArray, count: Int, acc: List(List(BitArray))) -> Result(#(List(List(BitArray)), BitArray), String) {
+fn decode_all_witnesses(
+  bytes: BitArray,
+  count: Int,
+  acc: List(List(BitArray)),
+) -> Result(#(List(List(BitArray)), BitArray), String) {
   case count {
     0 -> Ok(#(list.reverse(acc), bytes))
     _ -> {
       case decode_witness(bytes) {
         Error(e) -> Error(e)
-        Ok(#(witness, rest)) -> decode_all_witnesses(rest, count - 1, [witness, ..acc])
+        Ok(#(witness, rest)) ->
+          decode_all_witnesses(rest, count - 1, [witness, ..acc])
       }
     }
   }
 }
 
-fn decode_witness(bytes: BitArray) -> Result(#(List(BitArray), BitArray), String) {
+fn decode_witness(
+  bytes: BitArray,
+) -> Result(#(List(BitArray), BitArray), String) {
   case compact_size_decode(bytes) {
     Error(e) -> Error(e)
     Ok(#(stack_count, after_count)) -> {
@@ -1280,7 +1406,11 @@ fn decode_witness(bytes: BitArray) -> Result(#(List(BitArray), BitArray), String
   }
 }
 
-fn decode_witness_stack(bytes: BitArray, count: Int, acc: List(BitArray)) -> Result(#(List(BitArray), BitArray), String) {
+fn decode_witness_stack(
+  bytes: BitArray,
+  count: Int,
+  acc: List(BitArray),
+) -> Result(#(List(BitArray), BitArray), String) {
   case count {
     0 -> Ok(#(list.reverse(acc), bytes))
     _ -> {
@@ -1293,7 +1423,8 @@ fn decode_witness_stack(bytes: BitArray, count: Int, acc: List(BitArray)) -> Res
               let remaining_size = bit_array.byte_size(after_len) - item_len
               case bit_array.slice(after_len, item_len, remaining_size) {
                 Error(_) -> decode_witness_stack(<<>>, count - 1, [item, ..acc])
-                Ok(remaining) -> decode_witness_stack(remaining, count - 1, [item, ..acc])
+                Ok(remaining) ->
+                  decode_witness_stack(remaining, count - 1, [item, ..acc])
               }
             }
           }
@@ -1303,7 +1434,10 @@ fn decode_witness_stack(bytes: BitArray, count: Int, acc: List(BitArray)) -> Res
   }
 }
 
-fn attach_witnesses(inputs: List(TxIn), witnesses: List(List(BitArray))) -> List(TxIn) {
+fn attach_witnesses(
+  inputs: List(TxIn),
+  witnesses: List(List(BitArray)),
+) -> List(TxIn) {
   case inputs, witnesses {
     [], _ -> []
     [input, ..rest_inputs], [witness, ..rest_witnesses] -> {
@@ -1555,12 +1689,18 @@ const bech32_gen = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3]
 
 /// Bech32 encoding variant
 pub type Bech32Variant {
-  Bech32   // Original BIP173 (for SegWit v0)
-  Bech32m  // BIP350 (for SegWit v1+, Taproot)
+  Bech32
+  // Original BIP173 (for SegWit v0)
+  Bech32m
+  // BIP350 (for SegWit v1+, Taproot)
 }
 
 /// Encode data as Bech32/Bech32m
-pub fn bech32_encode(hrp: String, data: List(Int), variant: Bech32Variant) -> String {
+pub fn bech32_encode(
+  hrp: String,
+  data: List(Int),
+  variant: Bech32Variant,
+) -> String {
   // Expand HRP for checksum
   let hrp_expanded = bech32_hrp_expand(hrp)
 
@@ -1570,15 +1710,18 @@ pub fn bech32_encode(hrp: String, data: List(Int), variant: Bech32Variant) -> St
 
   // Encode data and checksum
   let data_with_checksum = list.append(data, checksum)
-  let encoded = list.fold(data_with_checksum, "", fn(acc, val) {
-    acc <> string_char_at(bech32_alphabet, val)
-  })
+  let encoded =
+    list.fold(data_with_checksum, "", fn(acc, val) {
+      acc <> string_char_at(bech32_alphabet, val)
+    })
 
   hrp <> "1" <> encoded
 }
 
 /// Decode a Bech32/Bech32m string
-pub fn bech32_decode(input: String) -> Result(#(String, List(Int), Bech32Variant), String) {
+pub fn bech32_decode(
+  input: String,
+) -> Result(#(String, List(Int), Bech32Variant), String) {
   // Check for mixed case
   let lower = string.lowercase(input)
   let upper = string.uppercase(input)
@@ -1658,9 +1801,11 @@ fn bech32_char_value(c: String) -> Result(Int, String) {
 }
 
 fn bech32_hrp_expand(hrp: String) -> List(Int) {
-  let high = string_to_chars(hrp)
+  let high =
+    string_to_chars(hrp)
     |> list.map(fn(c) { char_code(c) / 32 })
-  let low = string_to_chars(hrp)
+  let low =
+    string_to_chars(hrp)
     |> list.map(fn(c) { int.bitwise_and(char_code(c), 31) })
   list.flatten([high, [0], low])
 }
@@ -1694,10 +1839,11 @@ fn bech32_polymod_loop(values: List(Int), chk: Int) -> Int {
     [v, ..rest] -> {
       let b = int.bitwise_shift_right(chk, 25)
       // BIP-173: chk = (chk & 0x1ffffff) << 5 ^ v
-      let new_chk = int.bitwise_exclusive_or(
-        int.bitwise_shift_left(int.bitwise_and(chk, 0x1FFFFFF), 5),
-        v
-      )
+      let new_chk =
+        int.bitwise_exclusive_or(
+          int.bitwise_shift_left(int.bitwise_and(chk, 0x1FFFFFF), 5),
+          v,
+        )
       let new_chk = xor_generators(new_chk, b, bech32_gen, 0)
       bech32_polymod_loop(rest, new_chk)
     }
@@ -1717,7 +1863,10 @@ fn xor_generators(chk: Int, b: Int, gen: List(Int), i: Int) -> Int {
   }
 }
 
-fn bech32_create_checksum(values: List(Int), variant: Bech32Variant) -> List(Int) {
+fn bech32_create_checksum(
+  values: List(Int),
+  variant: Bech32Variant,
+) -> List(Int) {
   let const_value = case variant {
     Bech32 -> 1
     Bech32m -> 0x2bc830a3
@@ -1791,7 +1940,10 @@ pub fn address_to_string(addr: Address) -> String {
 }
 
 /// Parse an address from string
-pub fn address_from_string(s: String, network: Network) -> Result(Address, String) {
+pub fn address_from_string(
+  s: String,
+  network: Network,
+) -> Result(Address, String) {
   // Try Bech32 first
   case bech32_decode(s) {
     Ok(#(hrp, data, variant)) -> {
@@ -1854,14 +2006,18 @@ fn convert_bits_loop(
     <<byte:8, rest:bits>> -> {
       let new_acc = int.bitwise_or(int.bitwise_shift_left(acc, from), byte)
       let new_bits = bits + from
-      let #(new_result, final_acc, final_bits) = extract_bits(new_acc, new_bits, to, result)
+      let #(new_result, final_acc, final_bits) =
+        extract_bits(new_acc, new_bits, to, result)
       convert_bits_loop(rest, from, to, pad, final_acc, final_bits, new_result)
     }
     <<>> -> {
       case pad && bits > 0 {
         True -> {
           let padded = int.bitwise_shift_left(acc, to - bits)
-          list.reverse([int.bitwise_and(padded, int.bitwise_shift_left(1, to) - 1), ..result])
+          list.reverse([
+            int.bitwise_and(padded, int.bitwise_shift_left(1, to) - 1),
+            ..result
+          ])
         }
         False -> list.reverse(result)
       }
@@ -1870,18 +2026,32 @@ fn convert_bits_loop(
   }
 }
 
-fn extract_bits(acc: Int, bits: Int, to: Int, result: List(Int)) -> #(List(Int), Int, Int) {
+fn extract_bits(
+  acc: Int,
+  bits: Int,
+  to: Int,
+  result: List(Int),
+) -> #(List(Int), Int, Int) {
   case bits >= to {
     True -> {
       let new_bits = bits - to
-      let value = int.bitwise_and(int.bitwise_shift_right(acc, new_bits), int.bitwise_shift_left(1, to) - 1)
+      let value =
+        int.bitwise_and(
+          int.bitwise_shift_right(acc, new_bits),
+          int.bitwise_shift_left(1, to) - 1,
+        )
       extract_bits(acc, new_bits, to, [value, ..result])
     }
     False -> #(result, acc, bits)
   }
 }
 
-fn convert_bits_list(data: List(Int), from: Int, to: Int, pad: Bool) -> List(Int) {
+fn convert_bits_list(
+  data: List(Int),
+  from: Int,
+  to: Int,
+  pad: Bool,
+) -> List(Int) {
   convert_bits_list_loop(data, from, to, pad, 0, 0, [])
 }
 
@@ -1898,14 +2068,26 @@ fn convert_bits_list_loop(
     [byte, ..rest] -> {
       let new_acc = int.bitwise_or(int.bitwise_shift_left(acc, from), byte)
       let new_bits = bits + from
-      let #(new_result, final_acc, final_bits) = extract_bits(new_acc, new_bits, to, result)
-      convert_bits_list_loop(rest, from, to, pad, final_acc, final_bits, new_result)
+      let #(new_result, final_acc, final_bits) =
+        extract_bits(new_acc, new_bits, to, result)
+      convert_bits_list_loop(
+        rest,
+        from,
+        to,
+        pad,
+        final_acc,
+        final_bits,
+        new_result,
+      )
     }
     [] -> {
       case pad && bits > 0 {
         True -> {
           let padded = int.bitwise_shift_left(acc, to - bits)
-          list.reverse([int.bitwise_and(padded, int.bitwise_shift_left(1, to) - 1), ..result])
+          list.reverse([
+            int.bitwise_and(padded, int.bitwise_shift_left(1, to) - 1),
+            ..result
+          ])
         }
         False -> list.reverse(result)
       }
@@ -1914,9 +2096,7 @@ fn convert_bits_list_loop(
 }
 
 fn list_to_bitarray(lst: List(Int)) -> BitArray {
-  list.fold(lst, <<>>, fn(acc, byte) {
-    bit_array.append(acc, <<byte:8>>)
-  })
+  list.fold(lst, <<>>, fn(acc, byte) { bit_array.append(acc, <<byte:8>>) })
 }
 
 // ============================================================================
@@ -1936,20 +2116,30 @@ pub fn encode_block_header(header: BlockHeader) -> BitArray {
 }
 
 /// Decode a block header from bytes
-pub fn decode_block_header(bytes: BitArray) -> Result(#(BlockHeader, BitArray), String) {
+pub fn decode_block_header(
+  bytes: BitArray,
+) -> Result(#(BlockHeader, BitArray), String) {
   case bytes {
-    <<version:32-little, prev:256-bits, merkle:256-bits,
-      timestamp:32-little, bits:32-little, nonce:32-little, rest:bits>> -> {
+    <<
+      version:32-little,
+      prev:256-bits,
+      merkle:256-bits,
+      timestamp:32-little,
+      bits:32-little,
+      nonce:32-little,
+      rest:bits,
+    >> -> {
       let prev_block = BlockHash(Hash256(<<prev:256-bits>>))
       let merkle_root = Hash256(<<merkle:256-bits>>)
-      let header = BlockHeader(
-        version: version,
-        prev_block: prev_block,
-        merkle_root: merkle_root,
-        timestamp: timestamp,
-        bits: bits,
-        nonce: nonce,
-      )
+      let header =
+        BlockHeader(
+          version: version,
+          prev_block: prev_block,
+          merkle_root: merkle_root,
+          timestamp: timestamp,
+          bits: bits,
+          nonce: nonce,
+        )
       Ok(#(header, rest))
     }
     _ -> Error("Insufficient bytes for block header (need 80)")
@@ -1971,9 +2161,10 @@ pub fn block_hash_from_header(header: BlockHeader) -> BlockHash {
 pub fn encode_block(block: Block) -> BitArray {
   let header_bytes = encode_block_header(block.header)
   let tx_count = compact_size_encode(list.length(block.transactions))
-  let tx_bytes = list.fold(block.transactions, <<>>, fn(acc, tx) {
-    bit_array.append(acc, encode_tx(tx))
-  })
+  let tx_bytes =
+    list.fold(block.transactions, <<>>, fn(acc, tx) {
+      bit_array.append(acc, encode_tx(tx))
+    })
   bit_array.concat([header_bytes, tx_count, tx_bytes])
 }
 
@@ -1998,7 +2189,11 @@ pub fn decode_block(bytes: BitArray) -> Result(#(Block, BitArray), String) {
   }
 }
 
-fn decode_transactions(bytes: BitArray, count: Int, acc: List(Transaction)) -> Result(#(List(Transaction), BitArray), String) {
+fn decode_transactions(
+  bytes: BitArray,
+  count: Int,
+  acc: List(Transaction),
+) -> Result(#(List(Transaction), BitArray), String) {
   case count {
     0 -> Ok(#(list.reverse(acc), bytes))
     _ -> {
@@ -2059,7 +2254,10 @@ pub type PrivateKey {
 }
 
 /// Create a private key from 32 bytes
-pub fn private_key_from_bytes(bytes: BitArray, compressed: Bool) -> Result(PrivateKey, String) {
+pub fn private_key_from_bytes(
+  bytes: BitArray,
+  compressed: Bool,
+) -> Result(PrivateKey, String) {
   case bit_array.byte_size(bytes) {
     32 -> Ok(PrivateKey(bytes, compressed))
     _ -> Error("Private key must be 32 bytes")
@@ -2082,7 +2280,9 @@ pub fn private_key_to_wif(key: PrivateKey, network: Network) -> String {
 }
 
 /// Decode a private key from WIF format
-pub fn private_key_from_wif(wif: String) -> Result(#(PrivateKey, Network), String) {
+pub fn private_key_from_wif(
+  wif: String,
+) -> Result(#(PrivateKey, Network), String) {
   case base58check_decode(wif) {
     Error(e) -> Error(e)
     Ok(payload) -> {
@@ -2137,7 +2337,8 @@ pub fn private_key_to_pubkey_hash(_key: PrivateKey) -> BitArray {
 // ============================================================================
 
 /// Extended key depth
-pub type ExtKeyDepth = Int
+pub type ExtKeyDepth =
+  Int
 
 /// Extended key fingerprint (4 bytes)
 pub type Fingerprint {
@@ -2178,9 +2379,10 @@ pub fn tweak_pubkey_for_taproot(
 ) -> Result(#(XOnlyPubKey, Int), CryptoError) {
   case bit_array.byte_size(tweak_hash) {
     32 -> {
-      decode_tweak_result(
-        erlang_tweak_pubkey_raw(internal_key.bytes, tweak_hash),
-      )
+      decode_tweak_result(erlang_tweak_pubkey_raw(
+        internal_key.bytes,
+        tweak_hash,
+      ))
     }
     _ -> Error(InvalidMessage)
   }
@@ -2188,7 +2390,9 @@ pub fn tweak_pubkey_for_taproot(
 
 /// Decode the Erlang result from oni_secp256k1:tweak_pubkey
 /// Returns {ok, {OutputKey, Parity}} or {error, Reason}
-fn decode_tweak_result(result: Dynamic) -> Result(#(XOnlyPubKey, Int), CryptoError) {
+fn decode_tweak_result(
+  result: Dynamic,
+) -> Result(#(XOnlyPubKey, Int), CryptoError) {
   // Try to decode as {ok, {Binary, Int}}
   case dynamic.tuple2(dynamic.dynamic, dynamic.dynamic)(result) {
     Ok(#(tag, value)) -> {
@@ -2256,60 +2460,104 @@ const psbt_magic = <<0x70, 0x73, 0x62, 0x74, 0xFF>>
 
 /// PSBT key types for global map
 pub type PsbtGlobalKey {
-  PsbtGlobalUnsignedTx       // 0x00
-  PsbtGlobalXpub             // 0x01
-  PsbtGlobalTxVersion        // 0x02 (PSBT v2)
-  PsbtGlobalFallbackLocktime // 0x03 (PSBT v2)
-  PsbtGlobalInputCount       // 0x04 (PSBT v2)
-  PsbtGlobalOutputCount      // 0x05 (PSBT v2)
-  PsbtGlobalTxModifiable     // 0x06 (PSBT v2)
-  PsbtGlobalVersion          // 0xFB
-  PsbtGlobalProprietary      // 0xFC
+  PsbtGlobalUnsignedTx
+  // 0x00
+  PsbtGlobalXpub
+  // 0x01
+  PsbtGlobalTxVersion
+  // 0x02 (PSBT v2)
+  PsbtGlobalFallbackLocktime
+  // 0x03 (PSBT v2)
+  PsbtGlobalInputCount
+  // 0x04 (PSBT v2)
+  PsbtGlobalOutputCount
+  // 0x05 (PSBT v2)
+  PsbtGlobalTxModifiable
+  // 0x06 (PSBT v2)
+  PsbtGlobalVersion
+  // 0xFB
+  PsbtGlobalProprietary
+  // 0xFC
   PsbtGlobalUnknown(Int)
 }
 
 /// PSBT key types for input map
 pub type PsbtInputKey {
-  PsbtInNonWitnessUtxo       // 0x00
-  PsbtInWitnessUtxo          // 0x01
-  PsbtInPartialSig           // 0x02
-  PsbtInSighashType          // 0x03
-  PsbtInRedeemScript         // 0x04
-  PsbtInWitnessScript        // 0x05
-  PsbtInBip32Derivation      // 0x06
-  PsbtInFinalScriptsig       // 0x07
-  PsbtInFinalScriptwitness   // 0x08
-  PsbtInPorCommitment        // 0x09
-  PsbtInRipemd160            // 0x0A
-  PsbtInSha256               // 0x0B
-  PsbtInHash160              // 0x0C
-  PsbtInHash256              // 0x0D
-  PsbtInPreviousTxid         // 0x0E (PSBT v2)
-  PsbtInOutputIndex          // 0x0F (PSBT v2)
-  PsbtInSequence             // 0x10 (PSBT v2)
-  PsbtInRequiredTimeLocktime // 0x11 (PSBT v2)
-  PsbtInRequiredHeightLocktime // 0x12 (PSBT v2)
-  PsbtInTapKeySig            // 0x13
-  PsbtInTapScriptSig         // 0x14
-  PsbtInTapLeafScript        // 0x15
-  PsbtInTapBip32Derivation   // 0x16
-  PsbtInTapInternalKey       // 0x17
-  PsbtInTapMerkleRoot        // 0x18
-  PsbtInProprietary          // 0xFC
+  PsbtInNonWitnessUtxo
+  // 0x00
+  PsbtInWitnessUtxo
+  // 0x01
+  PsbtInPartialSig
+  // 0x02
+  PsbtInSighashType
+  // 0x03
+  PsbtInRedeemScript
+  // 0x04
+  PsbtInWitnessScript
+  // 0x05
+  PsbtInBip32Derivation
+  // 0x06
+  PsbtInFinalScriptsig
+  // 0x07
+  PsbtInFinalScriptwitness
+  // 0x08
+  PsbtInPorCommitment
+  // 0x09
+  PsbtInRipemd160
+  // 0x0A
+  PsbtInSha256
+  // 0x0B
+  PsbtInHash160
+  // 0x0C
+  PsbtInHash256
+  // 0x0D
+  PsbtInPreviousTxid
+  // 0x0E (PSBT v2)
+  PsbtInOutputIndex
+  // 0x0F (PSBT v2)
+  PsbtInSequence
+  // 0x10 (PSBT v2)
+  PsbtInRequiredTimeLocktime
+  // 0x11 (PSBT v2)
+  PsbtInRequiredHeightLocktime
+  // 0x12 (PSBT v2)
+  PsbtInTapKeySig
+  // 0x13
+  PsbtInTapScriptSig
+  // 0x14
+  PsbtInTapLeafScript
+  // 0x15
+  PsbtInTapBip32Derivation
+  // 0x16
+  PsbtInTapInternalKey
+  // 0x17
+  PsbtInTapMerkleRoot
+  // 0x18
+  PsbtInProprietary
+  // 0xFC
   PsbtInUnknown(Int)
 }
 
 /// PSBT key types for output map
 pub type PsbtOutputKey {
-  PsbtOutRedeemScript        // 0x00
-  PsbtOutWitnessScript       // 0x01
-  PsbtOutBip32Derivation     // 0x02
-  PsbtOutAmount              // 0x03 (PSBT v2)
-  PsbtOutScript              // 0x04 (PSBT v2)
-  PsbtOutTapInternalKey      // 0x05
-  PsbtOutTapTree             // 0x06
-  PsbtOutTapBip32Derivation  // 0x07
-  PsbtOutProprietary         // 0xFC
+  PsbtOutRedeemScript
+  // 0x00
+  PsbtOutWitnessScript
+  // 0x01
+  PsbtOutBip32Derivation
+  // 0x02
+  PsbtOutAmount
+  // 0x03 (PSBT v2)
+  PsbtOutScript
+  // 0x04 (PSBT v2)
+  PsbtOutTapInternalKey
+  // 0x05
+  PsbtOutTapTree
+  // 0x06
+  PsbtOutTapBip32Derivation
+  // 0x07
+  PsbtOutProprietary
+  // 0xFC
   PsbtOutUnknown(Int)
 }
 
@@ -2407,9 +2655,10 @@ pub fn psbt_output_new() -> PsbtOutput {
 /// Create a PSBT from an unsigned transaction
 pub fn psbt_from_unsigned_tx(tx: Transaction) -> Result(Psbt, PsbtError) {
   // Verify transaction has no signatures
-  let has_sigs = list.any(tx.inputs, fn(input) {
-    !script_is_empty(input.script_sig) || !list.is_empty(input.witness)
-  })
+  let has_sigs =
+    list.any(tx.inputs, fn(input) {
+      !script_is_empty(input.script_sig) || !list.is_empty(input.witness)
+    })
 
   case has_sigs {
     True -> Error(PsbtAlreadyFinalized)
@@ -2418,14 +2667,16 @@ pub fn psbt_from_unsigned_tx(tx: Transaction) -> Result(Psbt, PsbtError) {
       let inputs = list.map(tx.inputs, fn(_) { psbt_input_new() })
       let outputs = list.map(tx.outputs, fn(_) { psbt_output_new() })
 
-      Ok(Psbt(
-        unsigned_tx: tx,
-        version: 0,
-        xpubs: [],
-        inputs: inputs,
-        outputs: outputs,
-        unknown: [],
-      ))
+      Ok(
+        Psbt(
+          unsigned_tx: tx,
+          version: 0,
+          xpubs: [],
+          inputs: inputs,
+          outputs: outputs,
+          unknown: [],
+        ),
+      )
     }
   }
 }
@@ -2460,20 +2711,28 @@ fn serialize_psbt_global(psbt: Psbt) -> BitArray {
   }
 
   // Serialize xpubs
-  let xpub_entries = list.fold(psbt.xpubs, <<>>, fn(acc, xpub) {
-    let #(key, value) = xpub
-    let full_key = bit_array.append(<<0x01>>, key)
-    bit_array.append(acc, serialize_psbt_entry(full_key, value))
-  })
+  let xpub_entries =
+    list.fold(psbt.xpubs, <<>>, fn(acc, xpub) {
+      let #(key, value) = xpub
+      let full_key = bit_array.append(<<0x01>>, key)
+      bit_array.append(acc, serialize_psbt_entry(full_key, value))
+    })
 
   // Serialize unknown entries
-  let unknown_entries = list.fold(psbt.unknown, <<>>, fn(acc, entry) {
-    let #(key, value) = entry
-    bit_array.append(acc, serialize_psbt_entry(key, value))
-  })
+  let unknown_entries =
+    list.fold(psbt.unknown, <<>>, fn(acc, entry) {
+      let #(key, value) = entry
+      bit_array.append(acc, serialize_psbt_entry(key, value))
+    })
 
   // End with separator (0x00)
-  bit_array.concat([tx_entry, version_entry, xpub_entries, unknown_entries, <<0x00>>])
+  bit_array.concat([
+    tx_entry,
+    version_entry,
+    xpub_entries,
+    unknown_entries,
+    <<0x00>>,
+  ])
 }
 
 fn serialize_psbt_entry(key: BitArray, value: BitArray) -> BitArray {
@@ -2504,16 +2763,20 @@ fn serialize_psbt_input(input: PsbtInput) -> BitArray {
   }
 
   // Partial signatures
-  let data = list.fold(input.partial_sigs, data, fn(acc, sig) {
-    let #(pubkey, signature) = sig
-    let key = bit_array.append(<<0x02>>, pubkey)
-    bit_array.append(acc, serialize_psbt_entry(key, signature))
-  })
+  let data =
+    list.fold(input.partial_sigs, data, fn(acc, sig) {
+      let #(pubkey, signature) = sig
+      let key = bit_array.append(<<0x02>>, pubkey)
+      bit_array.append(acc, serialize_psbt_entry(key, signature))
+    })
 
   // Sighash type
   let data = case input.sighash_type {
     option.Some(sighash) -> {
-      bit_array.append(data, serialize_psbt_entry(<<0x03>>, <<sighash:32-little>>))
+      bit_array.append(
+        data,
+        serialize_psbt_entry(<<0x03>>, <<sighash:32-little>>),
+      )
     }
     option.None -> data
   }
@@ -2521,7 +2784,10 @@ fn serialize_psbt_input(input: PsbtInput) -> BitArray {
   // Redeem script
   let data = case input.redeem_script {
     option.Some(script) -> {
-      bit_array.append(data, serialize_psbt_entry(<<0x04>>, script_to_bytes(script)))
+      bit_array.append(
+        data,
+        serialize_psbt_entry(<<0x04>>, script_to_bytes(script)),
+      )
     }
     option.None -> data
   }
@@ -2529,7 +2795,10 @@ fn serialize_psbt_input(input: PsbtInput) -> BitArray {
   // Witness script
   let data = case input.witness_script {
     option.Some(script) -> {
-      bit_array.append(data, serialize_psbt_entry(<<0x05>>, script_to_bytes(script)))
+      bit_array.append(
+        data,
+        serialize_psbt_entry(<<0x05>>, script_to_bytes(script)),
+      )
     }
     option.None -> data
   }
@@ -2537,7 +2806,10 @@ fn serialize_psbt_input(input: PsbtInput) -> BitArray {
   // Final scriptsig
   let data = case input.final_script_sig {
     option.Some(script) -> {
-      bit_array.append(data, serialize_psbt_entry(<<0x07>>, script_to_bytes(script)))
+      bit_array.append(
+        data,
+        serialize_psbt_entry(<<0x07>>, script_to_bytes(script)),
+      )
     }
     option.None -> data
   }
@@ -2568,10 +2840,11 @@ fn serialize_psbt_input(input: PsbtInput) -> BitArray {
   }
 
   // Unknown entries
-  let data = list.fold(input.unknown, data, fn(acc, entry) {
-    let #(key, value) = entry
-    bit_array.append(acc, serialize_psbt_entry(key, value))
-  })
+  let data =
+    list.fold(input.unknown, data, fn(acc, entry) {
+      let #(key, value) = entry
+      bit_array.append(acc, serialize_psbt_entry(key, value))
+    })
 
   // End with separator
   bit_array.append(data, <<0x00>>)
@@ -2583,7 +2856,10 @@ fn serialize_psbt_output(output: PsbtOutput) -> BitArray {
   // Redeem script
   let data = case output.redeem_script {
     option.Some(script) -> {
-      bit_array.append(mut_data, serialize_psbt_entry(<<0x00>>, script_to_bytes(script)))
+      bit_array.append(
+        mut_data,
+        serialize_psbt_entry(<<0x00>>, script_to_bytes(script)),
+      )
     }
     option.None -> mut_data
   }
@@ -2591,17 +2867,21 @@ fn serialize_psbt_output(output: PsbtOutput) -> BitArray {
   // Witness script
   let data = case output.witness_script {
     option.Some(script) -> {
-      bit_array.append(data, serialize_psbt_entry(<<0x01>>, script_to_bytes(script)))
+      bit_array.append(
+        data,
+        serialize_psbt_entry(<<0x01>>, script_to_bytes(script)),
+      )
     }
     option.None -> data
   }
 
   // BIP32 derivation paths
-  let data = list.fold(output.bip32_derivation, data, fn(acc, deriv) {
-    let #(pubkey, path) = deriv
-    let key = bit_array.append(<<0x02>>, pubkey)
-    bit_array.append(acc, serialize_psbt_entry(key, path))
-  })
+  let data =
+    list.fold(output.bip32_derivation, data, fn(acc, deriv) {
+      let #(pubkey, path) = deriv
+      let key = bit_array.append(<<0x02>>, pubkey)
+      bit_array.append(acc, serialize_psbt_entry(key, path))
+    })
 
   // Tap internal key
   let data = case output.tap_internal_key {
@@ -2620,10 +2900,11 @@ fn serialize_psbt_output(output: PsbtOutput) -> BitArray {
   }
 
   // Unknown entries
-  let data = list.fold(output.unknown, data, fn(acc, entry) {
-    let #(key, value) = entry
-    bit_array.append(acc, serialize_psbt_entry(key, value))
-  })
+  let data =
+    list.fold(output.unknown, data, fn(acc, entry) {
+      let #(key, value) = entry
+      bit_array.append(acc, serialize_psbt_entry(key, value))
+    })
 
   // End with separator
   bit_array.append(data, <<0x00>>)
@@ -2641,10 +2922,11 @@ fn serialize_txout(output: TxOut) -> BitArray {
 
 fn serialize_witness_stack(witness: List(BitArray)) -> BitArray {
   let count = compact_size_encode(list.length(witness))
-  let items = list.fold(witness, <<>>, fn(acc, item) {
-    let item_len = compact_size_encode(bit_array.byte_size(item))
-    bit_array.concat([acc, item_len, item])
-  })
+  let items =
+    list.fold(witness, <<>>, fn(acc, item) {
+      let item_len = compact_size_encode(bit_array.byte_size(item))
+      bit_array.concat([acc, item_len, item])
+    })
   bit_array.append(count, items)
 }
 
@@ -2702,7 +2984,16 @@ fn parse_psbt_global_map(
   version: Int,
   xpubs: List(#(BitArray, BitArray)),
   unknown: List(#(BitArray, BitArray)),
-) -> Result(#(Option(Transaction), Int, List(#(BitArray, BitArray)), List(#(BitArray, BitArray)), BitArray), PsbtError) {
+) -> Result(
+  #(
+    Option(Transaction),
+    Int,
+    List(#(BitArray, BitArray)),
+    List(#(BitArray, BitArray)),
+    BitArray,
+  ),
+  PsbtError,
+) {
   // Read key length
   case compact_size_decode(bytes) {
     Error(_) -> Error(PsbtInvalidFormat("Failed to read key length"))
@@ -2729,22 +3020,41 @@ fn parse_psbt_global_map(
                     <<0x00>> -> {
                       // Unsigned transaction
                       case decode_tx(value) {
-                        Error(_) -> Error(PsbtInvalidFormat("Invalid unsigned tx"))
+                        Error(_) ->
+                          Error(PsbtInvalidFormat("Invalid unsigned tx"))
                         Ok(#(parsed_tx, _)) -> {
-                          parse_psbt_global_map(after_value, option.Some(parsed_tx), version, xpubs, unknown)
+                          parse_psbt_global_map(
+                            after_value,
+                            option.Some(parsed_tx),
+                            version,
+                            xpubs,
+                            unknown,
+                          )
                         }
                       }
                     }
                     <<0x01, xpub_key:bits>> -> {
                       // Xpub
                       let new_xpubs = [#(<<xpub_key:bits>>, value), ..xpubs]
-                      parse_psbt_global_map(after_value, tx, version, new_xpubs, unknown)
+                      parse_psbt_global_map(
+                        after_value,
+                        tx,
+                        version,
+                        new_xpubs,
+                        unknown,
+                      )
                     }
                     <<0xFB>> -> {
                       // Version
                       case value {
                         <<v:32-little>> -> {
-                          parse_psbt_global_map(after_value, tx, v, xpubs, unknown)
+                          parse_psbt_global_map(
+                            after_value,
+                            tx,
+                            v,
+                            xpubs,
+                            unknown,
+                          )
                         }
                         _ -> Error(PsbtInvalidFormat("Invalid version"))
                       }
@@ -2752,7 +3062,13 @@ fn parse_psbt_global_map(
                     _ -> {
                       // Unknown
                       let new_unknown = [#(key, value), ..unknown]
-                      parse_psbt_global_map(after_value, tx, version, xpubs, new_unknown)
+                      parse_psbt_global_map(
+                        after_value,
+                        tx,
+                        version,
+                        xpubs,
+                        new_unknown,
+                      )
                     }
                   }
                 }
@@ -2799,10 +3115,12 @@ fn parse_psbt_input_map(
         Ok(key) -> {
           let after_key = slice_after(rest, key_len)
           case compact_size_decode(after_key) {
-            Error(_) -> Error(PsbtInvalidFormat("Failed to read input value length"))
+            Error(_) ->
+              Error(PsbtInvalidFormat("Failed to read input value length"))
             Ok(#(value_len, after_value_len)) -> {
               case bit_array.slice(after_value_len, 0, value_len) {
-                Error(_) -> Error(PsbtInvalidFormat("Failed to read input value"))
+                Error(_) ->
+                  Error(PsbtInvalidFormat("Failed to read input value"))
                 Ok(value) -> {
                   let after_value = slice_after(after_value_len, value_len)
                   let new_input = update_psbt_input(input, key, value)
@@ -2817,7 +3135,11 @@ fn parse_psbt_input_map(
   }
 }
 
-fn update_psbt_input(input: PsbtInput, key: BitArray, value: BitArray) -> PsbtInput {
+fn update_psbt_input(
+  input: PsbtInput,
+  key: BitArray,
+  value: BitArray,
+) -> PsbtInput {
   case key {
     <<0x00>> -> {
       // Non-witness UTXO
@@ -2835,12 +3157,16 @@ fn update_psbt_input(input: PsbtInput, key: BitArray, value: BitArray) -> PsbtIn
     }
     <<0x02, pubkey:bits>> -> {
       // Partial signature
-      PsbtInput(..input, partial_sigs: [#(<<pubkey:bits>>, value), ..input.partial_sigs])
+      PsbtInput(..input, partial_sigs: [
+        #(<<pubkey:bits>>, value),
+        ..input.partial_sigs
+      ])
     }
     <<0x03>> -> {
       // Sighash type
       case value {
-        <<sighash:32-little>> -> PsbtInput(..input, sighash_type: option.Some(sighash))
+        <<sighash:32-little>> ->
+          PsbtInput(..input, sighash_type: option.Some(sighash))
         _ -> input
       }
     }
@@ -2859,7 +3185,8 @@ fn update_psbt_input(input: PsbtInput, key: BitArray, value: BitArray) -> PsbtIn
     <<0x08>> -> {
       // Final scriptwitness
       case parse_witness_stack(value) {
-        Ok(witness) -> PsbtInput(..input, final_script_witness: option.Some(witness))
+        Ok(witness) ->
+          PsbtInput(..input, final_script_witness: option.Some(witness))
         Error(_) -> input
       }
     }
@@ -2916,10 +3243,12 @@ fn parse_psbt_output_map(
         Ok(key) -> {
           let after_key = slice_after(rest, key_len)
           case compact_size_decode(after_key) {
-            Error(_) -> Error(PsbtInvalidFormat("Failed to read output value length"))
+            Error(_) ->
+              Error(PsbtInvalidFormat("Failed to read output value length"))
             Ok(#(value_len, after_value_len)) -> {
               case bit_array.slice(after_value_len, 0, value_len) {
-                Error(_) -> Error(PsbtInvalidFormat("Failed to read output value"))
+                Error(_) ->
+                  Error(PsbtInvalidFormat("Failed to read output value"))
                 Ok(value) -> {
                   let after_value = slice_after(after_value_len, value_len)
                   let new_output = update_psbt_output(output, key, value)
@@ -2934,7 +3263,11 @@ fn parse_psbt_output_map(
   }
 }
 
-fn update_psbt_output(output: PsbtOutput, key: BitArray, value: BitArray) -> PsbtOutput {
+fn update_psbt_output(
+  output: PsbtOutput,
+  key: BitArray,
+  value: BitArray,
+) -> PsbtOutput {
   case key {
     <<0x00>> -> {
       // Redeem script
@@ -2946,7 +3279,10 @@ fn update_psbt_output(output: PsbtOutput, key: BitArray, value: BitArray) -> Psb
     }
     <<0x02, pubkey:bits>> -> {
       // BIP32 derivation
-      PsbtOutput(..output, bip32_derivation: [#(<<pubkey:bits>>, value), ..output.bip32_derivation])
+      PsbtOutput(..output, bip32_derivation: [
+        #(<<pubkey:bits>>, value),
+        ..output.bip32_derivation
+      ])
     }
     <<0x05>> -> {
       // Tap internal key
@@ -3050,9 +3386,14 @@ pub fn psbt_add_partial_sig(
   pubkey: BitArray,
   signature: BitArray,
 ) -> Result(Psbt, PsbtError) {
-  case list_update_at(psbt.inputs, input_index, fn(input) {
-    PsbtInput(..input, partial_sigs: [#(pubkey, signature), ..input.partial_sigs])
-  }) {
+  case
+    list_update_at(psbt.inputs, input_index, fn(input) {
+      PsbtInput(..input, partial_sigs: [
+        #(pubkey, signature),
+        ..input.partial_sigs
+      ])
+    })
+  {
     Error(_) -> Error(PsbtInputCountMismatch)
     Ok(new_inputs) -> Ok(Psbt(..psbt, inputs: new_inputs))
   }
@@ -3061,42 +3402,52 @@ pub fn psbt_add_partial_sig(
 /// Check if a PSBT is complete (all inputs have signatures)
 pub fn psbt_is_complete(psbt: Psbt) -> Bool {
   list.all(psbt.inputs, fn(input) {
-    option.is_some(input.final_script_sig) ||
-    option.is_some(input.final_script_witness) ||
-    !list.is_empty(input.partial_sigs) ||
-    option.is_some(input.tap_key_sig)
+    option.is_some(input.final_script_sig)
+    || option.is_some(input.final_script_witness)
+    || !list.is_empty(input.partial_sigs)
+    || option.is_some(input.tap_key_sig)
   })
 }
 
 /// Extract the final signed transaction from a finalized PSBT
 pub fn psbt_extract_tx(psbt: Psbt) -> Result(Transaction, PsbtError) {
-  let all_finalized = list.all(psbt.inputs, fn(input) {
-    option.is_some(input.final_script_sig) ||
-    option.is_some(input.final_script_witness)
-  })
+  let all_finalized =
+    list.all(psbt.inputs, fn(input) {
+      option.is_some(input.final_script_sig)
+      || option.is_some(input.final_script_witness)
+    })
 
   case all_finalized {
     False -> Error(PsbtNotFinalized)
     True -> {
       // Build the final transaction
-      let new_inputs = list.map2(psbt.unsigned_tx.inputs, psbt.inputs, fn(tx_input, psbt_input) {
-        let final_sig = case psbt_input.final_script_sig {
-          option.Some(script) -> script
-          option.None -> script_empty()
-        }
-        let final_witness = case psbt_input.final_script_witness {
-          option.Some(witness) -> witness
-          option.None -> []
-        }
-        TxIn(..tx_input, script_sig: final_sig, witness: final_witness)
-      })
+      let new_inputs =
+        list.map2(
+          psbt.unsigned_tx.inputs,
+          psbt.inputs,
+          fn(tx_input, psbt_input) {
+            let final_sig = case psbt_input.final_script_sig {
+              option.Some(script) -> script
+              option.None -> script_empty()
+            }
+            let final_witness = case psbt_input.final_script_witness {
+              option.Some(witness) -> witness
+              option.None -> []
+            }
+            TxIn(..tx_input, script_sig: final_sig, witness: final_witness)
+          },
+        )
 
       Ok(Transaction(..psbt.unsigned_tx, inputs: new_inputs))
     }
   }
 }
 
-fn list_update_at(lst: List(a), index: Int, f: fn(a) -> a) -> Result(List(a), Nil) {
+fn list_update_at(
+  lst: List(a),
+  index: Int,
+  f: fn(a) -> a,
+) -> Result(List(a), Nil) {
   case lst, index {
     [], _ -> Error(Nil)
     [head, ..tail], 0 -> Ok([f(head), ..tail])
@@ -3123,21 +3474,24 @@ pub fn base64_encode(bytes: BitArray) -> String {
 fn do_base64_encode(bytes: BitArray, acc: String) -> String {
   case bytes {
     <<a:6, b:6, c:6, d:6, rest:bits>> -> {
-      let chars = string_char_at(base64_alphabet, a)
+      let chars =
+        string_char_at(base64_alphabet, a)
         <> string_char_at(base64_alphabet, b)
         <> string_char_at(base64_alphabet, c)
         <> string_char_at(base64_alphabet, d)
       do_base64_encode(rest, acc <> chars)
     }
     <<a:6, b:6, c:4>> -> {
-      let chars = string_char_at(base64_alphabet, a)
+      let chars =
+        string_char_at(base64_alphabet, a)
         <> string_char_at(base64_alphabet, b)
         <> string_char_at(base64_alphabet, int.bitwise_shift_left(c, 2))
         <> "="
       acc <> chars
     }
     <<a:6, b:2>> -> {
-      let chars = string_char_at(base64_alphabet, a)
+      let chars =
+        string_char_at(base64_alphabet, a)
         <> string_char_at(base64_alphabet, int.bitwise_shift_left(b, 4))
         <> "=="
       acc <> chars
@@ -3167,10 +3521,11 @@ fn do_base64_decode(input: String, acc: BitArray) -> Result(BitArray, String) {
             Ok(#(c2, _)) -> {
               case base64_char_value(c1), base64_char_value(c2) {
                 Ok(v1), Ok(v2) -> {
-                  let byte = int.bitwise_or(
-                    int.bitwise_shift_left(v1, 2),
-                    int.bitwise_shift_right(v2, 4),
-                  )
+                  let byte =
+                    int.bitwise_or(
+                      int.bitwise_shift_left(v1, 2),
+                      int.bitwise_shift_right(v2, 4),
+                    )
                   Ok(bit_array.append(acc, <<byte:8>>))
                 }
                 _, _ -> Error("Invalid base64 character")
@@ -3186,16 +3541,22 @@ fn do_base64_decode(input: String, acc: BitArray) -> Result(BitArray, String) {
         Ok(#(chars, _)) -> {
           case chars {
             [c1, c2, c3] -> {
-              case base64_char_value(c1), base64_char_value(c2), base64_char_value(c3) {
+              case
+                base64_char_value(c1),
+                base64_char_value(c2),
+                base64_char_value(c3)
+              {
                 Ok(v1), Ok(v2), Ok(v3) -> {
-                  let b1 = int.bitwise_or(
-                    int.bitwise_shift_left(v1, 2),
-                    int.bitwise_shift_right(v2, 4),
-                  )
-                  let b2 = int.bitwise_or(
-                    int.bitwise_and(int.bitwise_shift_left(v2, 4), 0xF0),
-                    int.bitwise_shift_right(v3, 2),
-                  )
+                  let b1 =
+                    int.bitwise_or(
+                      int.bitwise_shift_left(v1, 2),
+                      int.bitwise_shift_right(v2, 4),
+                    )
+                  let b2 =
+                    int.bitwise_or(
+                      int.bitwise_and(int.bitwise_shift_left(v2, 4), 0xF0),
+                      int.bitwise_shift_right(v3, 2),
+                    )
                   Ok(bit_array.concat([acc, <<b1:8, b2:8>>]))
                 }
                 _, _, _ -> Error("Invalid base64 character")
@@ -3212,21 +3573,28 @@ fn do_base64_decode(input: String, acc: BitArray) -> Result(BitArray, String) {
         Ok(#(chars, rest)) -> {
           case chars {
             [c1, c2, c3, c4] -> {
-              case base64_char_value(c1), base64_char_value(c2),
-                   base64_char_value(c3), base64_char_value(c4) {
+              case
+                base64_char_value(c1),
+                base64_char_value(c2),
+                base64_char_value(c3),
+                base64_char_value(c4)
+              {
                 Ok(v1), Ok(v2), Ok(v3), Ok(v4) -> {
-                  let b1 = int.bitwise_or(
-                    int.bitwise_shift_left(v1, 2),
-                    int.bitwise_shift_right(v2, 4),
-                  )
-                  let b2 = int.bitwise_or(
-                    int.bitwise_and(int.bitwise_shift_left(v2, 4), 0xF0),
-                    int.bitwise_shift_right(v3, 2),
-                  )
-                  let b3 = int.bitwise_or(
-                    int.bitwise_and(int.bitwise_shift_left(v3, 6), 0xC0),
-                    v4,
-                  )
+                  let b1 =
+                    int.bitwise_or(
+                      int.bitwise_shift_left(v1, 2),
+                      int.bitwise_shift_right(v2, 4),
+                    )
+                  let b2 =
+                    int.bitwise_or(
+                      int.bitwise_and(int.bitwise_shift_left(v2, 4), 0xF0),
+                      int.bitwise_shift_right(v3, 2),
+                    )
+                  let b3 =
+                    int.bitwise_or(
+                      int.bitwise_and(int.bitwise_shift_left(v3, 6), 0xC0),
+                      v4,
+                    )
                   let new_acc = bit_array.concat([acc, <<b1:8, b2:8, b3:8>>])
                   do_base64_decode(rest, new_acc)
                 }
@@ -3252,7 +3620,11 @@ fn take_n_chars(s: String, n: Int) -> Result(#(List(String), String), Nil) {
   take_n_chars_acc(s, n, [])
 }
 
-fn take_n_chars_acc(s: String, n: Int, acc: List(String)) -> Result(#(List(String), String), Nil) {
+fn take_n_chars_acc(
+  s: String,
+  n: Int,
+  acc: List(String),
+) -> Result(#(List(String), String), Nil) {
   case n {
     0 -> Ok(#(list.reverse(acc), s))
     _ -> {
@@ -3299,13 +3671,17 @@ pub fn dust_threshold(script_pubkey: Script, fee_rate_sat_per_vb: Float) -> Int 
   // For P2WPKH: witness is ~107 bytes but counted at 1/4 weight
   let input_size = case script_size {
     // P2PKH (OP_DUP OP_HASH160 <20> OP_EQUALVERIFY OP_CHECKSIG)
-    25 -> 148  // 36 + 1 + 4 + 107
+    25 -> 148
+    // 36 + 1 + 4 + 107
     // P2WPKH (OP_0 <20>)
-    22 -> 68   // (36 + 1 + 4) * 4 + 107 / 4 ≈ 68 vbytes
+    22 -> 68
+    // (36 + 1 + 4) * 4 + 107 / 4 ≈ 68 vbytes
     // P2WSH (OP_0 <32>)
-    34 -> 104  // rough estimate
+    34 -> 104
+    // rough estimate
     // P2TR (OP_1 <32>)
-    _ -> 58    // Taproot keypath
+    _ -> 58
+    // Taproot keypath
   }
   float_to_int(int.to_float(input_size) *. fee_rate_sat_per_vb)
 }

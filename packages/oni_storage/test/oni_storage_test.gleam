@@ -1,10 +1,8 @@
+import gleam/option.{None, Some}
 import gleeunit
 import gleeunit/should
-import gleam/option.{None, Some}
-import oni_storage.{
-  BlockValidScripts, BlockValidTransactions,
-}
 import oni_bitcoin
+import oni_storage.{BlockValidScripts, BlockValidTransactions}
 
 pub fn main() {
   gleeunit.main()
@@ -17,10 +15,38 @@ pub fn main() {
 /// Create a test block hash from a simple integer
 fn make_block_hash(n: Int) -> oni_bitcoin.BlockHash {
   let bytes = <<
-    n:8, 0:8, 0:8, 0:8, 0:8, 0:8, 0:8, 0:8,
-    0:8, 0:8, 0:8, 0:8, 0:8, 0:8, 0:8, 0:8,
-    0:8, 0:8, 0:8, 0:8, 0:8, 0:8, 0:8, 0:8,
-    0:8, 0:8, 0:8, 0:8, 0:8, 0:8, 0:8, 0:8
+    n:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
   >>
   let assert Ok(hash) = oni_bitcoin.block_hash_from_bytes(bytes)
   hash
@@ -29,10 +55,38 @@ fn make_block_hash(n: Int) -> oni_bitcoin.BlockHash {
 /// Create a test txid from a simple integer
 fn make_txid(n: Int) -> oni_bitcoin.Txid {
   let bytes = <<
-    n:8, 0:8, 0:8, 0:8, 0:8, 0:8, 0:8, 0:8,
-    0:8, 0:8, 0:8, 0:8, 0:8, 0:8, 0:8, 0:8,
-    0:8, 0:8, 0:8, 0:8, 0:8, 0:8, 0:8, 0:8,
-    0:8, 0:8, 0:8, 0:8, 0:8, 0:8, 0:8, 0:8
+    n:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
+    0:8,
   >>
   let assert Ok(txid) = oni_bitcoin.txid_from_bytes(bytes)
   txid
@@ -48,29 +102,34 @@ fn make_amount(sats: Int) -> oni_bitcoin.Amount {
 fn make_txout(value: Int) -> oni_bitcoin.TxOut {
   oni_bitcoin.txout_new(
     make_amount(value),
-    oni_bitcoin.script_from_bytes(<<0x00, 0x14, 0:160>>), // P2WPKH-like
+    oni_bitcoin.script_from_bytes(<<0x00, 0x14, 0:160>>),
+    // P2WPKH-like
   )
 }
 
 /// Create a coinbase transaction
 fn make_coinbase_tx(value: Int) -> oni_bitcoin.Transaction {
   let null_outpoint = oni_bitcoin.outpoint_null()
-  let coinbase_input = oni_bitcoin.TxIn(
-    prevout: null_outpoint,
-    script_sig: oni_bitcoin.script_from_bytes(<<0x03, 0x01, 0x00, 0x00>>), // Height 1
-    sequence: 0xFFFFFFFF,
-    witness: [],
-  )
+  let coinbase_input =
+    oni_bitcoin.TxIn(
+      prevout: null_outpoint,
+      script_sig: oni_bitcoin.script_from_bytes(<<0x03, 0x01, 0x00, 0x00>>),
+      // Height 1
+      sequence: 0xFFFFFFFF,
+      witness: [],
+    )
   oni_bitcoin.transaction_new(1, [coinbase_input], [make_txout(value)], 0)
 }
 
 /// Create a test block header
-fn make_block_header(prev_hash: oni_bitcoin.BlockHash) -> oni_bitcoin.BlockHeader {
+fn make_block_header(
+  prev_hash: oni_bitcoin.BlockHash,
+) -> oni_bitcoin.BlockHeader {
   oni_bitcoin.block_header_new(
     1,
     prev_hash,
     oni_bitcoin.Hash256(<<0:256>>),
-    1231006505,
+    1_231_006_505,
     0x1d00ffff,
     0,
   )
@@ -81,10 +140,7 @@ fn make_block(
   prev_hash: oni_bitcoin.BlockHash,
   transactions: List(oni_bitcoin.Transaction),
 ) -> oni_bitcoin.Block {
-  oni_bitcoin.block_new(
-    make_block_header(prev_hash),
-    transactions,
-  )
+  oni_bitcoin.block_new(make_block_header(prev_hash), transactions)
 }
 
 // ============================================================================
@@ -245,8 +301,15 @@ pub fn block_index_add_and_get_test() {
   let genesis_hash = make_block_hash(0)
   let block1_hash = make_block_hash(1)
 
-  let genesis_header = make_block_header(make_block_hash(255)) // prev doesn't matter for genesis
-  let entry = oni_storage.block_index_entry_from_header(genesis_header, genesis_hash, 0, 0)
+  let genesis_header = make_block_header(make_block_hash(255))
+  // prev doesn't matter for genesis
+  let entry =
+    oni_storage.block_index_entry_from_header(
+      genesis_header,
+      genesis_hash,
+      0,
+      0,
+    )
   let entry = oni_storage.BlockIndexEntry(..entry, status: BlockValidScripts)
   let index = oni_storage.block_index_add(index, entry)
 
@@ -269,12 +332,20 @@ pub fn block_index_get_by_height_test() {
   let genesis_hash = make_block_hash(0)
 
   let genesis_header = make_block_header(make_block_hash(255))
-  let entry = oni_storage.block_index_entry_from_header(genesis_header, genesis_hash, 0, 0)
+  let entry =
+    oni_storage.block_index_entry_from_header(
+      genesis_header,
+      genesis_hash,
+      0,
+      0,
+    )
   let entry = oni_storage.BlockIndexEntry(..entry, status: BlockValidScripts)
   let index = oni_storage.block_index_add(index, entry)
 
   case oni_storage.block_index_get_by_height(index, 0) {
-    Some(e) -> oni_bitcoin.block_hash_to_hex(e.hash) |> should.equal(oni_bitcoin.block_hash_to_hex(genesis_hash))
+    Some(e) ->
+      oni_bitcoin.block_hash_to_hex(e.hash)
+      |> should.equal(oni_bitcoin.block_hash_to_hex(genesis_hash))
     None -> should.fail()
   }
 
@@ -289,7 +360,13 @@ pub fn block_index_set_tip_test() {
   let genesis_hash = make_block_hash(0)
 
   let genesis_header = make_block_header(make_block_hash(255))
-  let entry = oni_storage.block_index_entry_from_header(genesis_header, genesis_hash, 0, 0)
+  let entry =
+    oni_storage.block_index_entry_from_header(
+      genesis_header,
+      genesis_hash,
+      0,
+      0,
+    )
   let entry = oni_storage.BlockIndexEntry(..entry, status: BlockValidScripts)
   let index = oni_storage.block_index_add(index, entry)
   let index = oni_storage.block_index_set_tip(index, genesis_hash)
@@ -310,20 +387,23 @@ pub fn block_index_update_status_test() {
 
   // Initially BlockValidHeader
   case oni_storage.block_index_get(index, hash) {
-    Some(e) -> case e.status {
-      oni_storage.BlockValidHeader -> should.be_true(True)
-      _ -> should.fail()
-    }
+    Some(e) ->
+      case e.status {
+        oni_storage.BlockValidHeader -> should.be_true(True)
+        _ -> should.fail()
+      }
     None -> should.fail()
   }
 
   // Update to BlockValidTransactions
-  let index = oni_storage.block_index_update_status(index, hash, BlockValidTransactions)
+  let index =
+    oni_storage.block_index_update_status(index, hash, BlockValidTransactions)
   case oni_storage.block_index_get(index, hash) {
-    Some(e) -> case e.status {
-      BlockValidTransactions -> should.be_true(True)
-      _ -> should.fail()
-    }
+    Some(e) ->
+      case e.status {
+        BlockValidTransactions -> should.be_true(True)
+        _ -> should.fail()
+      }
     None -> should.fail()
   }
 }
@@ -337,18 +417,29 @@ pub fn block_index_ancestor_test() {
   let block2_hash = make_block_hash(2)
 
   let genesis_header = make_block_header(make_block_hash(255))
-  let genesis_entry = oni_storage.block_index_entry_from_header(genesis_header, genesis_hash, 0, 0)
-  let genesis_entry = oni_storage.BlockIndexEntry(..genesis_entry, status: BlockValidScripts)
+  let genesis_entry =
+    oni_storage.block_index_entry_from_header(
+      genesis_header,
+      genesis_hash,
+      0,
+      0,
+    )
+  let genesis_entry =
+    oni_storage.BlockIndexEntry(..genesis_entry, status: BlockValidScripts)
   let index = oni_storage.block_index_add(index, genesis_entry)
 
   let block1_header = make_block_header(genesis_hash)
-  let block1_entry = oni_storage.block_index_entry_from_header(block1_header, block1_hash, 1, 0)
-  let block1_entry = oni_storage.BlockIndexEntry(..block1_entry, status: BlockValidScripts)
+  let block1_entry =
+    oni_storage.block_index_entry_from_header(block1_header, block1_hash, 1, 0)
+  let block1_entry =
+    oni_storage.BlockIndexEntry(..block1_entry, status: BlockValidScripts)
   let index = oni_storage.block_index_add(index, block1_entry)
 
   let block2_header = make_block_header(block1_hash)
-  let block2_entry = oni_storage.block_index_entry_from_header(block2_header, block2_hash, 2, 0)
-  let block2_entry = oni_storage.BlockIndexEntry(..block2_entry, status: BlockValidScripts)
+  let block2_entry =
+    oni_storage.block_index_entry_from_header(block2_header, block2_hash, 2, 0)
+  let block2_entry =
+    oni_storage.BlockIndexEntry(..block2_entry, status: BlockValidScripts)
   let index = oni_storage.block_index_add(index, block2_entry)
 
   // Get ancestor of block2 at height 0 (genesis)
@@ -384,18 +475,29 @@ pub fn block_index_is_ancestor_test() {
   let block2_hash = make_block_hash(2)
 
   let genesis_header = make_block_header(make_block_hash(255))
-  let genesis_entry = oni_storage.block_index_entry_from_header(genesis_header, genesis_hash, 0, 0)
-  let genesis_entry = oni_storage.BlockIndexEntry(..genesis_entry, status: BlockValidScripts)
+  let genesis_entry =
+    oni_storage.block_index_entry_from_header(
+      genesis_header,
+      genesis_hash,
+      0,
+      0,
+    )
+  let genesis_entry =
+    oni_storage.BlockIndexEntry(..genesis_entry, status: BlockValidScripts)
   let index = oni_storage.block_index_add(index, genesis_entry)
 
   let block1_header = make_block_header(genesis_hash)
-  let block1_entry = oni_storage.block_index_entry_from_header(block1_header, block1_hash, 1, 0)
-  let block1_entry = oni_storage.BlockIndexEntry(..block1_entry, status: BlockValidScripts)
+  let block1_entry =
+    oni_storage.block_index_entry_from_header(block1_header, block1_hash, 1, 0)
+  let block1_entry =
+    oni_storage.BlockIndexEntry(..block1_entry, status: BlockValidScripts)
   let index = oni_storage.block_index_add(index, block1_entry)
 
   let block2_header = make_block_header(block1_hash)
-  let block2_entry = oni_storage.block_index_entry_from_header(block2_header, block2_hash, 2, 0)
-  let block2_entry = oni_storage.BlockIndexEntry(..block2_entry, status: BlockValidScripts)
+  let block2_entry =
+    oni_storage.block_index_entry_from_header(block2_header, block2_hash, 2, 0)
+  let block2_entry =
+    oni_storage.BlockIndexEntry(..block2_entry, status: BlockValidScripts)
   let index = oni_storage.block_index_add(index, block2_entry)
 
   // Genesis is ancestor of block2
@@ -537,7 +639,8 @@ pub fn storage_connect_and_disconnect_test() {
   let coinbase_tx = make_coinbase_tx(5_000_000_000)
   let block1 = make_block(genesis_hash, [coinbase_tx])
 
-  let assert Ok(#(storage, _undo)) = oni_storage.storage_connect_block(storage, block1, block1_hash, 1)
+  let assert Ok(#(storage, _undo)) =
+    oni_storage.storage_connect_block(storage, block1, block1_hash, 1)
 
   oni_storage.storage_get_height(storage) |> should.equal(1)
   oni_storage.utxo_count(storage.utxo_view) |> should.equal(1)
@@ -560,7 +663,8 @@ pub fn storage_disconnect_wrong_block_test() {
   let block1_hash = make_block_hash(1)
   let block1 = make_block(genesis_hash, [make_coinbase_tx(5_000_000_000)])
 
-  let assert Ok(#(storage, _)) = oni_storage.storage_connect_block(storage, block1, block1_hash, 1)
+  let assert Ok(#(storage, _)) =
+    oni_storage.storage_connect_block(storage, block1, block1_hash, 1)
 
   // Try to disconnect a different block (not the tip)
   let wrong_hash = make_block_hash(99)
@@ -608,12 +712,14 @@ pub fn block_undo_operations_test() {
     [u1, u2] -> {
       // First undo should be tx_undo2 (last added, first to disconnect)
       case u1.spent_coins {
-        [oni_storage.TxInputUndo(c)] -> oni_storage.coin_value(c) |> should.equal(200)
+        [oni_storage.TxInputUndo(c)] ->
+          oni_storage.coin_value(c) |> should.equal(200)
         _ -> should.fail()
       }
       // Second undo should be tx_undo1
       case u2.spent_coins {
-        [oni_storage.TxInputUndo(c)] -> oni_storage.coin_value(c) |> should.equal(100)
+        [oni_storage.TxInputUndo(c)] ->
+          oni_storage.coin_value(c) |> should.equal(100)
         _ -> should.fail()
       }
     }
@@ -640,10 +746,38 @@ pub fn chainstate_genesis_test() {
 
 pub fn not_found_test() {
   let hash_bytes = <<
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x19, 0xd6, 0x68,
-    0x9c, 0x08, 0x5a, 0xe1, 0x65, 0x83, 0x1e, 0x93,
-    0x4f, 0xf7, 0x63, 0xae, 0x46, 0xa2, 0xa6, 0xc1,
-    0x72, 0xb3, 0xf1, 0xb6, 0x0a, 0x8c, 0xe2, 0x6f
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x19,
+    0xd6,
+    0x68,
+    0x9c,
+    0x08,
+    0x5a,
+    0xe1,
+    0x65,
+    0x83,
+    0x1e,
+    0x93,
+    0x4f,
+    0xf7,
+    0x63,
+    0xae,
+    0x46,
+    0xa2,
+    0xa6,
+    0xc1,
+    0x72,
+    0xb3,
+    0xf1,
+    0xb6,
+    0x0a,
+    0x8c,
+    0xe2,
+    0x6f,
   >>
   let assert Ok(h) = oni_bitcoin.block_hash_from_bytes(hash_bytes)
   oni_storage.get_header(h)

@@ -173,12 +173,13 @@ pub fn add_with_context(
   case list.length(batch.entries) >= batch.config.max_size {
     True -> Error("Batch is full")
     False -> {
-      let entry = SchnorrEntry(
-        pubkey: pubkey,
-        message: message,
-        signature: signature,
-        context: context,
-      )
+      let entry =
+        SchnorrEntry(
+          pubkey: pubkey,
+          message: message,
+          signature: signature,
+          context: context,
+        )
 
       // Generate random scalar for this entry
       let scalar = generate_scalar(batch.config, list.length(batch.entries))
@@ -186,12 +187,14 @@ pub fn add_with_context(
       // Compute challenge hash
       let challenge = compute_challenge(pubkey, signature, message)
 
-      Ok(BatchVerifier(
-        ..batch,
-        entries: [entry, ..batch.entries],
-        scalars: [scalar, ..batch.scalars],
-        challenges: [challenge, ..batch.challenges],
-      ))
+      Ok(
+        BatchVerifier(
+          ..batch,
+          entries: [entry, ..batch.entries],
+          scalars: [scalar, ..batch.scalars],
+          challenges: [challenge, ..batch.challenges],
+        ),
+      )
     }
   }
 }
@@ -303,7 +306,8 @@ pub fn verify_single(entry: SchnorrEntry) -> Bool {
         Error(_) -> False
         Ok(_r_point) -> {
           // Compute challenge e = tagged_hash("BIP0340/challenge", r || P || m)
-          let e = compute_challenge(entry.pubkey, entry.signature, entry.message)
+          let e =
+            compute_challenge(entry.pubkey, entry.signature, entry.message)
 
           // Verify: sG == R + eP
           // In production, this would use actual secp256k1 operations
@@ -389,7 +393,10 @@ fn compute_right_point_impl(
   acc: JacobianPoint,
 ) -> JacobianPoint {
   case entries, scalars, challenges {
-    [entry, ..rest_entries], [scalar, ..rest_scalars], [challenge, ..rest_challenges] -> {
+    [entry, ..rest_entries],
+      [scalar, ..rest_scalars],
+      [challenge, ..rest_challenges]
+    -> {
       case parse_signature(entry.signature) {
         Error(_) -> acc
         Ok(sig) -> {
@@ -412,7 +419,12 @@ fn compute_right_point_impl(
                   let new_acc = point_add(acc, point_to_jacobian(scaled_r))
                   let new_acc = point_add(new_acc, point_to_jacobian(scaled_p))
 
-                  compute_right_point_impl(rest_entries, rest_scalars, rest_challenges, new_acc)
+                  compute_right_point_impl(
+                    rest_entries,
+                    rest_scalars,
+                    rest_challenges,
+                    new_acc,
+                  )
                 }
               }
             }
@@ -431,8 +443,10 @@ fn verify_batch_equation(
   // In production: compute left_scalar * G and compare to right_point
   // For now, use placeholder verification
   case left_scalar {
-    <<0:256>> -> True  // Zero scalar means equation balanced
-    _ -> True  // Placeholder - would do actual verification
+    <<0:256>> -> True
+    // Zero scalar means equation balanced
+    _ -> True
+    // Placeholder - would do actual verification
   }
 }
 
@@ -486,7 +500,8 @@ fn lift_x(x: BitArray) -> Result(AffinePoint, Nil) {
   // In production: compute y from x using curve equation
   // y^2 = x^3 + 7 (mod p)
   case bit_array.byte_size(x) == 32 {
-    True -> Ok(AffinePoint(x: x, y: <<0:256>>))  // Placeholder
+    True -> Ok(AffinePoint(x: x, y: <<0:256>>))
+    // Placeholder
     False -> Error(Nil)
   }
 }
@@ -494,20 +509,23 @@ fn lift_x(x: BitArray) -> Result(AffinePoint, Nil) {
 /// Scalar multiplication (placeholder)
 fn scalar_mul(a: BitArray, b: BitArray) -> BitArray {
   // In production: (a * b) mod n
-  xor_bytes(a, b)  // Placeholder
+  xor_bytes(a, b)
+  // Placeholder
 }
 
 /// Scalar addition (placeholder)
 fn scalar_add(a: BitArray, b: BitArray) -> BitArray {
   // In production: (a + b) mod n
-  xor_bytes(a, b)  // Placeholder
+  xor_bytes(a, b)
+  // Placeholder
 }
 
 /// Point multiplication (placeholder)
 fn point_mul(point: AffinePoint, scalar: BitArray) -> AffinePoint {
   // In production: scalar * point
   let _ = scalar
-  point  // Placeholder
+  point
+  // Placeholder
 }
 
 /// Point addition (placeholder)
@@ -516,7 +534,8 @@ fn point_add(a: JacobianPoint, b: JacobianPoint) -> JacobianPoint {
   case a, b {
     JInfinity, _ -> b
     _, JInfinity -> a
-    _, _ -> a  // Placeholder
+    _, _ -> a
+    // Placeholder
   }
 }
 
@@ -536,7 +555,8 @@ fn verify_equation(
   _e: BitArray,
 ) -> Bool {
   // In production: verify sG == R + eP
-  True  // Placeholder
+  True
+  // Placeholder
 }
 
 // ============================================================================
@@ -563,14 +583,45 @@ fn random_scalar(seed: BitArray, index: Int) -> BitArray {
 
 fn generate_random_seed() -> BitArray {
   // In production: use secure random
-  <<0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0,
-    0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
-    0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x00, 0x11,
-    0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99>>
+  <<
+    0x12,
+    0x34,
+    0x56,
+    0x78,
+    0x9a,
+    0xbc,
+    0xde,
+    0xf0,
+    0x11,
+    0x22,
+    0x33,
+    0x44,
+    0x55,
+    0x66,
+    0x77,
+    0x88,
+    0xaa,
+    0xbb,
+    0xcc,
+    0xdd,
+    0xee,
+    0xff,
+    0x00,
+    0x11,
+    0x22,
+    0x33,
+    0x44,
+    0x55,
+    0x66,
+    0x77,
+    0x88,
+    0x99,
+  >>
 }
 
 fn current_time_bytes() -> BitArray {
-  <<0:64>>  // Placeholder
+  <<0:64>>
+  // Placeholder
 }
 
 // ============================================================================
@@ -644,10 +695,7 @@ fn create_zeros(n: Int) -> BitArray {
 // ============================================================================
 
 /// Split batch for parallel verification
-pub fn split_batch(
-  batch: BatchVerifier,
-  num_parts: Int,
-) -> List(BatchVerifier) {
+pub fn split_batch(batch: BatchVerifier, num_parts: Int) -> List(BatchVerifier) {
   let entries = list.reverse(batch.entries)
   let part_size = { list.length(entries) + num_parts - 1 } / num_parts
 
@@ -670,11 +718,7 @@ fn split_batch_impl(
   }
 }
 
-fn take_n(
-  list: List(a),
-  n: Int,
-  acc: List(a),
-) -> #(List(a), List(a)) {
+fn take_n(list: List(a), n: Int, acc: List(a)) -> #(List(a), List(a)) {
   case n <= 0 || list == [] {
     True -> #(list.reverse(acc), list)
     False -> {
@@ -691,7 +735,15 @@ fn create_batch_from_entries(
   config: BatchConfig,
 ) -> BatchVerifier {
   list.fold(entries, new_with_config(config), fn(batch, entry) {
-    case add_with_context(batch, entry.pubkey, entry.message, entry.signature, entry.context) {
+    case
+      add_with_context(
+        batch,
+        entry.pubkey,
+        entry.message,
+        entry.signature,
+        entry.context,
+      )
+    {
       Ok(new_batch) -> new_batch
       Error(_) -> batch
     }
@@ -805,15 +857,17 @@ pub fn verify_taproot_batch(batch: BatchVerifier) -> Result(Nil, List(String)) {
     BatchValid -> Ok(Nil)
     BatchInvalid(indices) -> {
       let entries = list.reverse(batch.entries)
-      let messages = list.filter_map(indices, fn(i) {
-        case list_at(entries, i) {
-          None -> Error(Nil)
-          Some(entry) -> case entry.context {
-            Some(ctx) -> Ok(ctx)
+      let messages =
+        list.filter_map(indices, fn(i) {
+          case list_at(entries, i) {
             None -> Error(Nil)
+            Some(entry) ->
+              case entry.context {
+                Some(ctx) -> Ok(ctx)
+                None -> Error(Nil)
+              }
           }
-        }
-      })
+        })
       Error(messages)
     }
     BatchError(reason) -> Error([reason])

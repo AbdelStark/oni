@@ -29,7 +29,9 @@ pub const rpc_version = "2.0"
 pub const rpc_timeout_ms = 30_000
 
 /// Maximum request size in bytes
-pub const max_request_size = 10_000_000  // 10 MB
+pub const max_request_size = 10_000_000
+
+// 10 MB
 
 /// Rate limit (requests per minute per IP)
 pub const rate_limit_per_minute = 100
@@ -39,15 +41,15 @@ pub const rate_limit_per_minute = 100
 // ============================================================================
 
 /// Standard JSON-RPC error codes
-pub const err_parse = -32700
+pub const err_parse = -32_700
 
-pub const err_invalid_request = -32600
+pub const err_invalid_request = -32_600
 
-pub const err_method_not_found = -32601
+pub const err_method_not_found = -32_601
 
-pub const err_invalid_params = -32602
+pub const err_invalid_params = -32_602
 
-pub const err_internal = -32603
+pub const err_internal = -32_603
 
 /// Bitcoin-specific error codes
 pub const err_misc = -1
@@ -118,12 +120,7 @@ pub fn error_message(err: RpcError) -> String {
 
 /// JSON-RPC request
 pub type RpcRequest {
-  RpcRequest(
-    jsonrpc: String,
-    id: RpcId,
-    method: String,
-    params: RpcParams,
-  )
+  RpcRequest(jsonrpc: String, id: RpcId, method: String, params: RpcParams)
 }
 
 /// JSON-RPC request ID (can be string, number, or null)
@@ -142,25 +139,13 @@ pub type RpcParams {
 
 /// JSON-RPC response
 pub type RpcResponse {
-  RpcSuccess(
-    jsonrpc: String,
-    id: RpcId,
-    result: RpcValue,
-  )
-  RpcFailure(
-    jsonrpc: String,
-    id: RpcId,
-    error: RpcErrorObject,
-  )
+  RpcSuccess(jsonrpc: String, id: RpcId, result: RpcValue)
+  RpcFailure(jsonrpc: String, id: RpcId, error: RpcErrorObject)
 }
 
 /// JSON-RPC error object
 pub type RpcErrorObject {
-  RpcErrorObject(
-    code: Int,
-    message: String,
-    data: Option(RpcValue),
-  )
+  RpcErrorObject(code: Int, message: String, data: Option(RpcValue))
 }
 
 /// JSON value types for RPC
@@ -329,17 +314,27 @@ pub fn error_response(id: RpcId, err: RpcError) -> RpcResponse {
 pub fn serialize_response(response: RpcResponse) -> String {
   case response {
     RpcSuccess(_, id, result) -> {
-      "{\"jsonrpc\":\"" <> rpc_version <> "\"" <>
-      ",\"id\":" <> serialize_id(id) <>
-      ",\"result\":" <> serialize_value(result) <>
-      "}"
+      "{\"jsonrpc\":\""
+      <> rpc_version
+      <> "\""
+      <> ",\"id\":"
+      <> serialize_id(id)
+      <> ",\"result\":"
+      <> serialize_value(result)
+      <> "}"
     }
     RpcFailure(_, id, error) -> {
-      "{\"jsonrpc\":\"" <> rpc_version <> "\"" <>
-      ",\"id\":" <> serialize_id(id) <>
-      ",\"error\":{\"code\":" <> int.to_string(error.code) <>
-      ",\"message\":\"" <> error.message <> "\"}" <>
-      "}"
+      "{\"jsonrpc\":\""
+      <> rpc_version
+      <> "\""
+      <> ",\"id\":"
+      <> serialize_id(id)
+      <> ",\"error\":{\"code\":"
+      <> int.to_string(error.code)
+      <> ",\"message\":\""
+      <> error.message
+      <> "\"}"
+      <> "}"
     }
   }
 }
@@ -366,10 +361,11 @@ fn serialize_value(val: RpcValue) -> String {
     }
     RpcObject(obj) -> {
       let pairs = dict.to_list(obj)
-      let items = list.map(pairs, fn(pair) {
-        let #(key, value) = pair
-        "\"" <> key <> "\":" <> serialize_value(value)
-      })
+      let items =
+        list.map(pairs, fn(pair) {
+          let #(key, value) = pair
+          "\"" <> key <> "\":" <> serialize_value(value)
+        })
       "{" <> string.join(items, ",") <> "}"
     }
   }
@@ -455,10 +451,7 @@ pub type RpcServer {
 
 /// Rate limit tracking entry
 pub type RateLimitEntry {
-  RateLimitEntry(
-    count: Int,
-    window_start: Int,
-  )
+  RateLimitEntry(count: Int, window_start: Int)
 }
 
 /// Create a new RPC server
@@ -480,10 +473,7 @@ pub fn server_register(
   method: String,
   handler: MethodHandler,
 ) -> RpcServer {
-  RpcServer(
-    ..server,
-    handlers: dict.insert(server.handlers, method, handler),
-  )
+  RpcServer(..server, handlers: dict.insert(server.handlers, method, handler))
 }
 
 /// Handle an RPC request
@@ -498,27 +488,43 @@ pub fn server_handle_request(
   // Check authentication if required
   case server.config.allow_anonymous || ctx.authenticated {
     False -> {
-      let err_server = RpcServer(..server_with_count, error_count: server.error_count + 1)
+      let err_server =
+        RpcServer(..server_with_count, error_count: server.error_count + 1)
       #(err_server, error_response(request.id, Unauthorized))
     }
     True -> {
       // Check if method is enabled
       case is_method_enabled(server.config, request.method) {
         False -> {
-          let err_server = RpcServer(..server_with_count, error_count: server.error_count + 1)
-          #(err_server, error_response(request.id, MethodNotFound(request.method)))
+          let err_server =
+            RpcServer(..server_with_count, error_count: server.error_count + 1)
+          #(
+            err_server,
+            error_response(request.id, MethodNotFound(request.method)),
+          )
         }
         True -> {
           // Find and execute handler
           case dict.get(server.handlers, request.method) {
             Error(_) -> {
-              let err_server = RpcServer(..server_with_count, error_count: server.error_count + 1)
-              #(err_server, error_response(request.id, MethodNotFound(request.method)))
+              let err_server =
+                RpcServer(
+                  ..server_with_count,
+                  error_count: server.error_count + 1,
+                )
+              #(
+                err_server,
+                error_response(request.id, MethodNotFound(request.method)),
+              )
             }
             Ok(handler) -> {
               case handler(request.params, ctx) {
                 Error(err) -> {
-                  let err_server = RpcServer(..server_with_count, error_count: server.error_count + 1)
+                  let err_server =
+                    RpcServer(
+                      ..server_with_count,
+                      error_count: server.error_count + 1,
+                    )
                   #(err_server, error_response(request.id, err))
                 }
                 Ok(result) -> {
@@ -535,7 +541,8 @@ pub fn server_handle_request(
 
 fn is_method_enabled(config: RpcConfig, method: String) -> Bool {
   case list.is_empty(config.enabled_methods) {
-    True -> True  // All methods enabled
+    True -> True
+    // All methods enabled
     False -> list.contains(config.enabled_methods, method)
   }
 }
@@ -544,7 +551,9 @@ fn is_method_enabled(config: RpcConfig, method: String) -> Bool {
 // Standard RPC Methods
 // ============================================================================
 
-fn register_default_handlers(handlers: Dict(String, MethodHandler)) -> Dict(String, MethodHandler) {
+fn register_default_handlers(
+  handlers: Dict(String, MethodHandler),
+) -> Dict(String, MethodHandler) {
   handlers
   |> dict.insert("getblockchaininfo", handle_getblockchaininfo)
   |> dict.insert("getnetworkinfo", handle_getnetworkinfo)
@@ -574,18 +583,32 @@ fn register_default_handlers(handlers: Dict(String, MethodHandler)) -> Dict(Stri
 }
 
 // Blockchain info
-fn handle_getblockchaininfo(_params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
-  let result = dict.new()
+fn handle_getblockchaininfo(
+  _params: RpcParams,
+  _ctx: RpcContext,
+) -> Result(RpcValue, RpcError) {
+  let result =
+    dict.new()
     |> dict.insert("chain", RpcString("main"))
     |> dict.insert("blocks", RpcInt(0))
     |> dict.insert("headers", RpcInt(0))
-    |> dict.insert("bestblockhash", RpcString("0000000000000000000000000000000000000000000000000000000000000000"))
+    |> dict.insert(
+      "bestblockhash",
+      RpcString(
+        "0000000000000000000000000000000000000000000000000000000000000000",
+      ),
+    )
     |> dict.insert("difficulty", RpcFloat(1.0))
     |> dict.insert("time", RpcInt(0))
     |> dict.insert("mediantime", RpcInt(0))
     |> dict.insert("verificationprogress", RpcFloat(0.0))
     |> dict.insert("initialblockdownload", RpcBool(True))
-    |> dict.insert("chainwork", RpcString("0000000000000000000000000000000000000000000000000000000000000000"))
+    |> dict.insert(
+      "chainwork",
+      RpcString(
+        "0000000000000000000000000000000000000000000000000000000000000000",
+      ),
+    )
     |> dict.insert("size_on_disk", RpcInt(0))
     |> dict.insert("pruned", RpcBool(False))
     |> dict.insert("warnings", RpcString(""))
@@ -594,17 +617,24 @@ fn handle_getblockchaininfo(_params: RpcParams, _ctx: RpcContext) -> Result(RpcV
 }
 
 // Network info
-fn handle_getnetworkinfo(_params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
-  let result = dict.new()
-    |> dict.insert("version", RpcInt(250000))
+fn handle_getnetworkinfo(
+  _params: RpcParams,
+  _ctx: RpcContext,
+) -> Result(RpcValue, RpcError) {
+  let result =
+    dict.new()
+    |> dict.insert("version", RpcInt(250_000))
     |> dict.insert("subversion", RpcString("/oni:0.1.0/"))
-    |> dict.insert("protocolversion", RpcInt(70016))
+    |> dict.insert("protocolversion", RpcInt(70_016))
     |> dict.insert("localservices", RpcString("000000000000040d"))
-    |> dict.insert("localservicesnames", RpcArray([
-      RpcString("NETWORK"),
-      RpcString("WITNESS"),
-      RpcString("NETWORK_LIMITED"),
-    ]))
+    |> dict.insert(
+      "localservicesnames",
+      RpcArray([
+        RpcString("NETWORK"),
+        RpcString("WITNESS"),
+        RpcString("NETWORK_LIMITED"),
+      ]),
+    )
     |> dict.insert("localrelay", RpcBool(True))
     |> dict.insert("timeoffset", RpcInt(0))
     |> dict.insert("networkactive", RpcBool(True))
@@ -621,8 +651,12 @@ fn handle_getnetworkinfo(_params: RpcParams, _ctx: RpcContext) -> Result(RpcValu
 }
 
 // Mining info
-fn handle_getmininginfo(_params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
-  let result = dict.new()
+fn handle_getmininginfo(
+  _params: RpcParams,
+  _ctx: RpcContext,
+) -> Result(RpcValue, RpcError) {
+  let result =
+    dict.new()
     |> dict.insert("blocks", RpcInt(0))
     |> dict.insert("difficulty", RpcFloat(1.0))
     |> dict.insert("networkhashps", RpcFloat(0.0))
@@ -634,14 +668,18 @@ fn handle_getmininginfo(_params: RpcParams, _ctx: RpcContext) -> Result(RpcValue
 }
 
 // Mempool info
-fn handle_getmempoolinfo(_params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
-  let result = dict.new()
+fn handle_getmempoolinfo(
+  _params: RpcParams,
+  _ctx: RpcContext,
+) -> Result(RpcValue, RpcError) {
+  let result =
+    dict.new()
     |> dict.insert("loaded", RpcBool(True))
     |> dict.insert("size", RpcInt(0))
     |> dict.insert("bytes", RpcInt(0))
     |> dict.insert("usage", RpcInt(0))
     |> dict.insert("total_fee", RpcFloat(0.0))
-    |> dict.insert("maxmempool", RpcInt(300000000))
+    |> dict.insert("maxmempool", RpcInt(300_000_000))
     |> dict.insert("mempoolminfee", RpcFloat(0.00001))
     |> dict.insert("minrelaytxfee", RpcFloat(0.00001))
     |> dict.insert("incrementalrelayfee", RpcFloat(0.00001))
@@ -651,39 +689,61 @@ fn handle_getmempoolinfo(_params: RpcParams, _ctx: RpcContext) -> Result(RpcValu
 }
 
 // Peer info
-fn handle_getpeerinfo(_params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
+fn handle_getpeerinfo(
+  _params: RpcParams,
+  _ctx: RpcContext,
+) -> Result(RpcValue, RpcError) {
   Ok(RpcArray([]))
 }
 
 // Connection count
-fn handle_getconnectioncount(_params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
+fn handle_getconnectioncount(
+  _params: RpcParams,
+  _ctx: RpcContext,
+) -> Result(RpcValue, RpcError) {
   Ok(RpcInt(0))
 }
 
 // Best block hash
-fn handle_getbestblockhash(_params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
+fn handle_getbestblockhash(
+  _params: RpcParams,
+  _ctx: RpcContext,
+) -> Result(RpcValue, RpcError) {
   let genesis = oni_bitcoin.mainnet_params().genesis_hash
   Ok(RpcString(oni_bitcoin.block_hash_to_hex(genesis)))
 }
 
 // Block count
-fn handle_getblockcount(_params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
+fn handle_getblockcount(
+  _params: RpcParams,
+  _ctx: RpcContext,
+) -> Result(RpcValue, RpcError) {
   Ok(RpcInt(0))
 }
 
 // Difficulty
-fn handle_getdifficulty(_params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
+fn handle_getdifficulty(
+  _params: RpcParams,
+  _ctx: RpcContext,
+) -> Result(RpcValue, RpcError) {
   Ok(RpcFloat(1.0))
 }
 
 // Uptime
-fn handle_uptime(_params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
+fn handle_uptime(
+  _params: RpcParams,
+  _ctx: RpcContext,
+) -> Result(RpcValue, RpcError) {
   Ok(RpcInt(0))
 }
 
 // Help
-fn handle_help(_params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
-  let help_text = "
+fn handle_help(
+  _params: RpcParams,
+  _ctx: RpcContext,
+) -> Result(RpcValue, RpcError) {
+  let help_text =
+    "
 == Blockchain ==
 getbestblockhash
 getblock \"blockhash\" ( verbosity )
@@ -729,12 +789,18 @@ uptime
 }
 
 // Stop node
-fn handle_stop(_params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
+fn handle_stop(
+  _params: RpcParams,
+  _ctx: RpcContext,
+) -> Result(RpcValue, RpcError) {
   Ok(RpcString("oni stopping"))
 }
 
 // Echo (for testing)
-fn handle_echo(params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
+fn handle_echo(
+  params: RpcParams,
+  _ctx: RpcContext,
+) -> Result(RpcValue, RpcError) {
   case params {
     ParamsArray(arr) -> Ok(RpcArray(arr))
     ParamsObject(obj) -> Ok(RpcObject(obj))
@@ -743,12 +809,17 @@ fn handle_echo(params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError
 }
 
 // Validate address
-fn handle_validateaddress(params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
+fn handle_validateaddress(
+  params: RpcParams,
+  _ctx: RpcContext,
+) -> Result(RpcValue, RpcError) {
   case params {
     ParamsArray([RpcString(address), ..]) -> {
       // Basic validation - real implementation would check address format
-      let is_valid = string.length(address) >= 26 && string.length(address) <= 90
-      let result = dict.new()
+      let is_valid =
+        string.length(address) >= 26 && string.length(address) <= 90
+      let result =
+        dict.new()
         |> dict.insert("isvalid", RpcBool(is_valid))
         |> dict.insert("address", RpcString(address))
 
@@ -759,13 +830,19 @@ fn handle_validateaddress(params: RpcParams, _ctx: RpcContext) -> Result(RpcValu
 }
 
 // Verify message
-fn handle_verifymessage(_params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
+fn handle_verifymessage(
+  _params: RpcParams,
+  _ctx: RpcContext,
+) -> Result(RpcValue, RpcError) {
   // Placeholder - would verify Bitcoin signed message
   Ok(RpcBool(False))
 }
 
 // Decode raw transaction
-fn handle_decoderawtransaction(params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
+fn handle_decoderawtransaction(
+  params: RpcParams,
+  _ctx: RpcContext,
+) -> Result(RpcValue, RpcError) {
   case params {
     ParamsArray([RpcString(hex), ..]) -> {
       case oni_bitcoin.hex_decode(hex) {
@@ -775,7 +852,8 @@ fn handle_decoderawtransaction(params: RpcParams, _ctx: RpcContext) -> Result(Rp
             Error(_) -> Error(InvalidParams("TX decode failed"))
             Ok(#(tx, _)) -> {
               let txid = oni_bitcoin.txid_from_tx(tx)
-              let result = dict.new()
+              let result =
+                dict.new()
                 |> dict.insert("txid", RpcString(oni_bitcoin.txid_to_hex(txid)))
                 |> dict.insert("version", RpcInt(tx.version))
                 |> dict.insert("locktime", RpcInt(tx.lock_time))
@@ -793,32 +871,51 @@ fn handle_decoderawtransaction(params: RpcParams, _ctx: RpcContext) -> Result(Rp
 }
 
 fn encode_tx_inputs(inputs: List(oni_bitcoin.TxIn)) -> RpcValue {
-  RpcArray(list.index_map(inputs, fn(input, _idx) {
-    let obj = dict.new()
-      |> dict.insert("txid", RpcString(oni_bitcoin.txid_to_hex(input.prevout.txid)))
-      |> dict.insert("vout", RpcInt(input.prevout.vout))
-      |> dict.insert("sequence", RpcInt(input.sequence))
-    RpcObject(obj)
-  }))
+  RpcArray(
+    list.index_map(inputs, fn(input, _idx) {
+      let obj =
+        dict.new()
+        |> dict.insert(
+          "txid",
+          RpcString(oni_bitcoin.txid_to_hex(input.prevout.txid)),
+        )
+        |> dict.insert("vout", RpcInt(input.prevout.vout))
+        |> dict.insert("sequence", RpcInt(input.sequence))
+      RpcObject(obj)
+    }),
+  )
 }
 
 fn encode_tx_outputs(outputs: List(oni_bitcoin.TxOut)) -> RpcValue {
-  RpcArray(list.index_map(outputs, fn(output, idx) {
-    let obj = dict.new()
-      |> dict.insert("value", RpcFloat(int.to_float(oni_bitcoin.amount_to_sats(output.value)) /. 100_000_000.0))
-      |> dict.insert("n", RpcInt(idx))
-    RpcObject(obj)
-  }))
+  RpcArray(
+    list.index_map(outputs, fn(output, idx) {
+      let obj =
+        dict.new()
+        |> dict.insert(
+          "value",
+          RpcFloat(
+            int.to_float(oni_bitcoin.amount_to_sats(output.value))
+            /. 100_000_000.0,
+          ),
+        )
+        |> dict.insert("n", RpcInt(idx))
+      RpcObject(obj)
+    }),
+  )
 }
 
 // Decode script
-fn handle_decodescript(params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
+fn handle_decodescript(
+  params: RpcParams,
+  _ctx: RpcContext,
+) -> Result(RpcValue, RpcError) {
   case params {
     ParamsArray([RpcString(hex), ..]) -> {
       case oni_bitcoin.hex_decode(hex) {
         Error(_) -> Error(InvalidParams("Invalid hex string"))
         Ok(_bytes) -> {
-          let result = dict.new()
+          let result =
+            dict.new()
             |> dict.insert("asm", RpcString(""))
             |> dict.insert("desc", RpcString("raw(" <> hex <> ")"))
             |> dict.insert("type", RpcString("nonstandard"))
@@ -832,12 +929,18 @@ fn handle_decodescript(params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, 
 }
 
 // Get raw mempool
-fn handle_getrawmempool(_params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
+fn handle_getrawmempool(
+  _params: RpcParams,
+  _ctx: RpcContext,
+) -> Result(RpcValue, RpcError) {
   Ok(RpcArray([]))
 }
 
 // Send raw transaction
-fn handle_sendrawtransaction(params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
+fn handle_sendrawtransaction(
+  params: RpcParams,
+  _ctx: RpcContext,
+) -> Result(RpcValue, RpcError) {
   case params {
     ParamsArray([RpcString(hex), ..]) -> {
       case oni_bitcoin.hex_decode(hex) {
@@ -858,7 +961,10 @@ fn handle_sendrawtransaction(params: RpcParams, _ctx: RpcContext) -> Result(RpcV
 }
 
 // Get block hash by height
-fn handle_getblockhash(params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
+fn handle_getblockhash(
+  params: RpcParams,
+  _ctx: RpcContext,
+) -> Result(RpcValue, RpcError) {
   case params {
     ParamsArray([RpcInt(height), ..]) -> {
       // In a real implementation, we would look up the block hash at this height
@@ -876,7 +982,10 @@ fn handle_getblockhash(params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, 
 }
 
 // Get block data
-fn handle_getblock(params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
+fn handle_getblock(
+  params: RpcParams,
+  _ctx: RpcContext,
+) -> Result(RpcValue, RpcError) {
   case params {
     ParamsArray([RpcString(blockhash), ..rest]) -> {
       // Determine verbosity level (0=hex, 1=json, 2=json+tx)
@@ -897,19 +1006,30 @@ fn handle_getblock(params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcE
             }
             _ -> {
               // Return JSON object
-              let result = dict.new()
+              let result =
+                dict.new()
                 |> dict.insert("hash", RpcString(blockhash))
                 |> dict.insert("confirmations", RpcInt(1))
                 |> dict.insert("height", RpcInt(0))
                 |> dict.insert("version", RpcInt(1))
                 |> dict.insert("versionHex", RpcString("00000001"))
-                |> dict.insert("merkleroot", RpcString("0000000000000000000000000000000000000000000000000000000000000000"))
+                |> dict.insert(
+                  "merkleroot",
+                  RpcString(
+                    "0000000000000000000000000000000000000000000000000000000000000000",
+                  ),
+                )
                 |> dict.insert("time", RpcInt(0))
                 |> dict.insert("mediantime", RpcInt(0))
                 |> dict.insert("nonce", RpcInt(0))
                 |> dict.insert("bits", RpcString("1d00ffff"))
                 |> dict.insert("difficulty", RpcFloat(1.0))
-                |> dict.insert("chainwork", RpcString("0000000000000000000000000000000000000000000000000000000000000000"))
+                |> dict.insert(
+                  "chainwork",
+                  RpcString(
+                    "0000000000000000000000000000000000000000000000000000000000000000",
+                  ),
+                )
                 |> dict.insert("nTx", RpcInt(1))
                 |> dict.insert("tx", RpcArray([]))
 
@@ -924,7 +1044,10 @@ fn handle_getblock(params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcE
 }
 
 // Get block header
-fn handle_getblockheader(params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
+fn handle_getblockheader(
+  params: RpcParams,
+  _ctx: RpcContext,
+) -> Result(RpcValue, RpcError) {
   case params {
     ParamsArray([RpcString(blockhash), ..rest]) -> {
       // Determine if verbose (default true)
@@ -944,19 +1067,30 @@ fn handle_getblockheader(params: RpcParams, _ctx: RpcContext) -> Result(RpcValue
             }
             True -> {
               // Return JSON object
-              let result = dict.new()
+              let result =
+                dict.new()
                 |> dict.insert("hash", RpcString(blockhash))
                 |> dict.insert("confirmations", RpcInt(1))
                 |> dict.insert("height", RpcInt(0))
                 |> dict.insert("version", RpcInt(1))
                 |> dict.insert("versionHex", RpcString("00000001"))
-                |> dict.insert("merkleroot", RpcString("0000000000000000000000000000000000000000000000000000000000000000"))
+                |> dict.insert(
+                  "merkleroot",
+                  RpcString(
+                    "0000000000000000000000000000000000000000000000000000000000000000",
+                  ),
+                )
                 |> dict.insert("time", RpcInt(0))
                 |> dict.insert("mediantime", RpcInt(0))
                 |> dict.insert("nonce", RpcInt(0))
                 |> dict.insert("bits", RpcString("1d00ffff"))
                 |> dict.insert("difficulty", RpcFloat(1.0))
-                |> dict.insert("chainwork", RpcString("0000000000000000000000000000000000000000000000000000000000000000"))
+                |> dict.insert(
+                  "chainwork",
+                  RpcString(
+                    "0000000000000000000000000000000000000000000000000000000000000000",
+                  ),
+                )
                 |> dict.insert("nTx", RpcInt(1))
 
               Ok(RpcObject(result))
@@ -970,7 +1104,10 @@ fn handle_getblockheader(params: RpcParams, _ctx: RpcContext) -> Result(RpcValue
 }
 
 // Get raw transaction
-fn handle_getrawtransaction(params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
+fn handle_getrawtransaction(
+  params: RpcParams,
+  _ctx: RpcContext,
+) -> Result(RpcValue, RpcError) {
   case params {
     ParamsArray([RpcString(txid), ..rest]) -> {
       // Determine verbosity
@@ -991,7 +1128,8 @@ fn handle_getrawtransaction(params: RpcParams, _ctx: RpcContext) -> Result(RpcVa
             }
             True -> {
               // Return JSON object
-              let result = dict.new()
+              let result =
+                dict.new()
                 |> dict.insert("txid", RpcString(txid))
                 |> dict.insert("hash", RpcString(txid))
                 |> dict.insert("version", RpcInt(1))
@@ -1008,12 +1146,18 @@ fn handle_getrawtransaction(params: RpcParams, _ctx: RpcContext) -> Result(RpcVa
         }
       }
     }
-    _ -> Error(InvalidParams("getrawtransaction \"txid\" ( verbose \"blockhash\" )"))
+    _ ->
+      Error(InvalidParams(
+        "getrawtransaction \"txid\" ( verbose \"blockhash\" )",
+      ))
   }
 }
 
 // Get transaction output
-fn handle_gettxout(params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
+fn handle_gettxout(
+  params: RpcParams,
+  _ctx: RpcContext,
+) -> Result(RpcValue, RpcError) {
   case params {
     ParamsArray([RpcString(txid), RpcInt(n), ..]) -> {
       // Validate txid
@@ -1032,21 +1176,44 @@ fn handle_gettxout(params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcE
 }
 
 // Get block template (for mining)
-fn handle_getblocktemplate(_params: RpcParams, _ctx: RpcContext) -> Result(RpcValue, RpcError) {
+fn handle_getblocktemplate(
+  _params: RpcParams,
+  _ctx: RpcContext,
+) -> Result(RpcValue, RpcError) {
   // Return a basic block template
-  let result = dict.new()
-    |> dict.insert("version", RpcInt(536870912))  // BIP9 versionbits
-    |> dict.insert("previousblockhash", RpcString("0000000000000000000000000000000000000000000000000000000000000000"))
+  let result =
+    dict.new()
+    |> dict.insert("version", RpcInt(536_870_912))
+    // BIP9 versionbits
+    |> dict.insert(
+      "previousblockhash",
+      RpcString(
+        "0000000000000000000000000000000000000000000000000000000000000000",
+      ),
+    )
     |> dict.insert("transactions", RpcArray([]))
     |> dict.insert("coinbaseaux", RpcObject(dict.new()))
-    |> dict.insert("coinbasevalue", RpcInt(625_000_000))  // 6.25 BTC subsidy
-    |> dict.insert("target", RpcString("00000000ffff0000000000000000000000000000000000000000000000000000"))
+    |> dict.insert("coinbasevalue", RpcInt(625_000_000))
+    // 6.25 BTC subsidy
+    |> dict.insert(
+      "target",
+      RpcString(
+        "00000000ffff0000000000000000000000000000000000000000000000000000",
+      ),
+    )
     |> dict.insert("mintime", RpcInt(0))
-    |> dict.insert("mutable", RpcArray([RpcString("time"), RpcString("transactions"), RpcString("prevblock")]))
+    |> dict.insert(
+      "mutable",
+      RpcArray([
+        RpcString("time"),
+        RpcString("transactions"),
+        RpcString("prevblock"),
+      ]),
+    )
     |> dict.insert("noncerange", RpcString("00000000ffffffff"))
-    |> dict.insert("sigoplimit", RpcInt(80000))
-    |> dict.insert("sizelimit", RpcInt(4000000))
-    |> dict.insert("weightlimit", RpcInt(4000000))
+    |> dict.insert("sigoplimit", RpcInt(80_000))
+    |> dict.insert("sizelimit", RpcInt(4_000_000))
+    |> dict.insert("weightlimit", RpcInt(4_000_000))
     |> dict.insert("curtime", RpcInt(0))
     |> dict.insert("bits", RpcString("1d00ffff"))
     |> dict.insert("height", RpcInt(0))

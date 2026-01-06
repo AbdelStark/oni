@@ -182,11 +182,7 @@ pub fn enable_erlay(
       // Combine salts to create shared salt
       let combined_salt = xor_salts(our_salt, their_salt)
 
-      Ok(ErlayPeerState(
-        ..state,
-        erlay_enabled: True,
-        salt: combined_salt,
-      ))
+      Ok(ErlayPeerState(..state, erlay_enabled: True, salt: combined_salt))
     }
   }
 }
@@ -216,11 +212,19 @@ pub fn decide_relay(
         False -> {
           // Non-Erlay peer: always flood
           let new_known = dict.insert(state.peer_known_txids, short_id, Nil)
-          let new_stats = ErlayStats(
-            ..state.stats,
-            flooded_count: state.stats.flooded_count + 1,
+          let new_stats =
+            ErlayStats(
+              ..state.stats,
+              flooded_count: state.stats.flooded_count + 1,
+            )
+          #(
+            ErlayPeerState(
+              ..state,
+              peer_known_txids: new_known,
+              stats: new_stats,
+            ),
+            Flood,
           )
-          #(ErlayPeerState(..state, peer_known_txids: new_known, stats: new_stats), Flood)
         }
         True -> {
           // Erlay-enabled peer
@@ -228,16 +232,28 @@ pub fn decide_relay(
             True -> {
               // Flood to outbound peers and high-priority txs for fast propagation
               let new_known = dict.insert(state.peer_known_txids, short_id, Nil)
-              let new_stats = ErlayStats(
-                ..state.stats,
-                flooded_count: state.stats.flooded_count + 1,
+              let new_stats =
+                ErlayStats(
+                  ..state.stats,
+                  flooded_count: state.stats.flooded_count + 1,
+                )
+              #(
+                ErlayPeerState(
+                  ..state,
+                  peer_known_txids: new_known,
+                  stats: new_stats,
+                ),
+                Flood,
               )
-              #(ErlayPeerState(..state, peer_known_txids: new_known, stats: new_stats), Flood)
             }
             False -> {
               // Queue for reconciliation (inbound peers)
-              let new_pending = dict.insert(state.pending_announcements, short_id, txid)
-              #(ErlayPeerState(..state, pending_announcements: new_pending), Reconcile)
+              let new_pending =
+                dict.insert(state.pending_announcements, short_id, txid)
+              #(
+                ErlayPeerState(..state, pending_announcements: new_pending),
+                Reconcile,
+              )
             }
           }
         }
@@ -250,7 +266,8 @@ pub fn decide_relay(
 pub fn needs_reconciliation(state: ErlayPeerState, current_time: Int) -> Bool {
   state.erlay_enabled
   && dict.size(state.pending_announcements) > 0
-  && current_time - state.last_reconciliation >= reconciliation_interval_sec * 1000
+  && current_time - state.last_reconciliation
+  >= reconciliation_interval_sec * 1000
   && state.recon_state == ReconIdle
 }
 
@@ -307,16 +324,16 @@ pub fn minisketch_new(capacity: Int) -> Minisketch {
 /// Add an element to the sketch
 pub fn minisketch_add(sketch: Minisketch, element: BitArray) -> Minisketch {
   case list.length(sketch.elements) >= sketch.capacity {
-    True -> sketch  // Sketch is full
+    True -> sketch
+    // Sketch is full
     False -> {
       // Add element to the sketch
       // In production, this would use proper field operations
       let new_data = xor_into_sketch(sketch.data, element)
-      Minisketch(
-        ..sketch,
-        data: new_data,
-        elements: [element, ..sketch.elements],
-      )
+      Minisketch(..sketch, data: new_data, elements: [
+        element,
+        ..sketch.elements
+      ])
     }
   }
 }
@@ -324,13 +341,15 @@ pub fn minisketch_add(sketch: Minisketch, element: BitArray) -> Minisketch {
 /// Merge two sketches (XOR operation)
 pub fn minisketch_merge(a: Minisketch, b: Minisketch) -> Minisketch {
   case a.capacity == b.capacity {
-    False -> a  // Incompatible sketches
+    False -> a
+    // Incompatible sketches
     True -> {
       let merged_data = xor_bytes(a.data, b.data)
       Minisketch(
         ..a,
         data: merged_data,
-        elements: [],  // Merged sketch, elements unknown
+        elements: [],
+        // Merged sketch, elements unknown
       )
     }
   }
@@ -362,10 +381,13 @@ pub fn minisketch_serialize(sketch: Minisketch) -> BitArray {
 }
 
 /// Deserialize minisketch from network data
-pub fn minisketch_deserialize(data: BitArray) -> Result(#(Minisketch, BitArray), String) {
+pub fn minisketch_deserialize(
+  data: BitArray,
+) -> Result(#(Minisketch, BitArray), String) {
   case data {
     <<capacity:32-little, field_size:8, rest:bits>> -> {
-      let sketch_size = capacity * 4  // 4 bytes per element slot
+      let sketch_size = capacity * 4
+      // 4 bytes per element slot
       case extract_bytes(rest, sketch_size) {
         Error(_) -> Error("Insufficient sketch data")
         Ok(#(sketch_data, remaining)) -> {
@@ -395,19 +417,21 @@ pub fn start_reconciliation(
   request_id: Int,
 ) -> #(ErlayPeerState, ErlayMessage) {
   // Build sketch from pending announcements
-  let sketch = dict.fold(
-    state.pending_announcements,
-    minisketch_new(default_sketch_capacity),
-    fn(sk, short_id, _txid) { minisketch_add(sk, short_id) },
-  )
+  let sketch =
+    dict.fold(
+      state.pending_announcements,
+      minisketch_new(default_sketch_capacity),
+      fn(sk, short_id, _txid) { minisketch_add(sk, short_id) },
+    )
 
   let short_ids = dict.keys(state.pending_announcements)
 
-  let new_state = ErlayPeerState(
-    ..state,
-    recon_state: ReconInitiated(sketch, request_id),
-    reconciliation_attempts: state.reconciliation_attempts + 1,
-  )
+  let new_state =
+    ErlayPeerState(
+      ..state,
+      recon_state: ReconInitiated(sketch, request_id),
+      reconciliation_attempts: state.reconciliation_attempts + 1,
+    )
 
   #(new_state, ReqTxRcncl(request_id, short_ids))
 }
@@ -419,26 +443,29 @@ pub fn handle_recon_request(
   their_short_ids: List(BitArray),
 ) -> #(ErlayPeerState, ErlayMessage) {
   // Build our sketch
-  let our_sketch = dict.fold(
-    state.pending_announcements,
-    minisketch_new(default_sketch_capacity),
-    fn(sk, short_id, _txid) { minisketch_add(sk, short_id) },
-  )
+  let our_sketch =
+    dict.fold(
+      state.pending_announcements,
+      minisketch_new(default_sketch_capacity),
+      fn(sk, short_id, _txid) { minisketch_add(sk, short_id) },
+    )
 
   // Merge with their knowledge to find differences
-  let their_sketch = list.fold(
-    their_short_ids,
-    minisketch_new(default_sketch_capacity),
-    fn(sk, id) { minisketch_add(sk, id) },
-  )
+  let their_sketch =
+    list.fold(
+      their_short_ids,
+      minisketch_new(default_sketch_capacity),
+      fn(sk, id) { minisketch_add(sk, id) },
+    )
 
   let diff_sketch = minisketch_merge(our_sketch, their_sketch)
 
-  let new_state = ErlayPeerState(
-    ..state,
-    recon_state: ReconReceived(their_sketch),
-    last_reconciliation: current_time_ms(),
-  )
+  let new_state =
+    ErlayPeerState(
+      ..state,
+      recon_state: ReconReceived(their_sketch),
+      last_reconciliation: current_time_ms(),
+    )
 
   #(new_state, TxReconcilSketch(request_id, diff_sketch))
 }
@@ -457,14 +484,15 @@ pub fn handle_sketch_response(
 
       case minisketch_decode(diff_sketch) {
         Error(reason) -> {
-          let new_state = ErlayPeerState(
-            ..state,
-            recon_state: ReconFailed(reason),
-            stats: ErlayStats(
-              ..state.stats,
-              reconciliation_failures: state.stats.reconciliation_failures + 1,
-            ),
-          )
+          let new_state =
+            ErlayPeerState(
+              ..state,
+              recon_state: ReconFailed(reason),
+              stats: ErlayStats(
+                ..state.stats,
+                reconciliation_failures: state.stats.reconciliation_failures + 1,
+              ),
+            )
           Error(reason)
         }
         Ok(differences) -> {
@@ -474,26 +502,27 @@ pub fn handle_sketch_response(
           case list.is_empty(missing) {
             True -> {
               // No missing transactions
-              let new_state = ErlayPeerState(
-                ..state,
-                recon_state: ReconComplete,
-                pending_announcements: dict.new(),
-                last_reconciliation: current_time_ms(),
-                stats: ErlayStats(
-                  ..state.stats,
-                  reconciliation_rounds: state.stats.reconciliation_rounds + 1,
-                  bytes_saved: state.stats.bytes_saved +
-                    estimate_bytes_saved(dict.size(state.pending_announcements)),
-                ),
-              )
+              let new_state =
+                ErlayPeerState(
+                  ..state,
+                  recon_state: ReconComplete,
+                  pending_announcements: dict.new(),
+                  last_reconciliation: current_time_ms(),
+                  stats: ErlayStats(
+                    ..state.stats,
+                    reconciliation_rounds: state.stats.reconciliation_rounds + 1,
+                    bytes_saved: state.stats.bytes_saved
+                      + estimate_bytes_saved(dict.size(
+                        state.pending_announcements,
+                      )),
+                  ),
+                )
               Ok(#(new_state, None))
             }
             False -> {
               // Request missing transactions
-              let new_state = ErlayPeerState(
-                ..state,
-                recon_state: ReconAwaitingTxs(missing),
-              )
+              let new_state =
+                ErlayPeerState(..state, recon_state: ReconAwaitingTxs(missing))
               Ok(#(new_state, Some(ReqTxDiff(missing))))
             }
           }
@@ -511,25 +540,23 @@ pub fn handle_txdiff_request(
   mempool: Dict(BitArray, oni_bitcoin.Transaction),
 ) -> #(ErlayPeerState, ErlayMessage) {
   // Find transactions matching the requested short IDs
-  let txs = list.filter_map(short_ids, fn(short_id) {
-    dict.get(mempool, short_id)
-  })
+  let txs =
+    list.filter_map(short_ids, fn(short_id) { dict.get(mempool, short_id) })
 
   // Mark these as known to peer
-  let new_known = list.fold(short_ids, state.peer_known_txids, fn(known, id) {
-    dict.insert(known, id, Nil)
-  })
+  let new_known =
+    list.fold(short_ids, state.peer_known_txids, fn(known, id) {
+      dict.insert(known, id, Nil)
+    })
 
-  let new_stats = ErlayStats(
-    ..state.stats,
-    reconciled_count: state.stats.reconciled_count + list.length(txs),
-  )
+  let new_stats =
+    ErlayStats(
+      ..state.stats,
+      reconciled_count: state.stats.reconciled_count + list.length(txs),
+    )
 
-  let new_state = ErlayPeerState(
-    ..state,
-    peer_known_txids: new_known,
-    stats: new_stats,
-  )
+  let new_state =
+    ErlayPeerState(..state, peer_known_txids: new_known, stats: new_stats)
 
   #(new_state, TxDiff(txs))
 }
@@ -540,30 +567,28 @@ pub fn handle_txdiff_response(
   transactions: List(oni_bitcoin.Transaction),
 ) -> #(ErlayPeerState, List(oni_bitcoin.Transaction)) {
   // Complete reconciliation
-  let new_state = ErlayPeerState(
-    ..state,
-    recon_state: ReconComplete,
-    pending_announcements: dict.new(),
-    last_reconciliation: current_time_ms(),
-    stats: ErlayStats(
-      ..state.stats,
-      reconciliation_rounds: state.stats.reconciliation_rounds + 1,
-      reconciled_count: state.stats.reconciled_count + list.length(transactions),
-      bytes_saved: state.stats.bytes_saved +
-        estimate_bytes_saved(dict.size(state.pending_announcements)),
-    ),
-  )
+  let new_state =
+    ErlayPeerState(
+      ..state,
+      recon_state: ReconComplete,
+      pending_announcements: dict.new(),
+      last_reconciliation: current_time_ms(),
+      stats: ErlayStats(
+        ..state.stats,
+        reconciliation_rounds: state.stats.reconciliation_rounds + 1,
+        reconciled_count: state.stats.reconciled_count
+          + list.length(transactions),
+        bytes_saved: state.stats.bytes_saved
+          + estimate_bytes_saved(dict.size(state.pending_announcements)),
+      ),
+    )
 
   #(new_state, transactions)
 }
 
 /// Reset reconciliation state on failure
 pub fn reset_reconciliation(state: ErlayPeerState) -> ErlayPeerState {
-  ErlayPeerState(
-    ..state,
-    recon_state: ReconIdle,
-    reconciliation_attempts: 0,
-  )
+  ErlayPeerState(..state, recon_state: ReconIdle, reconciliation_attempts: 0)
 }
 
 // ============================================================================
@@ -579,9 +604,8 @@ pub fn encode_message(msg: ErlayMessage) -> BitArray {
 
     ReqTxRcncl(request_id, short_ids) -> {
       let count = list.length(short_ids)
-      let ids_data = list.fold(short_ids, <<>>, fn(acc, id) {
-        bit_array.concat([acc, id])
-      })
+      let ids_data =
+        list.fold(short_ids, <<>>, fn(acc, id) { bit_array.concat([acc, id]) })
       <<request_id:32-little, count:32-little, ids_data:bits>>
     }
 
@@ -592,24 +616,26 @@ pub fn encode_message(msg: ErlayMessage) -> BitArray {
 
     ReqTxDiff(short_ids) -> {
       let count = list.length(short_ids)
-      let ids_data = list.fold(short_ids, <<>>, fn(acc, id) {
-        bit_array.concat([acc, id])
-      })
+      let ids_data =
+        list.fold(short_ids, <<>>, fn(acc, id) { bit_array.concat([acc, id]) })
       <<count:32-little, ids_data:bits>>
     }
 
     TxDiff(transactions) -> {
       let count = list.length(transactions)
-      let tx_data = list.fold(transactions, <<>>, fn(acc, tx) {
-        bit_array.concat([acc, oni_bitcoin.encode_tx(tx)])
-      })
+      let tx_data =
+        list.fold(transactions, <<>>, fn(acc, tx) {
+          bit_array.concat([acc, oni_bitcoin.encode_tx(tx)])
+        })
       <<count:32-little, tx_data:bits>>
     }
   }
 }
 
 /// Decode SendTxRcncl message
-pub fn decode_sendtxrcncl(data: BitArray) -> Result(#(ErlayMessage, BitArray), String) {
+pub fn decode_sendtxrcncl(
+  data: BitArray,
+) -> Result(#(ErlayMessage, BitArray), String) {
   case data {
     <<version:32-little, salt:bytes-size(16), rest:bits>> -> {
       Ok(#(SendTxRcncl(version, salt), rest))
@@ -619,7 +645,9 @@ pub fn decode_sendtxrcncl(data: BitArray) -> Result(#(ErlayMessage, BitArray), S
 }
 
 /// Decode ReqTxRcncl message
-pub fn decode_reqtxrcncl(data: BitArray) -> Result(#(ErlayMessage, BitArray), String) {
+pub fn decode_reqtxrcncl(
+  data: BitArray,
+) -> Result(#(ErlayMessage, BitArray), String) {
   case data {
     <<request_id:32-little, count:32-little, rest:bits>> -> {
       case decode_short_ids(rest, count, []) {
@@ -724,17 +752,15 @@ pub fn queue_transaction(
   txid: oni_bitcoin.Txid,
   is_high_priority: Bool,
 ) -> #(ErlayManager, List(#(Int, RelayDecision))) {
-  let #(new_peers, decisions) = dict.fold(
-    manager.peers,
-    #(dict.new(), []),
-    fn(acc, peer_id, peer_state) {
+  let #(new_peers, decisions) =
+    dict.fold(manager.peers, #(dict.new(), []), fn(acc, peer_id, peer_state) {
       let #(peers_acc, decisions_acc) = acc
-      let #(new_peer_state, decision) = decide_relay(peer_state, txid, is_high_priority)
+      let #(new_peer_state, decision) =
+        decide_relay(peer_state, txid, is_high_priority)
       let new_peers_acc = dict.insert(peers_acc, peer_id, new_peer_state)
       let new_decisions_acc = [#(peer_id, decision), ..decisions_acc]
       #(new_peers_acc, new_decisions_acc)
-    },
-  )
+    })
 
   #(ErlayManager(..manager, peers: new_peers), decisions)
 }
@@ -759,8 +785,10 @@ pub fn get_stats(manager: ErlayManager) -> ErlayStats {
     ErlayStats(
       flooded_count: acc.flooded_count + peer_state.stats.flooded_count,
       reconciled_count: acc.reconciled_count + peer_state.stats.reconciled_count,
-      reconciliation_rounds: acc.reconciliation_rounds + peer_state.stats.reconciliation_rounds,
-      reconciliation_failures: acc.reconciliation_failures + peer_state.stats.reconciliation_failures,
+      reconciliation_rounds: acc.reconciliation_rounds
+        + peer_state.stats.reconciliation_rounds,
+      reconciliation_failures: acc.reconciliation_failures
+        + peer_state.stats.reconciliation_failures,
       bytes_saved: acc.bytes_saved + peer_state.stats.bytes_saved,
     )
   })
@@ -842,14 +870,11 @@ fn identify_missing(
   salt: BitArray,
 ) -> List(BitArray) {
   // Compute short IDs for our mempool
-  let our_short_ids = list.map(our_mempool, fn(txid) {
-    compute_short_txid(txid, salt)
-  })
+  let our_short_ids =
+    list.map(our_mempool, fn(txid) { compute_short_txid(txid, salt) })
 
   // Find which differences we don't have
-  list.filter(differences, fn(diff) {
-    !list.contains(our_short_ids, diff)
-  })
+  list.filter(differences, fn(diff) { !list.contains(our_short_ids, diff) })
 }
 
 fn estimate_bytes_saved(num_txs: Int) -> Int {
@@ -861,8 +886,24 @@ fn estimate_bytes_saved(num_txs: Int) -> Int {
 
 fn generate_random_salt() -> BitArray {
   // In production, use secure random
-  <<0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0,
-    0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88>>
+  <<
+    0x12,
+    0x34,
+    0x56,
+    0x78,
+    0x9a,
+    0xbc,
+    0xde,
+    0xf0,
+    0x11,
+    0x22,
+    0x33,
+    0x44,
+    0x55,
+    0x66,
+    0x77,
+    0x88,
+  >>
 }
 
 fn current_time_ms() -> Int {
@@ -920,18 +961,46 @@ fn pad_last_block(data: BitArray) -> Int {
 
   case data {
     <<b0:8, b1:8, b2:8, b3:8, b4:8, b5:8, b6:8>> ->
-      b0 + b1 * 256 + b2 * 65536 + b3 * 16777216 +
-      b4 * 4294967296 + b5 * 1099511627776 + b6 * 281474976710656 +
-      len_byte * 72057594037927936
+      b0
+      + b1
+      * 256
+      + b2
+      * 65_536
+      + b3
+      * 16_777_216
+      + b4
+      * 4_294_967_296
+      + b5
+      * 1_099_511_627_776
+      + b6
+      * 281_474_976_710_656
+      + len_byte
+      * 72_057_594_037_927_936
     <<b0:8, b1:8, b2:8, b3:8, b4:8, b5:8>> ->
-      b0 + b1 * 256 + b2 * 65536 + b3 * 16777216 +
-      b4 * 4294967296 + b5 * 1099511627776 +
-      len_byte * 72057594037927936
-    _ -> len_byte * 72057594037927936
+      b0
+      + b1
+      * 256
+      + b2
+      * 65_536
+      + b3
+      * 16_777_216
+      + b4
+      * 4_294_967_296
+      + b5
+      * 1_099_511_627_776
+      + len_byte
+      * 72_057_594_037_927_936
+    _ -> len_byte * 72_057_594_037_927_936
   }
 }
 
-fn sip_rounds(v0: Int, v1: Int, v2: Int, v3: Int, n: Int) -> #(Int, Int, Int, Int) {
+fn sip_rounds(
+  v0: Int,
+  v1: Int,
+  v2: Int,
+  v3: Int,
+  n: Int,
+) -> #(Int, Int, Int, Int) {
   case n {
     0 -> #(v0, v1, v2, v3)
     _ -> {

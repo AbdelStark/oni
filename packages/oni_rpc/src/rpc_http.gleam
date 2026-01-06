@@ -159,7 +159,9 @@ pub fn parse_request_string(text: String) -> Result(HttpRequest, HttpError) {
   }
 }
 
-fn parse_request_line(line: String) -> Result(#(HttpMethod, String, String), HttpError) {
+fn parse_request_line(
+  line: String,
+) -> Result(#(HttpMethod, String, String), HttpError) {
   let parts = string.split(line, " ")
   case parts {
     [method_str, path, version] -> {
@@ -220,7 +222,8 @@ pub fn get_content_length(request: HttpRequest) -> Option(Int) {
 /// Create an HTTP response
 pub fn response(status_code: Int, body: BitArray) -> HttpResponse {
   let status_text = status_code_to_text(status_code)
-  let headers = dict.new()
+  let headers =
+    dict.new()
     |> dict.insert("content-length", int.to_string(bit_array.byte_size(body)))
     |> dict.insert("content-type", "application/json")
     |> dict.insert("connection", "keep-alive")
@@ -275,20 +278,22 @@ fn status_code_to_text(code: Int) -> String {
 
 /// Serialize HTTP response to bytes
 pub fn serialize_response(resp: HttpResponse) -> BitArray {
-  let status_line = http_version <> " " <>
-    int.to_string(resp.status_code) <> " " <>
-    resp.status_text <> "\r\n"
+  let status_line =
+    http_version
+    <> " "
+    <> int.to_string(resp.status_code)
+    <> " "
+    <> resp.status_text
+    <> "\r\n"
 
-  let headers_text = dict.fold(resp.headers, "", fn(acc, name, value) {
-    acc <> name <> ": " <> value <> "\r\n"
-  })
+  let headers_text =
+    dict.fold(resp.headers, "", fn(acc, name, value) {
+      acc <> name <> ": " <> value <> "\r\n"
+    })
 
   let header_section = status_line <> headers_text <> "\r\n"
 
-  bit_array.append(
-    bit_array.from_string(header_section),
-    resp.body
-  )
+  bit_array.append(bit_array.from_string(header_section), resp.body)
 }
 
 fn escape_json(s: String) -> String {
@@ -352,7 +357,8 @@ pub fn verify_auth(
             Error(_) -> False
             Ok(decoded) -> {
               case string.split_once(decoded, ":") {
-                Ok(#(user, pass)) -> user == expected_user && pass == expected_pass
+                Ok(#(user, pass)) ->
+                  user == expected_user && pass == expected_pass
                 Error(_) -> False
               }
             }
@@ -460,7 +466,10 @@ fn handle_post_request(
         _, _ -> {
           // Parse and handle RPC request
           case bit_array.to_string(request.body) {
-            Error(_) -> #(server, error_response(HttpBadRequest("Invalid body encoding")))
+            Error(_) -> #(
+              server,
+              error_response(HttpBadRequest("Invalid body encoding")),
+            )
             Ok(body_str) -> {
               case oni_rpc.parse_request_string(body_str) {
                 Error(err) -> {
@@ -470,18 +479,21 @@ fn handle_post_request(
                 }
                 Ok(rpc_req) -> {
                   // Create RPC context
-                  let ctx = oni_rpc.RpcContext(
-                    authenticated: authenticated,
-                    remote_addr: get_header(request, "x-forwarded-for"),
-                    request_time: 0,  // Would use erlang:system_time/1
-                  )
+                  let ctx =
+                    oni_rpc.RpcContext(
+                      authenticated: authenticated,
+                      remote_addr: get_header(request, "x-forwarded-for"),
+                      request_time: 0,
+                      // Would use erlang:system_time/1
+                    )
 
                   // Handle the RPC request
                   let #(new_server, rpc_resp) =
                     oni_rpc.server_handle_request(server, rpc_req, ctx)
 
                   let json = oni_rpc.serialize_response(rpc_resp)
-                  let http_resp = json_response(200, json)
+                  let http_resp =
+                    json_response(200, json)
                     |> add_cors_headers
 
                   #(new_server, http_resp)
@@ -497,21 +509,27 @@ fn handle_post_request(
 
 fn is_path_allowed(path: String, allowed: List(String)) -> Bool {
   case allowed {
-    [] -> True  // Empty list = all paths allowed
-    _ -> list.any(allowed, fn(p) { path == p || string.starts_with(path, p <> "/") })
+    [] -> True
+    // Empty list = all paths allowed
+    _ ->
+      list.any(allowed, fn(p) {
+        path == p || string.starts_with(path, p <> "/")
+      })
   }
 }
 
 fn check_auth(request: HttpRequest, config: RpcHandlerConfig) -> Bool {
   case config.username, config.password {
-    "", "" -> True  // No auth configured
+    "", "" -> True
+    // No auth configured
     user, pass -> verify_auth(request, user, pass)
   }
 }
 
 /// Create an authentication required response
 fn auth_required_response() -> HttpResponse {
-  let headers = dict.new()
+  let headers =
+    dict.new()
     |> dict.insert("www-authenticate", "Basic realm=\"oni-rpc\"")
     |> dict.insert("content-type", "application/json")
     |> dict.insert("content-length", "27")
@@ -528,10 +546,14 @@ fn auth_required_response() -> HttpResponse {
 
 /// Create a CORS preflight response
 fn cors_preflight_response() -> HttpResponse {
-  let headers = dict.new()
+  let headers =
+    dict.new()
     |> dict.insert("access-control-allow-origin", "*")
     |> dict.insert("access-control-allow-methods", "POST, GET, OPTIONS")
-    |> dict.insert("access-control-allow-headers", "Content-Type, Authorization")
+    |> dict.insert(
+      "access-control-allow-headers",
+      "Content-Type, Authorization",
+    )
     |> dict.insert("access-control-max-age", "86400")
     |> dict.insert("content-length", "0")
 
@@ -545,7 +567,8 @@ fn cors_preflight_response() -> HttpResponse {
 
 /// Add CORS headers to a response
 fn add_cors_headers(resp: HttpResponse) -> HttpResponse {
-  let headers = resp.headers
+  let headers =
+    resp.headers
     |> dict.insert("access-control-allow-origin", "*")
     |> dict.insert("access-control-allow-methods", "POST, GET, OPTIONS")
 
@@ -622,15 +645,17 @@ pub fn connection_try_parse(
           // Check if we have the full body
           let body_size = bit_array.byte_size(request.body)
           case body_size >= content_length {
-            False -> #(state, None)  // Need more data
+            False -> #(state, None)
+            // Need more data
             True -> {
               // We have a complete request, update state
-              let new_state = ConnectionState(
-                ..state,
-                buffer: <<>>,
-                current_request: None,
-                request_count: state.request_count + 1,
-              )
+              let new_state =
+                ConnectionState(
+                  ..state,
+                  buffer: <<>>,
+                  current_request: None,
+                  request_count: state.request_count + 1,
+                )
               #(new_state, Some(Ok(request)))
             }
           }
@@ -649,10 +674,7 @@ fn has_complete_request(buffer: BitArray) -> Bool {
 }
 
 /// Record bytes sent
-pub fn connection_sent(
-  state: ConnectionState,
-  count: Int,
-) -> ConnectionState {
+pub fn connection_sent(state: ConnectionState, count: Int) -> ConnectionState {
   ConnectionState(..state, bytes_sent: state.bytes_sent + count)
 }
 

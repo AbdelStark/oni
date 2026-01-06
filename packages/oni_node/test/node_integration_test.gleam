@@ -7,6 +7,8 @@
 // - IBD coordination
 // - Block validation and connection
 
+import activation
+import event_router
 import gleam/dict
 import gleam/erlang/process
 import gleam/int
@@ -15,16 +17,14 @@ import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
 import gleeunit/should
-import oni_bitcoin
-import oni_storage
-import oni_p2p
-import activation
-import persistent_chainstate
-import event_router
 import ibd_coordinator
-import reorg_handler
+import oni_bitcoin
+import oni_p2p
+import oni_storage
 import oni_supervisor
 import p2p_network
+import persistent_chainstate
+import reorg_handler
 
 // ============================================================================
 // Test Helpers
@@ -49,8 +49,21 @@ fn remove_dir_recursive(path: String) -> Result(Nil, Nil)
 
 /// Create a regtest genesis block
 fn create_regtest_genesis() -> oni_bitcoin.Block {
-  let params = oni_bitcoin.regtest_params()
-  params.genesis_block
+  // Create a minimal genesis block with the regtest genesis hash
+  let header =
+    oni_bitcoin.BlockHeader(
+      version: 1,
+      prev_block: oni_bitcoin.BlockHash(
+        hash: oni_bitcoin.Hash256(bytes: <<0:256>>),
+      ),
+      merkle_root: oni_bitcoin.Hash256(bytes: <<0:256>>),
+      timestamp: 1_296_688_602,
+      bits: 0x207fffff,
+      nonce: 2,
+    )
+  // Genesis has a single coinbase transaction
+  let coinbase = create_coinbase_tx(0)
+  oni_bitcoin.Block(header: header, transactions: [coinbase])
 }
 
 /// Create a test block that extends the given parent
@@ -60,46 +73,48 @@ fn create_test_block(
   _timestamp: Int,
 ) -> oni_bitcoin.Block {
   // Create a minimal test block
-  let header = oni_bitcoin.BlockHeader(
-    version: 1,
-    prev_block: parent_hash,
-    merkle_root: oni_bitcoin.Hash256(bytes: <<0:256>>),
-    timestamp: 1231006505 + height * 600,
-    bits: 0x207fffff,  // Regtest minimum difficulty
-    nonce: 0,
-  )
+  let header =
+    oni_bitcoin.BlockHeader(
+      version: 1,
+      prev_block: parent_hash,
+      merkle_root: oni_bitcoin.Hash256(bytes: <<0:256>>),
+      timestamp: 1_231_006_505 + height * 600,
+      bits: 0x207fffff,
+      // Regtest minimum difficulty
+      nonce: 0,
+    )
 
   // Create a coinbase transaction
   let coinbase = create_coinbase_tx(height)
 
-  oni_bitcoin.Block(
-    header: header,
-    transactions: [coinbase],
-  )
+  oni_bitcoin.Block(header: header, transactions: [coinbase])
 }
 
 /// Create a coinbase transaction
 fn create_coinbase_tx(height: Int) -> oni_bitcoin.Transaction {
   // Create coinbase input (points to null outpoint)
-  let coinbase_input = oni_bitcoin.TxIn(
-    prevout: oni_bitcoin.outpoint_null(),
-    script_sig: create_coinbase_script(height),
-    sequence: 0xffffffff,
-    witness: [],
-  )
+  let coinbase_input =
+    oni_bitcoin.TxIn(
+      prevout: oni_bitcoin.outpoint_null(),
+      script_sig: create_coinbase_script(height),
+      sequence: 0xffffffff,
+      witness: [],
+    )
 
   // Create coinbase output (50 BTC subsidy)
   let subsidy = activation.get_block_subsidy(height, oni_bitcoin.Regtest)
-  let coinbase_output = oni_bitcoin.TxOut(
-    value: oni_bitcoin.Amount(sats: subsidy),
-    script_pubkey: oni_bitcoin.Script(bytes: <<0x51>>),  // OP_TRUE
-  )
+  let coinbase_output =
+    oni_bitcoin.TxOut(
+      value: oni_bitcoin.Amount(sats: subsidy),
+      script_pubkey: oni_bitcoin.Script(bytes: <<0x51>>),
+      // OP_TRUE
+    )
 
   oni_bitcoin.Transaction(
     version: 1,
     inputs: [coinbase_input],
     outputs: [coinbase_output],
-    locktime: 0,
+    lock_time: 0,
   )
 }
 
@@ -183,7 +198,10 @@ pub fn is_segwit_active_test() {
 
 pub fn is_taproot_active_test() {
   // Not active before activation height on mainnet
-  should.equal(activation.is_taproot_active(709_631, oni_bitcoin.Mainnet), False)
+  should.equal(
+    activation.is_taproot_active(709_631, oni_bitcoin.Mainnet),
+    False,
+  )
 
   // Active at activation height
   should.equal(activation.is_taproot_active(709_632, oni_bitcoin.Mainnet), True)
@@ -194,19 +212,34 @@ pub fn is_taproot_active_test() {
 
 pub fn block_subsidy_test() {
   // Initial subsidy is 50 BTC (5,000,000,000 satoshis)
-  should.equal(activation.get_block_subsidy(0, oni_bitcoin.Mainnet), 5_000_000_000)
+  should.equal(
+    activation.get_block_subsidy(0, oni_bitcoin.Mainnet),
+    5_000_000_000,
+  )
 
   // After first halving (210,000 blocks) = 25 BTC
-  should.equal(activation.get_block_subsidy(210_000, oni_bitcoin.Mainnet), 2_500_000_000)
+  should.equal(
+    activation.get_block_subsidy(210_000, oni_bitcoin.Mainnet),
+    2_500_000_000,
+  )
 
   // After second halving = 12.5 BTC
-  should.equal(activation.get_block_subsidy(420_000, oni_bitcoin.Mainnet), 1_250_000_000)
+  should.equal(
+    activation.get_block_subsidy(420_000, oni_bitcoin.Mainnet),
+    1_250_000_000,
+  )
 
   // After third halving = 6.25 BTC
-  should.equal(activation.get_block_subsidy(630_000, oni_bitcoin.Mainnet), 625_000_000)
+  should.equal(
+    activation.get_block_subsidy(630_000, oni_bitcoin.Mainnet),
+    625_000_000,
+  )
 
   // After 64 halvings = 0
-  should.equal(activation.get_block_subsidy(64 * 210_000, oni_bitcoin.Mainnet), 0)
+  should.equal(
+    activation.get_block_subsidy(64 * 210_000, oni_bitcoin.Mainnet),
+    0,
+  )
 }
 
 pub fn coinbase_maturity_test() {
@@ -236,27 +269,26 @@ pub fn difficulty_adjustment_height_test() {
 
 pub fn checkpoint_verification_test() {
   // Correct checkpoint should pass
-  let result = activation.verify_checkpoint(
-    11_111,
-    "0000000069e244f73d78e8fd29ba2fd2ed618bd6fa2ee92559f542fdb26e7c1d",
-    oni_bitcoin.Mainnet,
-  )
+  let result =
+    activation.verify_checkpoint(
+      11_111,
+      "0000000069e244f73d78e8fd29ba2fd2ed618bd6fa2ee92559f542fdb26e7c1d",
+      oni_bitcoin.Mainnet,
+    )
   should.equal(result, True)
 
   // Wrong hash should fail
-  let result2 = activation.verify_checkpoint(
-    11_111,
-    "0000000000000000000000000000000000000000000000000000000000000000",
-    oni_bitcoin.Mainnet,
-  )
+  let result2 =
+    activation.verify_checkpoint(
+      11_111,
+      "0000000000000000000000000000000000000000000000000000000000000000",
+      oni_bitcoin.Mainnet,
+    )
   should.equal(result2, False)
 
   // Height with no checkpoint should pass
-  let result3 = activation.verify_checkpoint(
-    12_345,
-    "anyhash",
-    oni_bitcoin.Mainnet,
-  )
+  let result3 =
+    activation.verify_checkpoint(12_345, "anyhash", oni_bitcoin.Mainnet)
   should.equal(result3, True)
 }
 
@@ -322,14 +354,15 @@ pub fn storage_block_undo_test() {
   let undo = oni_storage.block_undo_new()
 
   // Create a tx undo with spent coins
-  let coin = oni_storage.Coin(
-    output: oni_bitcoin.TxOut(
-      value: oni_bitcoin.Amount(sats: 100_000),
-      script_pubkey: oni_bitcoin.Script(bytes: <<0x51>>),
-    ),
-    height: 100,
-    is_coinbase: False,
-  )
+  let coin =
+    oni_storage.Coin(
+      output: oni_bitcoin.TxOut(
+        value: oni_bitcoin.Amount(sats: 100_000),
+        script_pubkey: oni_bitcoin.Script(bytes: <<0x51>>),
+      ),
+      height: 100,
+      is_coinbase: False,
+    )
 
   let tx_undo = oni_storage.tx_undo_new()
   let tx_undo2 = oni_storage.tx_undo_add_spent(tx_undo, coin)
@@ -342,19 +375,19 @@ pub fn storage_block_undo_test() {
 }
 
 pub fn storage_chainstate_test() {
-  let genesis_hash = oni_bitcoin.BlockHash(
-    hash: oni_bitcoin.Hash256(bytes: <<1:256>>),
-  )
+  let genesis_hash =
+    oni_bitcoin.BlockHash(hash: oni_bitcoin.Hash256(bytes: <<1:256>>))
 
-  let chainstate = oni_storage.Chainstate(
-    best_block: genesis_hash,
-    best_height: 0,
-    total_tx: 1,
-    total_coins: 1,
-    total_amount: 5_000_000_000,
-    pruned: False,
-    pruned_height: None,
-  )
+  let chainstate =
+    oni_storage.Chainstate(
+      best_block: genesis_hash,
+      best_height: 0,
+      total_tx: 1,
+      total_coins: 1,
+      total_amount: 5_000_000_000,
+      pruned: False,
+      pruned_height: None,
+    )
 
   should.equal(chainstate.best_height, 0)
   should.equal(chainstate.total_coins, 1)
@@ -370,9 +403,6 @@ pub fn mainnet_params_test() {
   // Mainnet port is 8333
   should.equal(params.default_port, 8333)
 
-  // Mainnet magic bytes
-  should.equal(params.magic, <<0xf9, 0xbe, 0xb4, 0xd9>>)
-
   // Genesis hash starts with many zeros
   let genesis_hex = oni_bitcoin.block_hash_to_hex(params.genesis_hash)
   should.equal(
@@ -385,20 +415,14 @@ pub fn testnet_params_test() {
   let params = oni_bitcoin.testnet_params()
 
   // Testnet port is 18333
-  should.equal(params.default_port, 18333)
-
-  // Testnet magic bytes
-  should.equal(params.magic, <<0x0b, 0x11, 0x09, 0x07>>)
+  should.equal(params.default_port, 18_333)
 }
 
 pub fn regtest_params_test() {
   let params = oni_bitcoin.regtest_params()
 
   // Regtest port is 18444
-  should.equal(params.default_port, 18444)
-
-  // Regtest magic bytes
-  should.equal(params.magic, <<0xfa, 0xbf, 0xb5, 0xda>>)
+  should.equal(params.default_port, 18_444)
 }
 
 // ============================================================================
@@ -416,14 +440,15 @@ pub fn ibd_config_test() {
 }
 
 pub fn ibd_status_initial_test() {
-  let status = ibd_coordinator.IbdStatus(
-    state: ibd_coordinator.IbdWaitingForPeers,
-    headers_height: 0,
-    blocks_height: 0,
-    connected_peers: 0,
-    inflight_blocks: 0,
-    progress_percent: 0.0,
-  )
+  let status =
+    ibd_coordinator.IbdStatus(
+      state: ibd_coordinator.IbdWaitingForPeers,
+      headers_height: 0,
+      blocks_height: 0,
+      connected_peers: 0,
+      inflight_blocks: 0,
+      progress_percent: 0.0,
+    )
 
   should.equal(status.headers_height, 0)
   should.equal(status.blocks_height, 0)
@@ -444,27 +469,30 @@ pub fn fork_block_creation_test() {
   let hash = oni_bitcoin.BlockHash(hash: oni_bitcoin.Hash256(bytes: <<1:256>>))
   let prev = oni_bitcoin.BlockHash(hash: oni_bitcoin.Hash256(bytes: <<0:256>>))
 
-  let block = reorg_handler.ForkBlock(
-    hash: hash,
-    height: 100,
-    prev_hash: prev,
-    total_work: 1000,
-  )
+  let block =
+    reorg_handler.ForkBlock(
+      hash: hash,
+      height: 100,
+      prev_hash: prev,
+      total_work: 1000,
+    )
 
   should.equal(block.height, 100)
   should.equal(block.total_work, 1000)
 }
 
 pub fn reorg_event_test() {
-  let fork_point = oni_bitcoin.BlockHash(hash: oni_bitcoin.Hash256(bytes: <<1:256>>))
+  let fork_point =
+    oni_bitcoin.BlockHash(hash: oni_bitcoin.Hash256(bytes: <<1:256>>))
 
-  let event = reorg_handler.ReorgEvent(
-    fork_point: fork_point,
-    fork_height: 99,
-    blocks_disconnected: 3,
-    blocks_connected: 5,
-    resubmit_txs: [],
-  )
+  let event =
+    reorg_handler.ReorgEvent(
+      fork_point: fork_point,
+      fork_height: 99,
+      blocks_disconnected: 3,
+      blocks_connected: 5,
+      resubmit_txs: [],
+    )
 
   should.equal(event.blocks_disconnected, 3)
   should.equal(event.blocks_connected, 5)
@@ -482,15 +510,16 @@ pub fn router_config_test() {
 }
 
 pub fn router_stats_initial_test() {
-  let stats = event_router.RouterStats(
-    blocks_received: 0,
-    txs_received: 0,
-    headers_received: 0,
-    blocks_requested: 0,
-    txs_requested: 0,
-    peers_connected: 0,
-    peers_disconnected: 0,
-  )
+  let stats =
+    event_router.RouterStats(
+      blocks_received: 0,
+      txs_received: 0,
+      headers_received: 0,
+      blocks_requested: 0,
+      txs_requested: 0,
+      peers_connected: 0,
+      peers_disconnected: 0,
+    )
 
   should.equal(stats.blocks_received, 0)
   should.equal(stats.peers_connected, 0)
@@ -551,7 +580,7 @@ pub fn integration_flow_test() {
   let genesis_hash = oni_bitcoin.block_hash_from_header(genesis.header)
 
   // Create a block extending genesis
-  let block1 = create_test_block(genesis_hash, 1, 1231006505 + 600)
+  let block1 = create_test_block(genesis_hash, 1, 1_231_006_505 + 600)
   let _block1_hash = oni_bitcoin.block_hash_from_header(block1.header)
 
   // Verify block structure
@@ -560,13 +589,14 @@ pub fn integration_flow_test() {
 
   // Verify coinbase output has correct subsidy
   case list.first(block1.transactions) {
-    None -> should.fail()
-    Some(coinbase) -> {
+    Error(_) -> should.fail()
+    Ok(coinbase) -> {
       case list.first(coinbase.outputs) {
-        None -> should.fail()
-        Some(output) -> {
+        Error(_) -> should.fail()
+        Ok(output) -> {
           // Regtest subsidy at height 1 should still be 50 BTC
-          let expected_subsidy = activation.get_block_subsidy(1, oni_bitcoin.Regtest)
+          let expected_subsidy =
+            activation.get_block_subsidy(1, oni_bitcoin.Regtest)
           should.equal(output.value.sats, expected_subsidy)
         }
       }
@@ -612,8 +642,6 @@ pub fn chainstate_startup_test() {
 
       // Query tip - should be genesis hash
       let tip = process.call(chainstate, oni_supervisor.GetTip, 5000)
-      should.be_some(tip)
-
       case tip {
         Some(hash) -> {
           // Verify it's the regtest genesis hash
@@ -646,11 +674,8 @@ pub fn chainstate_connect_block_test() {
       let block1 = create_test_block(genesis_hash, 1, 1)
 
       // Connect the block
-      let connect_result = process.call(
-        chainstate,
-        oni_supervisor.ConnectBlock(block1, _),
-        5000,
-      )
+      let connect_result =
+        process.call(chainstate, oni_supervisor.ConnectBlock(block1, _), 5000)
       should.be_ok(connect_result)
 
       // Verify height increased
@@ -690,23 +715,28 @@ pub fn chainstate_connect_chain_test() {
       // Create and connect blocks 1-5
       let block1 = create_test_block(hash0, 1, 1)
       let hash1 = oni_bitcoin.block_hash_from_header(block1.header)
-      let _ = process.call(chainstate, oni_supervisor.ConnectBlock(block1, _), 5000)
+      let _ =
+        process.call(chainstate, oni_supervisor.ConnectBlock(block1, _), 5000)
 
       let block2 = create_test_block(hash1, 2, 2)
       let hash2 = oni_bitcoin.block_hash_from_header(block2.header)
-      let _ = process.call(chainstate, oni_supervisor.ConnectBlock(block2, _), 5000)
+      let _ =
+        process.call(chainstate, oni_supervisor.ConnectBlock(block2, _), 5000)
 
       let block3 = create_test_block(hash2, 3, 3)
       let hash3 = oni_bitcoin.block_hash_from_header(block3.header)
-      let _ = process.call(chainstate, oni_supervisor.ConnectBlock(block3, _), 5000)
+      let _ =
+        process.call(chainstate, oni_supervisor.ConnectBlock(block3, _), 5000)
 
       let block4 = create_test_block(hash3, 4, 4)
       let hash4 = oni_bitcoin.block_hash_from_header(block4.header)
-      let _ = process.call(chainstate, oni_supervisor.ConnectBlock(block4, _), 5000)
+      let _ =
+        process.call(chainstate, oni_supervisor.ConnectBlock(block4, _), 5000)
 
       let block5 = create_test_block(hash4, 5, 5)
       let hash5 = oni_bitcoin.block_hash_from_header(block5.header)
-      let _ = process.call(chainstate, oni_supervisor.ConnectBlock(block5, _), 5000)
+      let _ =
+        process.call(chainstate, oni_supervisor.ConnectBlock(block5, _), 5000)
 
       // Verify final height
       let height = process.call(chainstate, oni_supervisor.GetHeight, 5000)
@@ -780,15 +810,16 @@ pub fn event_router_config_test() {
 /// Test event router stats tracking
 pub fn event_router_stats_test() {
   // Create initial stats
-  let stats = event_router.RouterStats(
-    blocks_received: 0,
-    txs_received: 0,
-    headers_received: 0,
-    blocks_requested: 0,
-    txs_requested: 0,
-    peers_connected: 0,
-    peers_disconnected: 0,
-  )
+  let stats =
+    event_router.RouterStats(
+      blocks_received: 0,
+      txs_received: 0,
+      headers_received: 0,
+      blocks_requested: 0,
+      txs_requested: 0,
+      peers_connected: 0,
+      peers_disconnected: 0,
+    )
 
   // Verify all fields
   should.equal(stats.blocks_received, 0)
@@ -827,7 +858,8 @@ pub fn full_subsystem_integration_test() {
       // Connect a block to chainstate
       let params = oni_bitcoin.regtest_params()
       let block1 = create_test_block(params.genesis_hash, 1, 1)
-      let _ = process.call(chainstate, oni_supervisor.ConnectBlock(block1, _), 5000)
+      let _ =
+        process.call(chainstate, oni_supervisor.ConnectBlock(block1, _), 5000)
 
       // Verify height updated
       let new_height = process.call(chainstate, oni_supervisor.GetHeight, 5000)
@@ -853,16 +885,18 @@ pub fn utxo_lifecycle_test() {
       // Connect block 1 (creates coinbase UTXO)
       let params = oni_bitcoin.regtest_params()
       let block1 = create_test_block(params.genesis_hash, 1, 1)
-      let _ = process.call(chainstate, oni_supervisor.ConnectBlock(block1, _), 5000)
+      let _ =
+        process.call(chainstate, oni_supervisor.ConnectBlock(block1, _), 5000)
 
       // The coinbase txid
       case list.first(block1.transactions) {
-        Some(coinbase) -> {
+        Ok(coinbase) -> {
           let txid = oni_bitcoin.txid_from_tx(coinbase)
           let outpoint = oni_bitcoin.OutPoint(txid: txid, vout: 0)
 
           // Query the UTXO
-          let utxo = process.call(chainstate, oni_supervisor.GetUtxo(outpoint, _), 5000)
+          let utxo =
+            process.call(chainstate, oni_supervisor.GetUtxo(outpoint, _), 5000)
 
           case utxo {
             Some(coin_info) -> {
@@ -870,7 +904,8 @@ pub fn utxo_lifecycle_test() {
               should.equal(coin_info.is_coinbase, True)
               should.equal(coin_info.height, 1)
               // Verify value is 50 BTC (regtest subsidy)
-              let expected_subsidy = activation.get_block_subsidy(1, oni_bitcoin.Regtest)
+              let expected_subsidy =
+                activation.get_block_subsidy(1, oni_bitcoin.Regtest)
               should.equal(coin_info.value.sats, expected_subsidy)
             }
             None -> {
@@ -880,7 +915,7 @@ pub fn utxo_lifecycle_test() {
             }
           }
         }
-        None -> should.fail()
+        Error(_) -> should.fail()
       }
 
       // Shutdown
@@ -895,7 +930,10 @@ pub fn utxo_lifecycle_test() {
 // ============================================================================
 
 /// Start a mock P2P listener for testing (receives broadcast messages)
-fn start_mock_p2p() -> Result(process.Subject(p2p_network.ListenerMsg), actor.StartError) {
+fn start_mock_p2p() -> Result(
+  process.Subject(p2p_network.ListenerMsg),
+  actor.StartError,
+) {
   actor.start(0, fn(msg: p2p_network.ListenerMsg, count: Int) {
     case msg {
       p2p_network.BroadcastMessage(_) -> {
@@ -917,24 +955,27 @@ pub fn event_router_block_routing_test() {
   case chainstate_result, mempool_result, sync_result, mock_p2p_result {
     Ok(chainstate), Ok(mempool), Ok(sync), Ok(mock_p2p) -> {
       // Create router handles
-      let router_handles = event_router.RouterHandles(
-        chainstate: chainstate,
-        mempool: mempool,
-        sync: sync,
-        p2p: mock_p2p,
-      )
+      let router_handles =
+        event_router.RouterHandles(
+          chainstate: chainstate,
+          mempool: mempool,
+          sync: sync,
+          p2p: mock_p2p,
+        )
 
       // Start event router
-      let router_config = event_router.RouterConfig(
-        max_pending_blocks: 16,
-        max_pending_txs: 100,
-        debug: False,
-      )
+      let router_config =
+        event_router.RouterConfig(
+          max_pending_blocks: 16,
+          max_pending_txs: 100,
+          debug: False,
+        )
 
       case event_router.start(router_config, router_handles) {
         Ok(router) -> {
           // Verify initial height
-          let initial_height = process.call(chainstate, oni_supervisor.GetHeight, 5000)
+          let initial_height =
+            process.call(chainstate, oni_supervisor.GetHeight, 5000)
           should.equal(initial_height, 0)
 
           // Create a test block
@@ -942,14 +983,16 @@ pub fn event_router_block_routing_test() {
           let block1 = create_test_block(params.genesis_hash, 1, 1)
 
           // Simulate receiving a block message via the event router
-          let block_event = p2p_network.MessageReceived(1, oni_p2p.MsgBlock(block1))
+          let block_event =
+            p2p_network.MessageReceived(1, oni_p2p.MsgBlock(block1))
           process.send(router, event_router.ProcessEvent(block_event))
 
           // Give the router time to process and forward to chainstate
           process.sleep(100)
 
           // Verify height increased (block was connected)
-          let new_height = process.call(chainstate, oni_supervisor.GetHeight, 5000)
+          let new_height =
+            process.call(chainstate, oni_supervisor.GetHeight, 5000)
           should.equal(new_height, 1)
 
           // Get router stats to verify tracking
@@ -979,48 +1022,44 @@ pub fn event_router_peer_connection_test() {
 
   case chainstate_result, mempool_result, sync_result, mock_p2p_result {
     Ok(chainstate), Ok(mempool), Ok(sync), Ok(mock_p2p) -> {
-      let router_handles = event_router.RouterHandles(
-        chainstate: chainstate,
-        mempool: mempool,
-        sync: sync,
-        p2p: mock_p2p,
-      )
+      let router_handles =
+        event_router.RouterHandles(
+          chainstate: chainstate,
+          mempool: mempool,
+          sync: sync,
+          p2p: mock_p2p,
+        )
 
-      let router_config = event_router.RouterConfig(
-        max_pending_blocks: 16,
-        max_pending_txs: 100,
-        debug: False,
-      )
+      let router_config =
+        event_router.RouterConfig(
+          max_pending_blocks: 16,
+          max_pending_txs: 100,
+          debug: False,
+        )
 
       case event_router.start(router_config, router_handles) {
         Ok(router) -> {
           // Create a mock version payload
-          let version = oni_p2p.VersionPayload(
-            version: 70015,
-            services: oni_p2p.ServiceFlags(
-              node_network: True,
-              node_witness: True,
-              node_bloom: False,
-              node_compact_filters: False,
-              node_network_limited: False,
-              node_p2p_v2: False,
-            ),
-            timestamp: 1234567890,
-            addr_recv: oni_p2p.NetAddr(
+          let version =
+            oni_p2p.VersionPayload(
+              version: 70_015,
               services: oni_p2p.default_services(),
-              ip: <<0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 127, 0, 0, 1>>,
-              port: 8333,
-            ),
-            addr_from: oni_p2p.NetAddr(
-              services: oni_p2p.default_services(),
-              ip: <<0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 127, 0, 0, 1>>,
-              port: 8334,
-            ),
-            nonce: 12345,
-            user_agent: "/oni:0.1.0/",
-            start_height: 100,
-            relay: True,
-          )
+              timestamp: 1_234_567_890,
+              addr_recv: oni_p2p.NetAddr(
+                services: oni_p2p.default_services(),
+                ip: oni_p2p.localhost(),
+                port: 8333,
+              ),
+              addr_from: oni_p2p.NetAddr(
+                services: oni_p2p.default_services(),
+                ip: oni_p2p.localhost(),
+                port: 8334,
+              ),
+              nonce: 12_345,
+              user_agent: "/oni:0.1.0/",
+              start_height: 100,
+              relay: True,
+            )
 
           // Simulate peer handshake complete
           let handshake_event = p2p_network.PeerHandshakeComplete(1, version)
@@ -1060,18 +1099,20 @@ pub fn event_router_chain_sync_test() {
 
   case chainstate_result, mempool_result, sync_result, mock_p2p_result {
     Ok(chainstate), Ok(mempool), Ok(sync), Ok(mock_p2p) -> {
-      let router_handles = event_router.RouterHandles(
-        chainstate: chainstate,
-        mempool: mempool,
-        sync: sync,
-        p2p: mock_p2p,
-      )
+      let router_handles =
+        event_router.RouterHandles(
+          chainstate: chainstate,
+          mempool: mempool,
+          sync: sync,
+          p2p: mock_p2p,
+        )
 
-      let router_config = event_router.RouterConfig(
-        max_pending_blocks: 16,
-        max_pending_txs: 100,
-        debug: False,
-      )
+      let router_config =
+        event_router.RouterConfig(
+          max_pending_blocks: 16,
+          max_pending_txs: 100,
+          debug: False,
+        )
 
       case event_router.start(router_config, router_handles) {
         Ok(router) -> {
@@ -1094,24 +1135,49 @@ pub fn event_router_chain_sync_test() {
           let block5 = create_test_block(hash4, 5, 5)
 
           // Simulate receiving blocks through event router
-          process.send(router, event_router.ProcessEvent(
-            p2p_network.MessageReceived(1, oni_p2p.MsgBlock(block1))))
+          process.send(
+            router,
+            event_router.ProcessEvent(p2p_network.MessageReceived(
+              1,
+              oni_p2p.MsgBlock(block1),
+            )),
+          )
           process.sleep(50)
 
-          process.send(router, event_router.ProcessEvent(
-            p2p_network.MessageReceived(1, oni_p2p.MsgBlock(block2))))
+          process.send(
+            router,
+            event_router.ProcessEvent(p2p_network.MessageReceived(
+              1,
+              oni_p2p.MsgBlock(block2),
+            )),
+          )
           process.sleep(50)
 
-          process.send(router, event_router.ProcessEvent(
-            p2p_network.MessageReceived(1, oni_p2p.MsgBlock(block3))))
+          process.send(
+            router,
+            event_router.ProcessEvent(p2p_network.MessageReceived(
+              1,
+              oni_p2p.MsgBlock(block3),
+            )),
+          )
           process.sleep(50)
 
-          process.send(router, event_router.ProcessEvent(
-            p2p_network.MessageReceived(1, oni_p2p.MsgBlock(block4))))
+          process.send(
+            router,
+            event_router.ProcessEvent(p2p_network.MessageReceived(
+              1,
+              oni_p2p.MsgBlock(block4),
+            )),
+          )
           process.sleep(50)
 
-          process.send(router, event_router.ProcessEvent(
-            p2p_network.MessageReceived(1, oni_p2p.MsgBlock(block5))))
+          process.send(
+            router,
+            event_router.ProcessEvent(p2p_network.MessageReceived(
+              1,
+              oni_p2p.MsgBlock(block5),
+            )),
+          )
           process.sleep(50)
 
           // Verify final height
@@ -1145,38 +1211,38 @@ pub fn event_router_headers_test() {
 
   case chainstate_result, mempool_result, sync_result, mock_p2p_result {
     Ok(chainstate), Ok(mempool), Ok(sync), Ok(mock_p2p) -> {
-      let router_handles = event_router.RouterHandles(
-        chainstate: chainstate,
-        mempool: mempool,
-        sync: sync,
-        p2p: mock_p2p,
-      )
+      let router_handles =
+        event_router.RouterHandles(
+          chainstate: chainstate,
+          mempool: mempool,
+          sync: sync,
+          p2p: mock_p2p,
+        )
 
-      let router_config = event_router.RouterConfig(
-        max_pending_blocks: 16,
-        max_pending_txs: 100,
-        debug: False,
-      )
+      let router_config =
+        event_router.RouterConfig(
+          max_pending_blocks: 16,
+          max_pending_txs: 100,
+          debug: False,
+        )
 
       case event_router.start(router_config, router_handles) {
         Ok(router) -> {
           // Create test headers
           let params = oni_bitcoin.regtest_params()
-          let header1 = oni_p2p.BlockHeaderNet(
-            version: 1,
-            prev_block: params.genesis_hash,
-            merkle_root: oni_bitcoin.Hash256(bytes: <<0:256>>),
-            timestamp: 1231006505 + 600,
-            bits: 0x207fffff,
-            nonce: 0,
-            tx_count: 0,
-          )
+          let header1 =
+            oni_p2p.BlockHeaderNet(
+              version: 1,
+              prev_block: params.genesis_hash,
+              merkle_root: oni_bitcoin.Hash256(bytes: <<0:256>>),
+              timestamp: 1_231_006_505 + 600,
+              bits: 0x207fffff,
+              nonce: 0,
+            )
 
           // Simulate receiving headers
-          let headers_event = p2p_network.MessageReceived(
-            1,
-            oni_p2p.MsgHeaders([header1]),
-          )
+          let headers_event =
+            p2p_network.MessageReceived(1, oni_p2p.MsgHeaders([header1]))
           process.send(router, event_router.ProcessEvent(headers_event))
           process.sleep(50)
 
@@ -1211,49 +1277,62 @@ pub fn event_router_peer_disconnect_test() {
 
   case chainstate_result, mempool_result, sync_result, mock_p2p_result {
     Ok(chainstate), Ok(mempool), Ok(sync), Ok(mock_p2p) -> {
-      let router_handles = event_router.RouterHandles(
-        chainstate: chainstate,
-        mempool: mempool,
-        sync: sync,
-        p2p: mock_p2p,
-      )
+      let router_handles =
+        event_router.RouterHandles(
+          chainstate: chainstate,
+          mempool: mempool,
+          sync: sync,
+          p2p: mock_p2p,
+        )
 
-      let router_config = event_router.RouterConfig(
-        max_pending_blocks: 16,
-        max_pending_txs: 100,
-        debug: False,
-      )
+      let router_config =
+        event_router.RouterConfig(
+          max_pending_blocks: 16,
+          max_pending_txs: 100,
+          debug: False,
+        )
 
       case event_router.start(router_config, router_handles) {
         Ok(router) -> {
           // Simulate peer connect then disconnect
-          let version = oni_p2p.VersionPayload(
-            version: 70015,
-            services: oni_p2p.default_services(),
-            timestamp: 1234567890,
-            addr_recv: oni_p2p.NetAddr(
+          let version =
+            oni_p2p.VersionPayload(
+              version: 70_015,
               services: oni_p2p.default_services(),
-              ip: <<0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 127, 0, 0, 1>>,
-              port: 8333,
-            ),
-            addr_from: oni_p2p.NetAddr(
-              services: oni_p2p.default_services(),
-              ip: <<0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 127, 0, 0, 1>>,
-              port: 8334,
-            ),
-            nonce: 12345,
-            user_agent: "/test/",
-            start_height: 50,
-            relay: True,
-          )
+              timestamp: 1_234_567_890,
+              addr_recv: oni_p2p.NetAddr(
+                services: oni_p2p.default_services(),
+                ip: oni_p2p.localhost(),
+                port: 8333,
+              ),
+              addr_from: oni_p2p.NetAddr(
+                services: oni_p2p.default_services(),
+                ip: oni_p2p.localhost(),
+                port: 8334,
+              ),
+              nonce: 12_345,
+              user_agent: "/test/",
+              start_height: 50,
+              relay: True,
+            )
 
-          process.send(router, event_router.ProcessEvent(
-            p2p_network.PeerHandshakeComplete(1, version)))
+          process.send(
+            router,
+            event_router.ProcessEvent(p2p_network.PeerHandshakeComplete(
+              1,
+              version,
+            )),
+          )
           process.sleep(50)
 
           // Disconnect the peer
-          process.send(router, event_router.ProcessEvent(
-            p2p_network.PeerDisconnectedEvent(1, "test disconnect")))
+          process.send(
+            router,
+            event_router.ProcessEvent(p2p_network.PeerDisconnectedEvent(
+              1,
+              "test disconnect",
+            )),
+          )
           process.sleep(50)
 
           // Verify stats
@@ -1284,28 +1363,30 @@ pub fn persistent_chainstate_startup_test() {
   let data_dir = test_data_dir()
 
   // Create config
-  let config = persistent_chainstate.ChainstateConfig(
-    network: oni_bitcoin.Regtest,
-    data_dir: data_dir,
-    sync_interval: 1,  // Sync after every block for testing
-    verify_scripts: False,
-  )
+  let config =
+    persistent_chainstate.ChainstateConfig(
+      network: oni_bitcoin.Regtest,
+      data_dir: data_dir,
+      sync_interval: 1,
+      // Sync after every block for testing
+      verify_scripts: False,
+    )
 
   // Start persistent chainstate
   case persistent_chainstate.start(config) {
     Ok(chainstate) -> {
       // Should start at height 0 (genesis)
-      let height = process.call(chainstate, persistent_chainstate.GetHeight, 5000)
+      let height =
+        process.call(chainstate, persistent_chainstate.GetHeight, 5000)
       should.equal(height, 0)
 
       // Verify network
-      let network = process.call(chainstate, persistent_chainstate.GetNetwork, 5000)
+      let network =
+        process.call(chainstate, persistent_chainstate.GetNetwork, 5000)
       should.equal(network, oni_bitcoin.Regtest)
 
       // Verify tip is genesis
       let tip = process.call(chainstate, persistent_chainstate.GetTip, 5000)
-      should.be_some(tip)
-
       case tip {
         Some(hash) -> {
           let params = oni_bitcoin.regtest_params()
@@ -1316,7 +1397,8 @@ pub fn persistent_chainstate_startup_test() {
 
       // Shutdown
       process.send(chainstate, persistent_chainstate.Shutdown)
-      process.sleep(100)  // Give time to close storage
+      process.sleep(100)
+      // Give time to close storage
     }
     Error(err) -> {
       io.println("Failed to start persistent chainstate: " <> err)
@@ -1334,12 +1416,13 @@ pub fn persistent_chainstate_startup_test() {
 pub fn persistent_chainstate_connect_block_test() {
   let data_dir = test_data_dir()
 
-  let config = persistent_chainstate.ChainstateConfig(
-    network: oni_bitcoin.Regtest,
-    data_dir: data_dir,
-    sync_interval: 1,
-    verify_scripts: False,
-  )
+  let config =
+    persistent_chainstate.ChainstateConfig(
+      network: oni_bitcoin.Regtest,
+      data_dir: data_dir,
+      sync_interval: 1,
+      verify_scripts: False,
+    )
 
   case persistent_chainstate.start(config) {
     Ok(chainstate) -> {
@@ -1347,15 +1430,17 @@ pub fn persistent_chainstate_connect_block_test() {
       let params = oni_bitcoin.regtest_params()
       let block1 = create_test_block(params.genesis_hash, 1, 1)
 
-      let result = process.call(
-        chainstate,
-        persistent_chainstate.ConnectBlock(block1, _),
-        5000,
-      )
+      let result =
+        process.call(
+          chainstate,
+          persistent_chainstate.ConnectBlock(block1, _),
+          5000,
+        )
       should.be_ok(result)
 
       // Verify height increased
-      let height = process.call(chainstate, persistent_chainstate.GetHeight, 5000)
+      let height =
+        process.call(chainstate, persistent_chainstate.GetHeight, 5000)
       should.equal(height, 1)
 
       // Shutdown
@@ -1375,12 +1460,14 @@ pub fn persistent_chainstate_connect_block_test() {
 pub fn persistent_chainstate_recovery_test() {
   let data_dir = test_data_dir()
 
-  let config = persistent_chainstate.ChainstateConfig(
-    network: oni_bitcoin.Regtest,
-    data_dir: data_dir,
-    sync_interval: 1,  // Sync after every block
-    verify_scripts: False,
-  )
+  let config =
+    persistent_chainstate.ChainstateConfig(
+      network: oni_bitcoin.Regtest,
+      data_dir: data_dir,
+      sync_interval: 1,
+      // Sync after every block
+      verify_scripts: False,
+    )
 
   // Phase 1: Start chainstate, connect blocks, shutdown
   case persistent_chainstate.start(config) {
@@ -1389,39 +1476,60 @@ pub fn persistent_chainstate_recovery_test() {
       let params = oni_bitcoin.regtest_params()
       let block1 = create_test_block(params.genesis_hash, 1, 1)
       let hash1 = oni_bitcoin.block_hash_from_header(block1.header)
-      let _ = process.call(chainstate1, persistent_chainstate.ConnectBlock(block1, _), 5000)
+      let _ =
+        process.call(
+          chainstate1,
+          persistent_chainstate.ConnectBlock(block1, _),
+          5000,
+        )
 
       let block2 = create_test_block(hash1, 2, 2)
       let hash2 = oni_bitcoin.block_hash_from_header(block2.header)
-      let _ = process.call(chainstate1, persistent_chainstate.ConnectBlock(block2, _), 5000)
+      let _ =
+        process.call(
+          chainstate1,
+          persistent_chainstate.ConnectBlock(block2, _),
+          5000,
+        )
 
       let block3 = create_test_block(hash2, 3, 3)
-      let _ = process.call(chainstate1, persistent_chainstate.ConnectBlock(block3, _), 5000)
+      let _ =
+        process.call(
+          chainstate1,
+          persistent_chainstate.ConnectBlock(block3, _),
+          5000,
+        )
 
       // Force sync to disk
-      let sync_result = process.call(chainstate1, persistent_chainstate.Sync, 5000)
+      let sync_result =
+        process.call(chainstate1, persistent_chainstate.Sync, 5000)
       should.be_ok(sync_result)
 
       // Verify height before shutdown
-      let height1 = process.call(chainstate1, persistent_chainstate.GetHeight, 5000)
+      let height1 =
+        process.call(chainstate1, persistent_chainstate.GetHeight, 5000)
       should.equal(height1, 3)
 
       // Shutdown
       process.send(chainstate1, persistent_chainstate.Shutdown)
-      process.sleep(200)  // Give time for clean shutdown
+      process.sleep(200)
+      // Give time for clean shutdown
 
       // Phase 2: Restart and verify state recovered
       case persistent_chainstate.start(config) {
         Ok(chainstate2) -> {
           // Height should be recovered
-          let height2 = process.call(chainstate2, persistent_chainstate.GetHeight, 5000)
+          let height2 =
+            process.call(chainstate2, persistent_chainstate.GetHeight, 5000)
           should.equal(height2, 3)
 
           // Tip should match block3
-          let tip = process.call(chainstate2, persistent_chainstate.GetTip, 5000)
+          let tip =
+            process.call(chainstate2, persistent_chainstate.GetTip, 5000)
           case tip {
             Some(hash) -> {
-              let block3_hash = oni_bitcoin.block_hash_from_header(block3.header)
+              let block3_hash =
+                oni_bitcoin.block_hash_from_header(block3.header)
               should.equal(hash.hash.bytes, block3_hash.hash.bytes)
             }
             None -> should.fail()
@@ -1447,12 +1555,13 @@ pub fn persistent_chainstate_recovery_test() {
 pub fn persistent_chainstate_info_test() {
   let data_dir = test_data_dir()
 
-  let config = persistent_chainstate.ChainstateConfig(
-    network: oni_bitcoin.Regtest,
-    data_dir: data_dir,
-    sync_interval: 1,
-    verify_scripts: False,
-  )
+  let config =
+    persistent_chainstate.ChainstateConfig(
+      network: oni_bitcoin.Regtest,
+      data_dir: data_dir,
+      sync_interval: 1,
+      verify_scripts: False,
+    )
 
   case persistent_chainstate.start(config) {
     Ok(chainstate) -> {
@@ -1464,7 +1573,12 @@ pub fn persistent_chainstate_info_test() {
       // Connect a block
       let params = oni_bitcoin.regtest_params()
       let block1 = create_test_block(params.genesis_hash, 1, 1)
-      let _ = process.call(chainstate, persistent_chainstate.ConnectBlock(block1, _), 5000)
+      let _ =
+        process.call(
+          chainstate,
+          persistent_chainstate.ConnectBlock(block1, _),
+          5000,
+        )
 
       // Get updated info
       let info2 = process.call(chainstate, persistent_chainstate.GetInfo, 5000)

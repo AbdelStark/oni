@@ -13,12 +13,12 @@
 // - Network quality (latency, uptime)
 // - Historical reliability
 
+import ban_manager.{type BanManager, type Misbehavior}
 import gleam/dict.{type Dict}
 import gleam/float
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
-import ban_manager.{type BanManager, type Misbehavior}
 
 // ============================================================================
 // Constants
@@ -98,7 +98,10 @@ pub fn quality_metrics_new(current_time: Int) -> QualityMetrics {
 }
 
 /// Record a latency sample
-pub fn record_latency(metrics: QualityMetrics, latency_ms: Int) -> QualityMetrics {
+pub fn record_latency(
+  metrics: QualityMetrics,
+  latency_ms: Int,
+) -> QualityMetrics {
   let new_samples = metrics.latency_samples + 1
   let new_avg = case metrics.latency_samples {
     0 -> latency_ms
@@ -144,15 +147,17 @@ pub fn record_connection(
   current_time: Int,
 ) -> QualityMetrics {
   case success {
-    True -> QualityMetrics(
-      ..metrics,
-      connection_count: metrics.connection_count + 1,
-      last_seen: current_time,
-    )
-    False -> QualityMetrics(
-      ..metrics,
-      failed_connections: metrics.failed_connections + 1,
-    )
+    True ->
+      QualityMetrics(
+        ..metrics,
+        connection_count: metrics.connection_count + 1,
+        last_seen: current_time,
+      )
+    False ->
+      QualityMetrics(
+        ..metrics,
+        failed_connections: metrics.failed_connections + 1,
+      )
   }
 }
 
@@ -195,8 +200,10 @@ pub type PositiveBehavior {
 pub fn positive_behavior_bonus(behavior: PositiveBehavior) -> Int {
   case behavior {
     RelayedBlock -> 50
-    RelayedTransactions(count) -> int.min(count, 10)  // Max 10 per batch
-    ProvidedHeaders(count) -> count / 100  // 1 point per 100 headers
+    RelayedTransactions(count) -> int.min(count, 10)
+    // Max 10 per batch
+    ProvidedHeaders(count) -> count / 100
+    // 1 point per 100 headers
     FastPingResponse(latency_ms) -> {
       case latency_ms {
         ms if ms < 50 -> 5
@@ -448,14 +455,12 @@ pub fn get_or_create(
     Error(_) -> {
       let rep = peer_reputation_new(current_time)
       let new_peers = dict.insert(manager.peers, peer_id, rep)
-      let new_stats = ReputationStats(
-        ..manager.stats,
-        total_peers: manager.stats.total_peers + 1,
-      )
-      #(
-        ReputationManager(..manager, peers: new_peers, stats: new_stats),
-        rep,
-      )
+      let new_stats =
+        ReputationStats(
+          ..manager.stats,
+          total_peers: manager.stats.total_peers + 1,
+        )
+      #(ReputationManager(..manager, peers: new_peers, stats: new_stats), rep)
     }
   }
 }
@@ -470,10 +475,8 @@ pub fn record_positive(
   let #(mgr, rep) = get_or_create(manager, peer_id, current_time)
   let new_rep = apply_positive(rep, behavior, current_time)
   let new_peers = dict.insert(mgr.peers, peer_id, new_rep)
-  let new_stats = ReputationStats(
-    ..mgr.stats,
-    total_positive: mgr.stats.total_positive + 1,
-  )
+  let new_stats =
+    ReputationStats(..mgr.stats, total_positive: mgr.stats.total_positive + 1)
 
   update_classification_counts(
     ReputationManager(..mgr, peers: new_peers, stats: new_stats),
@@ -495,28 +498,31 @@ pub fn record_misbehavior(
   let new_peers = dict.insert(mgr.peers, peer_id, new_rep)
 
   // Also record in ban_manager
-  let #(new_ban_mgr, _action) = ban_manager.record_misbehavior(
-    mgr.ban_manager,
-    peer_id,
-    misbehavior,
-    current_time,
-  )
+  let #(new_ban_mgr, _action) =
+    ban_manager.record_misbehavior(
+      mgr.ban_manager,
+      peer_id,
+      misbehavior,
+      current_time,
+    )
 
-  let new_stats = ReputationStats(
-    ..mgr.stats,
-    total_misbehavior: mgr.stats.total_misbehavior + 1,
-  )
+  let new_stats =
+    ReputationStats(
+      ..mgr.stats,
+      total_misbehavior: mgr.stats.total_misbehavior + 1,
+    )
 
-  let updated_mgr = update_classification_counts(
-    ReputationManager(
-      ..mgr,
-      peers: new_peers,
-      ban_manager: new_ban_mgr,
-      stats: new_stats,
-    ),
-    rep.classification,
-    new_rep.classification,
-  )
+  let updated_mgr =
+    update_classification_counts(
+      ReputationManager(
+        ..mgr,
+        peers: new_peers,
+        ban_manager: new_ban_mgr,
+        stats: new_stats,
+      ),
+      rep.classification,
+      new_rep.classification,
+    )
 
   #(updated_mgr, should_ban(new_rep))
 }
@@ -532,17 +538,15 @@ pub fn record_quality(
 ) -> ReputationManager {
   let #(mgr, rep) = get_or_create(manager, peer_id, current_time)
 
-  let new_quality = case latency_ms {
-    Some(latency) -> record_latency(rep.quality, latency)
-    None -> rep.quality
-  }
-  |> record_transfer(bytes_in, bytes_out)
+  let new_quality =
+    case latency_ms {
+      Some(latency) -> record_latency(rep.quality, latency)
+      None -> rep.quality
+    }
+    |> record_transfer(bytes_in, bytes_out)
 
-  let new_rep = PeerReputation(
-    ..rep,
-    quality: new_quality,
-    last_update: current_time,
-  )
+  let new_rep =
+    PeerReputation(..rep, quality: new_quality, last_update: current_time)
 
   let new_peers = dict.insert(mgr.peers, peer_id, new_rep)
   ReputationManager(..mgr, peers: new_peers)
@@ -560,8 +564,9 @@ pub fn manager_record_connection(
 ) -> ReputationManager {
   let #(mgr, rep) = get_or_create(manager, peer_id, current_time)
 
-  let new_quality = ban_manager.peer_score_new()
-  |> fn(_) { record_connection(rep.quality, success, current_time) }
+  let new_quality =
+    ban_manager.peer_score_new()
+    |> fn(_) { record_connection(rep.quality, success, current_time) }
 
   let new_rep = case success {
     True -> {
@@ -575,10 +580,7 @@ pub fn manager_record_connection(
         user_agent: user_agent,
       )
     }
-    False -> PeerReputation(
-      ..rep,
-      quality: new_quality,
-    )
+    False -> PeerReputation(..rep, quality: new_quality)
   }
 
   let new_peers = dict.insert(mgr.peers, peer_id, new_rep)
@@ -596,11 +598,13 @@ pub fn record_disconnection(
     Ok(rep) -> {
       // Calculate uptime and award bonus if stable
       let uptime_hours = { current_time - rep.quality.first_seen } / 3600
-      let new_rep = case uptime_hours >= 1 {
-        True -> apply_positive(rep, StableConnection(uptime_hours), current_time)
-        False -> rep
-      }
-      |> fn(r) { PeerReputation(..r, connected: False) }
+      let new_rep =
+        case uptime_hours >= 1 {
+          True ->
+            apply_positive(rep, StableConnection(uptime_hours), current_time)
+          False -> rep
+        }
+        |> fn(r) { PeerReputation(..r, connected: False) }
 
       let new_peers = dict.insert(manager.peers, peer_id, new_rep)
       ReputationManager(..manager, peers: new_peers)
@@ -621,20 +625,28 @@ fn update_classification_counts(
 
       // Decrement old class
       let s1 = case old_class {
-        ClassTrusted -> ReputationStats(..stats, trusted_count: stats.trusted_count - 1)
-        ClassReliable -> ReputationStats(..stats, reliable_count: stats.reliable_count - 1)
-        ClassNormal -> ReputationStats(..stats, normal_count: stats.normal_count - 1)
-        ClassUntrusted -> ReputationStats(..stats, untrusted_count: stats.untrusted_count - 1)
-        ClassBanned -> ReputationStats(..stats, banned_count: stats.banned_count - 1)
+        ClassTrusted ->
+          ReputationStats(..stats, trusted_count: stats.trusted_count - 1)
+        ClassReliable ->
+          ReputationStats(..stats, reliable_count: stats.reliable_count - 1)
+        ClassNormal ->
+          ReputationStats(..stats, normal_count: stats.normal_count - 1)
+        ClassUntrusted ->
+          ReputationStats(..stats, untrusted_count: stats.untrusted_count - 1)
+        ClassBanned ->
+          ReputationStats(..stats, banned_count: stats.banned_count - 1)
         ClassNew -> stats
       }
 
       // Increment new class
       let s2 = case new_class {
-        ClassTrusted -> ReputationStats(..s1, trusted_count: s1.trusted_count + 1)
-        ClassReliable -> ReputationStats(..s1, reliable_count: s1.reliable_count + 1)
+        ClassTrusted ->
+          ReputationStats(..s1, trusted_count: s1.trusted_count + 1)
+        ClassReliable ->
+          ReputationStats(..s1, reliable_count: s1.reliable_count + 1)
         ClassNormal -> ReputationStats(..s1, normal_count: s1.normal_count + 1)
-        ClassUntrusted -> ReputationStats(..s1, untrusted_count: s1.untrusted_count + 1)
+        ClassUntrusted ->
+          ReputationStats(..s1, untrusted_count: s1.untrusted_count + 1)
         ClassBanned -> ReputationStats(..s1, banned_count: s1.banned_count + 1)
         ClassNew -> s1
       }
@@ -688,8 +700,11 @@ pub fn select_peers(
     // Check minimum score
     rep.score >= criteria.min_score
     // Check services
-    && { criteria.required_services == 0 ||
-         int.bitwise_and(rep.services, criteria.required_services) == criteria.required_services }
+    && {
+      criteria.required_services == 0
+      || int.bitwise_and(rep.services, criteria.required_services)
+      == criteria.required_services
+    }
     // Check connected status
     && { !criteria.exclude_connected || !rep.connected }
     // Not banned
@@ -702,7 +717,12 @@ pub fn select_peers(
     case criteria.prefer_low_latency {
       True -> {
         // Sort by latency first, then score
-        case int.compare(rep_a.quality.avg_latency_ms, rep_b.quality.avg_latency_ms) {
+        case
+          int.compare(
+            rep_a.quality.avg_latency_ms,
+            rep_b.quality.avg_latency_ms,
+          )
+        {
           order.Eq -> int.compare(rep_b.score, rep_a.score)
           other -> other
         }
@@ -721,13 +741,18 @@ pub fn select_sync_peers(
   manager: ReputationManager,
   count: Int,
 ) -> List(#(String, PeerReputation)) {
-  select_peers(manager, SelectionCriteria(
-    min_score: reliable_threshold,
-    required_services: 1,  // NODE_NETWORK
-    prefer_low_latency: False,  // Prefer reputation for sync
-    max_results: count,
-    exclude_connected: False,
-  ))
+  select_peers(
+    manager,
+    SelectionCriteria(
+      min_score: reliable_threshold,
+      required_services: 1,
+      // NODE_NETWORK
+      prefer_low_latency: False,
+      // Prefer reputation for sync
+      max_results: count,
+      exclude_connected: False,
+    ),
+  )
 }
 
 /// Select peers for eviction (lowest reputation among connected)
@@ -762,9 +787,10 @@ pub fn apply_global_decay(
   case manager.config.decay_enabled {
     False -> manager
     True -> {
-      let new_peers = dict.map_values(manager.peers, fn(_id, rep) {
-        apply_decay(rep, current_time)
-      })
+      let new_peers =
+        dict.map_values(manager.peers, fn(_id, rep) {
+          apply_decay(rep, current_time)
+        })
       ReputationManager(..manager, peers: new_peers)
     }
   }
@@ -781,28 +807,32 @@ pub fn cleanup(
       // Sort by score and last_seen, remove lowest
       let to_remove = dict.size(manager.peers) - manager.config.max_peers
 
-      let sorted_peers = manager.peers
+      let sorted_peers =
+        manager.peers
         |> dict.to_list
         |> list.sort(fn(a, b) {
           let #(_id_a, rep_a) = a
           let #(_id_b, rep_b) = b
           // Sort by score first, then last_seen
           case int.compare(rep_a.score, rep_b.score) {
-            order.Eq -> int.compare(rep_a.quality.last_seen, rep_b.quality.last_seen)
+            order.Eq ->
+              int.compare(rep_a.quality.last_seen, rep_b.quality.last_seen)
             other -> other
           }
         })
 
-      let to_remove_ids = sorted_peers
+      let to_remove_ids =
+        sorted_peers
         |> list.take(to_remove)
         |> list.map(fn(pair) {
           let #(id, _) = pair
           id
         })
 
-      let new_peers = list.fold(to_remove_ids, manager.peers, fn(peers, id) {
-        dict.delete(peers, id)
-      })
+      let new_peers =
+        list.fold(to_remove_ids, manager.peers, fn(peers, id) {
+          dict.delete(peers, id)
+        })
 
       ReputationManager(
         ..manager,
@@ -840,7 +870,8 @@ pub fn is_banned(
 ) -> Bool {
   case dict.get(manager.peers, peer_id) {
     Ok(rep) -> rep.classification == ClassBanned
-    Error(_) -> ban_manager.is_peer_banned(manager.ban_manager, peer_id, current_time)
+    Error(_) ->
+      ban_manager.is_peer_banned(manager.ban_manager, peer_id, current_time)
   }
 }
 

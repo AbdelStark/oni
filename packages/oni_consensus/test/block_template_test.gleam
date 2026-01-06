@@ -6,12 +6,12 @@
 // - Transaction selection from mempool
 // - Template creation
 
+import block_template
+import gleam/option.{None, Some}
 import gleeunit
 import gleeunit/should
-import gleam/option.{None, Some}
-import oni_bitcoin
-import block_template
 import mempool
+import oni_bitcoin
 
 pub fn main() {
   gleeunit.main()
@@ -24,7 +24,8 @@ pub fn main() {
 pub fn subsidy_genesis_test() {
   // Genesis block (height 0) should have 50 BTC
   let subsidy = block_template.calculate_subsidy(0)
-  should.equal(subsidy, 5_000_000_000)  // 50 BTC in satoshis
+  should.equal(subsidy, 5_000_000_000)
+  // 50 BTC in satoshis
 }
 
 pub fn subsidy_before_first_halving_test() {
@@ -36,25 +37,29 @@ pub fn subsidy_before_first_halving_test() {
 pub fn subsidy_first_halving_test() {
   // First halving (height 210000) should have 25 BTC
   let subsidy = block_template.calculate_subsidy(210_000)
-  should.equal(subsidy, 2_500_000_000)  // 25 BTC
+  should.equal(subsidy, 2_500_000_000)
+  // 25 BTC
 }
 
 pub fn subsidy_second_halving_test() {
   // Second halving (height 420000) should have 12.5 BTC
   let subsidy = block_template.calculate_subsidy(420_000)
-  should.equal(subsidy, 1_250_000_000)  // 12.5 BTC
+  should.equal(subsidy, 1_250_000_000)
+  // 12.5 BTC
 }
 
 pub fn subsidy_third_halving_test() {
   // Third halving (height 630000) should have 6.25 BTC
   let subsidy = block_template.calculate_subsidy(630_000)
-  should.equal(subsidy, 625_000_000)  // 6.25 BTC
+  should.equal(subsidy, 625_000_000)
+  // 6.25 BTC
 }
 
 pub fn subsidy_fourth_halving_test() {
   // Fourth halving (height 840000) should have 3.125 BTC
   let subsidy = block_template.calculate_subsidy(840_000)
-  should.equal(subsidy, 312_500_000)  // 3.125 BTC
+  should.equal(subsidy, 312_500_000)
+  // 3.125 BTC
 }
 
 pub fn subsidy_exhausted_test() {
@@ -76,28 +81,34 @@ pub fn subsidy_very_high_block_test() {
 pub fn coinbase_value_no_fees_test() {
   // Coinbase with no fees should equal subsidy
   let value = block_template.calculate_coinbase_value(0, 0)
-  should.equal(value, 5_000_000_000)  // 50 BTC
+  should.equal(value, 5_000_000_000)
+  // 50 BTC
 }
 
 pub fn coinbase_value_with_fees_test() {
   // Coinbase should include fees
-  let fees = 100_000  // 0.001 BTC
+  let fees = 100_000
+  // 0.001 BTC
   let value = block_template.calculate_coinbase_value(0, fees)
-  should.equal(value, 5_000_000_000 + 100_000)  // 50.001 BTC
+  should.equal(value, 5_000_000_000 + 100_000)
+  // 50.001 BTC
 }
 
 pub fn coinbase_value_halving_with_fees_test() {
   // After halving, coinbase should be subsidy + fees
-  let fees = 50_000_000  // 0.5 BTC in fees
+  let fees = 50_000_000
+  // 0.5 BTC in fees
   let value = block_template.calculate_coinbase_value(210_000, fees)
-  should.equal(value, 2_500_000_000 + 50_000_000)  // 25.5 BTC
+  should.equal(value, 2_500_000_000 + 50_000_000)
+  // 25.5 BTC
 }
 
 pub fn coinbase_value_exhausted_subsidy_test() {
   // When subsidy is exhausted, only fees
   let fees = 1_000_000
   let value = block_template.calculate_coinbase_value(100_000_000, fees)
-  should.equal(value, 1_000_000)  // Only fees
+  should.equal(value, 1_000_000)
+  // Only fees
 }
 
 // ============================================================================
@@ -105,13 +116,18 @@ pub fn coinbase_value_exhausted_subsidy_test() {
 // ============================================================================
 
 pub fn create_coinbase_basic_test() {
-  let output_script = oni_bitcoin.Script(<<0x76, 0xa9, 0x14>>)  // P2PKH start
-  let coinbase = block_template.create_coinbase(
-    100,          // height
-    5_000_000_000,  // 50 BTC
-    output_script,
-    None,         // no witness commitment
-  )
+  let output_script = oni_bitcoin.Script(<<0x76, 0xa9, 0x14>>)
+  // P2PKH start
+  let coinbase =
+    block_template.create_coinbase(
+      100,
+      // height
+      5_000_000_000,
+      // 50 BTC
+      output_script,
+      None,
+      // no witness commitment
+    )
 
   // Should have one input (coinbase)
   should.equal(list.length(coinbase.inputs), 1)
@@ -139,14 +155,16 @@ pub fn create_coinbase_basic_test() {
 
 pub fn create_coinbase_with_witness_commitment_test() {
   let output_script = oni_bitcoin.Script(<<0x76, 0xa9, 0x14>>)
-  let commitment = <<1:256>>  // Fake witness commitment
+  let commitment = <<1:256>>
+  // Fake witness commitment
 
-  let coinbase = block_template.create_coinbase(
-    100,
-    5_000_000_000,
-    output_script,
-    Some(commitment),
-  )
+  let coinbase =
+    block_template.create_coinbase(
+      100,
+      5_000_000_000,
+      output_script,
+      Some(commitment),
+    )
 
   // Should have two outputs (main + witness commitment)
   should.equal(list.length(coinbase.outputs), 2)
@@ -193,17 +211,17 @@ pub fn create_template_empty_mempool_test() {
   let pool = mempool.mempool_new()
 
   // Create minimal genesis hash for testing
-  let genesis_hash = oni_bitcoin.BlockHash(
-    oni_bitcoin.Hash256(<<0:256>>)
-  )
+  let genesis_hash = oni_bitcoin.BlockHash(oni_bitcoin.Hash256(<<0:256>>))
 
-  let params = block_template.TemplateParams(
-    prev_block_hash: genesis_hash,
-    height: 1,
-    cur_time: 1234567890,
-    bits: 0x1d00ffff,  // Genesis difficulty
-    coinbase_address: None,
-  )
+  let params =
+    block_template.TemplateParams(
+      prev_block_hash: genesis_hash,
+      height: 1,
+      cur_time: 1_234_567_890,
+      bits: 0x1d00ffff,
+      // Genesis difficulty
+      coinbase_address: None,
+    )
 
   let template = block_template.create_template(pool, params)
 
@@ -222,17 +240,16 @@ pub fn create_template_empty_mempool_test() {
 
 pub fn create_template_version_test() {
   let pool = mempool.mempool_new()
-  let genesis_hash = oni_bitcoin.BlockHash(
-    oni_bitcoin.Hash256(<<0:256>>)
-  )
+  let genesis_hash = oni_bitcoin.BlockHash(oni_bitcoin.Hash256(<<0:256>>))
 
-  let params = block_template.TemplateParams(
-    prev_block_hash: genesis_hash,
-    height: 100,
-    cur_time: 0,
-    bits: 0x1d00ffff,
-    coinbase_address: None,
-  )
+  let params =
+    block_template.TemplateParams(
+      prev_block_hash: genesis_hash,
+      height: 100,
+      cur_time: 0,
+      bits: 0x1d00ffff,
+      coinbase_address: None,
+    )
 
   let template = block_template.create_template(pool, params)
 
@@ -242,17 +259,16 @@ pub fn create_template_version_test() {
 
 pub fn create_template_prev_hash_test() {
   let pool = mempool.mempool_new()
-  let prev_hash = oni_bitcoin.BlockHash(
-    oni_bitcoin.Hash256(<<1:256>>)
-  )
+  let prev_hash = oni_bitcoin.BlockHash(oni_bitcoin.Hash256(<<1:256>>))
 
-  let params = block_template.TemplateParams(
-    prev_block_hash: prev_hash,
-    height: 500,
-    cur_time: 0,
-    bits: 0x1d00ffff,
-    coinbase_address: None,
-  )
+  let params =
+    block_template.TemplateParams(
+      prev_block_hash: prev_hash,
+      height: 500,
+      cur_time: 0,
+      bits: 0x1d00ffff,
+      coinbase_address: None,
+    )
 
   let template = block_template.create_template(pool, params)
 
@@ -262,17 +278,17 @@ pub fn create_template_prev_hash_test() {
 
 pub fn create_template_halved_subsidy_test() {
   let pool = mempool.mempool_new()
-  let genesis_hash = oni_bitcoin.BlockHash(
-    oni_bitcoin.Hash256(<<0:256>>)
-  )
+  let genesis_hash = oni_bitcoin.BlockHash(oni_bitcoin.Hash256(<<0:256>>))
 
-  let params = block_template.TemplateParams(
-    prev_block_hash: genesis_hash,
-    height: 210_000,  // First halving
-    cur_time: 0,
-    bits: 0x1d00ffff,
-    coinbase_address: None,
-  )
+  let params =
+    block_template.TemplateParams(
+      prev_block_hash: genesis_hash,
+      height: 210_000,
+      // First halving
+      cur_time: 0,
+      bits: 0x1d00ffff,
+      coinbase_address: None,
+    )
 
   let template = block_template.create_template(pool, params)
 

@@ -28,7 +28,33 @@ import gleam/string
 pub const message_magic = "Bitcoin Signed Message:\n"
 
 /// Magic prefix with length byte for hashing
-pub const message_magic_bytes = <<24, 66, 105, 116, 99, 111, 105, 110, 32, 83, 105, 103, 110, 101, 100, 32, 77, 101, 115, 115, 97, 103, 101, 58, 10>>
+pub const message_magic_bytes = <<
+  24,
+  66,
+  105,
+  116,
+  99,
+  111,
+  105,
+  110,
+  32,
+  83,
+  105,
+  103,
+  110,
+  101,
+  100,
+  32,
+  77,
+  101,
+  115,
+  115,
+  97,
+  103,
+  101,
+  58,
+  10,
+>>
 
 /// Signature header base for uncompressed keys
 pub const sig_header_uncompressed_base = 27
@@ -48,11 +74,7 @@ pub const sig_header_p2wpkh_base = 39
 
 /// A signed message
 pub type SignedMessage {
-  SignedMessage(
-    message: String,
-    signature: MessageSignature,
-    address: String,
-  )
+  SignedMessage(message: String, signature: MessageSignature, address: String)
 }
 
 /// A message signature (65 bytes: 1 byte header + 32 byte r + 32 byte s)
@@ -141,7 +163,9 @@ pub fn message_preimage(message: String) -> BitArray {
 // ============================================================================
 
 /// Parse a base64-encoded signature
-pub fn parse_signature(base64_sig: String) -> Result(MessageSignature, MessageError) {
+pub fn parse_signature(
+  base64_sig: String,
+) -> Result(MessageSignature, MessageError) {
   case base64_decode(base64_sig) {
     Error(_) -> Error(SignatureDecodeFailed)
     Ok(bytes) -> {
@@ -178,7 +202,9 @@ pub fn get_signature_s(sig: MessageSignature) -> Result(BitArray, MessageError) 
 }
 
 /// Determine address type from signature header
-pub fn address_type_from_header(header: Int) -> Result(#(AddressType, Bool, Int), MessageError) {
+pub fn address_type_from_header(
+  header: Int,
+) -> Result(#(AddressType, Bool, Int), MessageError) {
   case header {
     // Uncompressed P2PKH (27-30)
     h if h >= 27 && h <= 30 -> Ok(#(P2PKH, False, h - 27))
@@ -198,7 +224,9 @@ pub fn encode_signature(sig: MessageSignature) -> String {
 }
 
 /// Create a signature from raw bytes
-pub fn signature_from_bytes(bytes: BitArray) -> Result(MessageSignature, MessageError) {
+pub fn signature_from_bytes(
+  bytes: BitArray,
+) -> Result(MessageSignature, MessageError) {
   case bit_array.byte_size(bytes) {
     65 -> Ok(MessageSignature(bytes))
     _ -> Error(InvalidSignatureLength)
@@ -224,7 +252,7 @@ pub fn prepare_verification(
 
   // Determine address type
   use #(addr_type, compressed, recovery_id) <- result.try(
-    address_type_from_header(header)
+    address_type_from_header(header),
   )
 
   // Validate address format matches claimed type
@@ -262,30 +290,37 @@ fn validate_address_format(
 ) -> Result(Nil, MessageError) {
   case addr_type {
     P2PKH -> {
-      case string.starts_with(address, "1") ||
-           string.starts_with(address, "m") ||
-           string.starts_with(address, "n") {
+      case
+        string.starts_with(address, "1")
+        || string.starts_with(address, "m")
+        || string.starts_with(address, "n")
+      {
         True -> Ok(Nil)
         False -> Error(AddressMismatch)
       }
     }
     P2SHP2WPKH -> {
-      case string.starts_with(address, "3") ||
-           string.starts_with(address, "2") {
+      case
+        string.starts_with(address, "3") || string.starts_with(address, "2")
+      {
         True -> Ok(Nil)
         False -> Error(AddressMismatch)
       }
     }
     P2WPKH -> {
-      case string.starts_with(address, "bc1q") ||
-           string.starts_with(address, "tb1q") {
+      case
+        string.starts_with(address, "bc1q")
+        || string.starts_with(address, "tb1q")
+      {
         True -> Ok(Nil)
         False -> Error(AddressMismatch)
       }
     }
     P2TR -> {
-      case string.starts_with(address, "bc1p") ||
-           string.starts_with(address, "tb1p") {
+      case
+        string.starts_with(address, "bc1p")
+        || string.starts_with(address, "tb1p")
+      {
         True -> Ok(Nil)
         False -> Error(AddressMismatch)
       }
@@ -332,7 +367,8 @@ pub fn calculate_signature_header(
     P2PKH, True -> sig_header_compressed_base
     P2SHP2WPKH, _ -> sig_header_p2sh_p2wpkh_base
     P2WPKH, _ -> sig_header_p2wpkh_base
-    P2TR, _ -> sig_header_p2wpkh_base  // Taproot uses same range
+    P2TR, _ -> sig_header_p2wpkh_base
+    // Taproot uses same range
   }
   base + recovery_id
 }
@@ -359,7 +395,7 @@ pub fn validate_message(message: String) -> Result(Nil, MessageError) {
   let len = bit_array.byte_size(bytes)
 
   // Maximum message length (arbitrary but sensible limit)
-  case len <= 65536 {
+  case len <= 65_536 {
     True -> Ok(Nil)
     False -> Error(InvalidMessage)
   }
@@ -372,12 +408,15 @@ pub fn format_signed_message(
   signature: MessageSignature,
 ) -> String {
   let sig_base64 = encode_signature(signature)
-  "-----BEGIN BITCOIN SIGNED MESSAGE-----\n" <>
-  message <> "\n" <>
-  "-----BEGIN SIGNATURE-----\n" <>
-  address <> "\n" <>
-  sig_base64 <> "\n" <>
-  "-----END BITCOIN SIGNED MESSAGE-----"
+  "-----BEGIN BITCOIN SIGNED MESSAGE-----\n"
+  <> message
+  <> "\n"
+  <> "-----BEGIN SIGNATURE-----\n"
+  <> address
+  <> "\n"
+  <> sig_base64
+  <> "\n"
+  <> "-----END BITCOIN SIGNED MESSAGE-----"
 }
 
 /// Parse a formatted signed message
@@ -414,32 +453,87 @@ fn parse_signed_message_lines(
       case state {
         Idle -> {
           case string.contains(trimmed, "BEGIN BITCOIN SIGNED MESSAGE") {
-            True -> parse_signed_message_lines(rest, message, address, signature, ReadingMessage)
-            False -> parse_signed_message_lines(rest, message, address, signature, Idle)
+            True ->
+              parse_signed_message_lines(
+                rest,
+                message,
+                address,
+                signature,
+                ReadingMessage,
+              )
+            False ->
+              parse_signed_message_lines(
+                rest,
+                message,
+                address,
+                signature,
+                Idle,
+              )
           }
         }
         ReadingMessage -> {
           case string.contains(trimmed, "BEGIN SIGNATURE") {
-            True -> parse_signed_message_lines(rest, message, address, signature, ReadingSignature)
+            True ->
+              parse_signed_message_lines(
+                rest,
+                message,
+                address,
+                signature,
+                ReadingSignature,
+              )
             False -> {
               let new_message = case message {
                 None -> Some(trimmed)
                 Some(m) -> Some(m <> "\n" <> trimmed)
               }
-              parse_signed_message_lines(rest, new_message, address, signature, ReadingMessage)
+              parse_signed_message_lines(
+                rest,
+                new_message,
+                address,
+                signature,
+                ReadingMessage,
+              )
             }
           }
         }
         ReadingSignature -> {
           case string.contains(trimmed, "END BITCOIN SIGNED MESSAGE") {
-            True -> parse_signed_message_lines(rest, message, address, signature, Done)
+            True ->
+              parse_signed_message_lines(
+                rest,
+                message,
+                address,
+                signature,
+                Done,
+              )
             False -> {
               case address {
-                None -> parse_signed_message_lines(rest, message, Some(trimmed), signature, ReadingSignature)
+                None ->
+                  parse_signed_message_lines(
+                    rest,
+                    message,
+                    Some(trimmed),
+                    signature,
+                    ReadingSignature,
+                  )
                 Some(_) -> {
                   case signature {
-                    None -> parse_signed_message_lines(rest, message, address, Some(trimmed), ReadingSignature)
-                    Some(_) -> parse_signed_message_lines(rest, message, address, signature, ReadingSignature)
+                    None ->
+                      parse_signed_message_lines(
+                        rest,
+                        message,
+                        address,
+                        Some(trimmed),
+                        ReadingSignature,
+                      )
+                    Some(_) ->
+                      parse_signed_message_lines(
+                        rest,
+                        message,
+                        address,
+                        signature,
+                        ReadingSignature,
+                      )
                   }
                 }
               }

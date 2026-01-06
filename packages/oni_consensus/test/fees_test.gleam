@@ -1,8 +1,8 @@
 // Tests for fee estimation module
 
+import fees
 import gleeunit
 import gleeunit/should
-import fees
 
 pub fn main() {
   gleeunit.main()
@@ -164,10 +164,14 @@ pub fn build_histogram_empty_test() {
 pub fn build_histogram_with_txs_test() {
   // Create some test transactions (fee in sats, vsize)
   let txs = [
-    #(1000, 100),   // 10 sat/vB
-    #(2000, 100),   // 20 sat/vB
-    #(5000, 100),   // 50 sat/vB
-    #(10000, 100),  // 100 sat/vB
+    #(1000, 100),
+    // 10 sat/vB
+    #(2000, 100),
+    // 20 sat/vB
+    #(5000, 100),
+    // 50 sat/vB
+    #(10_000, 100),
+    // 100 sat/vB
   ]
 
   let histogram = fees.build_histogram(txs)
@@ -190,9 +194,12 @@ pub fn calculate_mempool_stats_empty_test() {
 
 pub fn calculate_mempool_stats_test() {
   let txs = [
-    #(1000, 100),   // 10 sat/vB
-    #(2000, 200),   // 10 sat/vB
-    #(3000, 100),   // 30 sat/vB
+    #(1000, 100),
+    // 10 sat/vB
+    #(2000, 200),
+    // 10 sat/vB
+    #(3000, 100),
+    // 30 sat/vB
   ]
 
   let stats = fees.calculate_mempool_stats(txs)
@@ -204,9 +211,12 @@ pub fn calculate_mempool_stats_test() {
 
 pub fn calculate_mempool_stats_min_max_test() {
   let txs = [
-    #(100, 100),    // 1 sat/vB (min)
-    #(1000, 100),   // 10 sat/vB
-    #(5000, 100),   // 50 sat/vB (max)
+    #(100, 100),
+    // 1 sat/vB (min)
+    #(1000, 100),
+    // 10 sat/vB
+    #(5000, 100),
+    // 50 sat/vB (max)
   ]
 
   let stats = fees.calculate_mempool_stats(txs)
@@ -232,6 +242,7 @@ pub fn parse_estimate_mode_test() {
 
 pub fn estimate_mode_to_string_test() {
   fees.estimate_mode_to_string(fees.Economical) |> should.equal("ECONOMICAL")
-  fees.estimate_mode_to_string(fees.Conservative) |> should.equal("CONSERVATIVE")
+  fees.estimate_mode_to_string(fees.Conservative)
+  |> should.equal("CONSERVATIVE")
   fees.estimate_mode_to_string(fees.Unset) |> should.equal("UNSET")
 }

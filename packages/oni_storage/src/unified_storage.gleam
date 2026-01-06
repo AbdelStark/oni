@@ -129,15 +129,9 @@ pub fn get_utxo(
             Error(_) -> #(storage, None)
             Ok(coin) -> {
               // Add to cache
-              let new_cache = oni_storage.utxo_add(
-                storage.utxo_cache,
-                outpoint,
-                coin,
-              )
-              #(
-                UnifiedStorage(..storage, utxo_cache: new_cache),
-                Some(coin),
-              )
+              let new_cache =
+                oni_storage.utxo_add(storage.utxo_cache, outpoint, coin)
+              #(UnifiedStorage(..storage, utxo_cache: new_cache), Some(coin))
             }
           }
         }
@@ -196,13 +190,15 @@ pub fn batch_utxo(
   removals: List(OutPoint),
 ) -> Result(UnifiedStorage, StorageError) {
   // Update cache
-  let cache_with_removals = list.fold(removals, storage.utxo_cache, fn(cache, op) {
-    oni_storage.utxo_remove(cache, op)
-  })
-  let cache_with_additions = list.fold(additions, cache_with_removals, fn(cache, entry) {
-    let #(op, coin) = entry
-    oni_storage.utxo_add(cache, op, coin)
-  })
+  let cache_with_removals =
+    list.fold(removals, storage.utxo_cache, fn(cache, op) {
+      oni_storage.utxo_remove(cache, op)
+    })
+  let cache_with_additions =
+    list.fold(additions, cache_with_removals, fn(cache, entry) {
+      let #(op, coin) = entry
+      oni_storage.utxo_add(cache, op, coin)
+    })
   let updated = UnifiedStorage(..storage, utxo_cache: cache_with_additions)
 
   // Write to persistent storage
@@ -319,10 +315,7 @@ pub fn get_best_height(storage: UnifiedStorage) -> Int {
 // ============================================================================
 
 /// Get undo data for a block
-pub fn get_undo(
-  storage: UnifiedStorage,
-  hash: BlockHash,
-) -> Option(BlockUndo) {
+pub fn get_undo(storage: UnifiedStorage, hash: BlockHash) -> Option(BlockUndo) {
   case storage.persistent {
     None -> None
     Some(handle) -> {
@@ -357,11 +350,8 @@ pub fn connect_block(
   height: Int,
 ) -> Result(#(UnifiedStorage, BlockUndo), StorageError) {
   // Collect UTXO changes
-  let #(additions, removals, tx_undos) = process_block_transactions(
-    storage,
-    block.transactions,
-    height,
-  )
+  let #(additions, removals, tx_undos) =
+    process_block_transactions(storage, block.transactions, height)
 
   // Create undo data
   let undo = oni_storage.BlockUndo(tx_undos: tx_undos)
@@ -371,15 +361,22 @@ pub fn connect_block(
 
   // Update chainstate
   let block_hash = oni_bitcoin.block_hash_from_header(block.header)
-  let new_chainstate = oni_storage.Chainstate(
-    ..updated_storage.chainstate,
-    best_block: block_hash,
-    best_height: height,
-    total_tx: updated_storage.chainstate.total_tx + list.length(block.transactions),
-    total_coins: updated_storage.chainstate.total_coins + list.length(additions) - list.length(removals),
-  )
+  let new_chainstate =
+    oni_storage.Chainstate(
+      ..updated_storage.chainstate,
+      best_block: block_hash,
+      best_height: height,
+      total_tx: updated_storage.chainstate.total_tx
+        + list.length(block.transactions),
+      total_coins: updated_storage.chainstate.total_coins
+        + list.length(additions)
+        - list.length(removals),
+    )
 
-  use final_storage <- result.try(update_chainstate(updated_storage, new_chainstate))
+  use final_storage <- result.try(update_chainstate(
+    updated_storage,
+    new_chainstate,
+  ))
 
   // Store undo data
   case put_undo(final_storage, block_hash, undo) {
@@ -403,13 +400,17 @@ pub fn disconnect_block(
   use updated_storage <- result.try(batch_utxo(storage, additions, removals))
 
   // Update chainstate
-  let new_chainstate = oni_storage.Chainstate(
-    ..updated_storage.chainstate,
-    best_block: prev_hash,
-    best_height: prev_height,
-    total_tx: updated_storage.chainstate.total_tx - list.length(block.transactions),
-    total_coins: updated_storage.chainstate.total_coins + list.length(removals) - list.length(additions),
-  )
+  let new_chainstate =
+    oni_storage.Chainstate(
+      ..updated_storage.chainstate,
+      best_block: prev_hash,
+      best_height: prev_height,
+      total_tx: updated_storage.chainstate.total_tx
+        - list.length(block.transactions),
+      total_coins: updated_storage.chainstate.total_coins
+        + list.length(removals)
+        - list.length(additions),
+    )
 
   update_chainstate(updated_storage, new_chainstate)
 }
@@ -437,56 +438,53 @@ fn process_block_transactions(
   transactions: List(Transaction),
   height: Int,
 ) -> #(List(#(OutPoint, Coin)), List(OutPoint), List(oni_storage.TxUndo)) {
-  list.index_fold(
-    transactions,
-    #([], [], []),
-    fn(acc, tx, tx_index) {
-      let #(additions, removals, undos) = acc
-      let is_coinbase = tx_index == 0
+  list.index_fold(transactions, #([], [], []), fn(acc, tx, tx_index) {
+    let #(additions, removals, undos) = acc
+    let is_coinbase = tx_index == 0
 
-      // Get spent coins for undo data (skip coinbase)
-      let input_undos = case is_coinbase {
-        True -> []
-        False -> {
-          list.map(tx.inputs, fn(input) {
-            let #(_, maybe_coin) = get_utxo(storage, input.prevout)
-            oni_storage.TxInputUndo(
-              prevout: maybe_coin,
-            )
-          })
-        }
+    // Get spent coins for undo data (skip coinbase)
+    let input_undos = case is_coinbase {
+      True -> []
+      False -> {
+        list.filter_map(tx.inputs, fn(input) {
+          let #(_, maybe_coin) = get_utxo(storage, input.prevout)
+          case maybe_coin {
+            Some(coin) -> Ok(oni_storage.TxInputUndo(coin: coin))
+            None -> Error(Nil)
+          }
+        })
       }
+    }
 
-      // Remove spent outputs (skip coinbase inputs)
-      let new_removals = case is_coinbase {
-        True -> removals
-        False -> {
-          list.append(
-            removals,
-            list.map(tx.inputs, fn(input) { input.prevout }),
-          )
-        }
+    // Remove spent outputs (skip coinbase inputs)
+    let new_removals = case is_coinbase {
+      True -> removals
+      False -> {
+        list.append(removals, list.map(tx.inputs, fn(input) { input.prevout }))
       }
+    }
 
-      // Add new outputs
-      let txid = oni_bitcoin.txid_from_tx(tx)
-      let new_additions = list.index_fold(tx.outputs, additions, fn(add_acc, output, vout) {
+    // Add new outputs
+    let txid = oni_bitcoin.txid_from_tx(tx)
+    let new_additions =
+      list.index_fold(tx.outputs, additions, fn(add_acc, output, vout) {
         let outpoint = oni_bitcoin.OutPoint(txid: txid, vout: vout)
-        let coin = oni_storage.Coin(
-          output: output,
-          height: height,
-          is_coinbase: is_coinbase,
-        )
+        let coin =
+          oni_storage.Coin(
+            output: output,
+            height: height,
+            is_coinbase: is_coinbase,
+          )
         list.append(add_acc, [#(outpoint, coin)])
       })
 
-      let new_undos = list.append(undos, [
-        oni_storage.TxUndo(inputs: input_undos),
+    let new_undos =
+      list.append(undos, [
+        oni_storage.TxUndo(spent_coins: input_undos),
       ])
 
-      #(new_additions, new_removals, new_undos)
-    },
-  )
+    #(new_additions, new_removals, new_undos)
+  })
 }
 
 /// Reverse block transactions for disconnect
@@ -495,30 +493,27 @@ fn reverse_block_transactions(
   undo: BlockUndo,
 ) -> #(List(#(OutPoint, Coin)), List(OutPoint)) {
   // Removals: the outputs created by this block
-  let removals = list.flatten(
-    list.index_map(block.transactions, fn(tx, _) {
-      let txid = oni_bitcoin.txid_from_tx(tx)
-      list.index_map(tx.outputs, fn(_, vout) {
-        oni_bitcoin.OutPoint(txid: txid, vout: vout)
-      })
-    }),
-  )
+  let removals =
+    list.flatten(
+      list.index_map(block.transactions, fn(tx, _) {
+        let txid = oni_bitcoin.txid_from_tx(tx)
+        list.index_map(tx.outputs, fn(_, vout) {
+          oni_bitcoin.OutPoint(txid: txid, vout: vout)
+        })
+      }),
+    )
 
   // Additions: restore the spent inputs (from undo data)
-  let additions = list.flatten(
+  let additions =
     list.zip(block.transactions, undo.tx_undos)
     |> list.flat_map(fn(pair) {
       let #(tx, tx_undo) = pair
-      list.zip(tx.inputs, tx_undo.inputs)
-      |> list.filter_map(fn(input_pair) {
+      list.zip(tx.inputs, tx_undo.spent_coins)
+      |> list.map(fn(input_pair) {
         let #(input, input_undo) = input_pair
-        case input_undo.prevout {
-          Some(coin) -> Ok(#(input.prevout, coin))
-          None -> Error(Nil)
-        }
+        #(input.prevout, input_undo.coin)
       })
-    }),
-  )
+    })
 
   #(additions, removals)
 }

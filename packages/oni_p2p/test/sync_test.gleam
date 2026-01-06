@@ -1,7 +1,7 @@
-import gleeunit
-import gleeunit/should
 import gleam/list
 import gleam/option.{None, Some}
+import gleeunit
+import gleeunit/should
 import oni_bitcoin
 import oni_p2p
 import sync
@@ -27,13 +27,17 @@ fn make_block_hash(n: Int) -> oni_bitcoin.BlockHash {
 }
 
 // Helper function for creating test headers (used in future tests)
-pub fn make_test_header(prev: oni_bitcoin.BlockHash, nonce: Int) -> oni_p2p.BlockHeaderNet {
+pub fn make_test_header(
+  prev: oni_bitcoin.BlockHash,
+  nonce: Int,
+) -> oni_p2p.BlockHeaderNet {
   oni_p2p.BlockHeaderNet(
     version: 1,
     prev_block: prev,
     merkle_root: oni_bitcoin.Hash256(<<0:256>>),
-    timestamp: 1234567890,
-    bits: 0x1d00ffff,  // Mainnet genesis difficulty
+    timestamp: 1_234_567_890,
+    bits: 0x1d00ffff,
+    // Mainnet genesis difficulty
     nonce: nonce,
   )
 }
@@ -141,15 +145,18 @@ pub fn download_manager_next_for_peer_test() {
 
   let dm_with_requests = sync.download_manager_add(dm, requests)
   let peer = oni_p2p.peer_id("test-peer")
-  let current_time = 1_000_000  // 1 second in milliseconds
+  let current_time = 1_000_000
+  // 1 second in milliseconds
 
-  let #(updated_dm, assigned) = sync.download_manager_next_for_peer(dm_with_requests, peer, 2, current_time)
+  let #(updated_dm, assigned) =
+    sync.download_manager_next_for_peer(dm_with_requests, peer, 2, current_time)
 
   // Should have assigned 2 blocks
   list.length(assigned) |> should.equal(2)
 
   // Should have 1 remaining in queue
-  sync.download_manager_pending_count(updated_dm) |> should.equal(3)  // 2 in-flight + 1 queued
+  sync.download_manager_pending_count(updated_dm) |> should.equal(3)
+  // 2 in-flight + 1 queued
 }
 
 // ============================================================================
@@ -163,10 +170,12 @@ pub fn stall_detection_no_stalls_test() {
   let peer = oni_p2p.peer_id("test-peer")
 
   // Request at time 0
-  let #(dm_in_flight, _) = sync.download_manager_next_for_peer(dm_with_requests, peer, 1, 0)
+  let #(dm_in_flight, _) =
+    sync.download_manager_next_for_peer(dm_with_requests, peer, 1, 0)
 
   // Check at time 60 seconds (well under 2 minute timeout)
-  let #(_dm_after, stalled) = sync.download_manager_check_stalls(dm_in_flight, 60_000)
+  let #(_dm_after, stalled) =
+    sync.download_manager_check_stalls(dm_in_flight, 60_000)
 
   // Should not detect any stalls
   list.length(stalled) |> should.equal(0)
@@ -182,10 +191,12 @@ pub fn stall_detection_with_stalls_test() {
   let peer = oni_p2p.peer_id("test-peer")
 
   // Request at time 0
-  let #(dm_in_flight, _) = sync.download_manager_next_for_peer(dm_with_requests, peer, 2, 0)
+  let #(dm_in_flight, _) =
+    sync.download_manager_next_for_peer(dm_with_requests, peer, 2, 0)
 
   // Check at time 3 minutes (over 2 minute timeout)
-  let #(dm_after, stalled) = sync.download_manager_check_stalls(dm_in_flight, 180_000)
+  let #(dm_after, stalled) =
+    sync.download_manager_check_stalls(dm_in_flight, 180_000)
 
   // Should detect 2 stalled requests
   list.length(stalled) |> should.equal(2)
@@ -204,7 +215,8 @@ pub fn stall_detection_partial_stalls_test() {
   let peer = oni_p2p.peer_id("test-peer")
 
   // Request first block at time 0
-  let #(dm1, _) = sync.download_manager_next_for_peer(dm_with_requests, peer, 1, 0)
+  let #(dm1, _) =
+    sync.download_manager_next_for_peer(dm_with_requests, peer, 1, 0)
 
   // Request second block at time 150 seconds
   let #(dm2, _) = sync.download_manager_next_for_peer(dm1, peer, 1, 150_000)
@@ -260,7 +272,8 @@ pub fn peer_is_healthy_new_peer_test() {
 
 pub fn peer_is_healthy_good_peer_test() {
   // Peer with good speed and no timeouts
-  let perf = sync.peer_performance_new()
+  let perf =
+    sync.peer_performance_new()
     |> sync.peer_performance_record_success(100_000, 100, 1000)
     |> sync.peer_performance_record_success(100_000, 100, 2000)
     |> sync.peer_performance_record_success(100_000, 100, 3000)
@@ -270,8 +283,10 @@ pub fn peer_is_healthy_good_peer_test() {
 
 pub fn peer_is_healthy_slow_peer_test() {
   // Peer with very slow speed (less than 1KB/s)
-  let perf = sync.peer_performance_new()
-    |> sync.peer_performance_record_success(500, 1000, 1000)  // 500 bytes/sec
+  let perf =
+    sync.peer_performance_new()
+    |> sync.peer_performance_record_success(500, 1000, 1000)
+    // 500 bytes/sec
     |> sync.peer_performance_record_success(500, 1000, 2000)
     |> sync.peer_performance_record_success(500, 1000, 3000)
 
@@ -281,7 +296,8 @@ pub fn peer_is_healthy_slow_peer_test() {
 
 pub fn peer_is_healthy_high_timeout_test() {
   // Peer with too many timeouts
-  let perf = sync.peer_performance_new()
+  let perf =
+    sync.peer_performance_new()
     |> sync.peer_performance_record_success(10_000, 100, 1000)
     |> sync.peer_performance_record_timeout(2000)
     |> sync.peer_performance_record_timeout(3000)
@@ -293,10 +309,12 @@ pub fn peer_is_healthy_high_timeout_test() {
 
 pub fn peer_performance_score_test() {
   // Score is based on speed minus penalty for timeouts
-  let good_perf = sync.peer_performance_new()
+  let good_perf =
+    sync.peer_performance_new()
     |> sync.peer_performance_record_success(100_000, 100, 1000)
 
-  let bad_perf = sync.peer_performance_new()
+  let bad_perf =
+    sync.peer_performance_new()
     |> sync.peer_performance_record_timeout(1000)
     |> sync.peer_performance_record_timeout(2000)
 
@@ -377,7 +395,8 @@ pub fn find_common_ancestor_fork_test() {
   let chain2 = [
     make_block_hash(0),
     make_block_hash(1),
-    make_block_hash(99),  // Different block at height 2
+    make_block_hash(99),
+    // Different block at height 2
   ]
 
   case sync.find_common_ancestor(chain1, chain2) {
@@ -407,7 +426,8 @@ pub fn calculate_reorg_test() {
   let new_chain = [
     make_block_hash(0),
     make_block_hash(1),
-    make_block_hash(100),  // Fork starts here
+    make_block_hash(100),
+    // Fork starts here
     make_block_hash(101),
     make_block_hash(102),
   ]

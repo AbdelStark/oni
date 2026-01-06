@@ -1,17 +1,16 @@
 // persistent_storage_test.gleam - Tests for persistent storage layer
 
+import gleam/option.{None, Some}
 import gleeunit
 import gleeunit/should
-import gleam/option.{None, Some}
-import persistent_storage.{
-  block_index_get, block_index_has, block_index_put,
-  chainstate_get, chainstate_put,
-  persistent_storage_close, persistent_storage_open, persistent_storage_sync,
-  undo_delete, undo_get, undo_put,
-  utxo_batch, utxo_count, utxo_delete, utxo_get, utxo_has, utxo_put,
-}
 import oni_bitcoin
 import oni_storage
+import persistent_storage.{
+  block_index_get, block_index_has, block_index_put, chainstate_get,
+  chainstate_put, persistent_storage_close, persistent_storage_open,
+  persistent_storage_sync, undo_delete, undo_get, undo_put, utxo_batch,
+  utxo_count, utxo_delete, utxo_get, utxo_has, utxo_put,
+}
 
 pub fn main() {
   gleeunit.main()
@@ -77,9 +76,24 @@ pub fn utxo_count_test() {
   should.equal(count0, 0)
 
   // Add some UTXOs
-  let assert Ok(_) = utxo_put(handle, create_test_outpoint(1, 0), create_test_coin(100, 1, False))
-  let assert Ok(_) = utxo_put(handle, create_test_outpoint(2, 0), create_test_coin(200, 2, False))
-  let assert Ok(_) = utxo_put(handle, create_test_outpoint(3, 0), create_test_coin(300, 3, False))
+  let assert Ok(_) =
+    utxo_put(
+      handle,
+      create_test_outpoint(1, 0),
+      create_test_coin(100, 1, False),
+    )
+  let assert Ok(_) =
+    utxo_put(
+      handle,
+      create_test_outpoint(2, 0),
+      create_test_coin(200, 2, False),
+    )
+  let assert Ok(_) =
+    utxo_put(
+      handle,
+      create_test_outpoint(3, 0),
+      create_test_coin(300, 3, False),
+    )
 
   let assert Ok(count3) = utxo_count(handle)
   should.equal(count3, 3)
@@ -105,11 +119,8 @@ pub fn utxo_batch_test() {
   let coin2 = create_test_coin(200, 2, False)
   let coin3 = create_test_coin(300, 3, False)
 
-  let assert Ok(_) = utxo_batch(
-    handle,
-    [#(outpoint2, coin2), #(outpoint3, coin3)],
-    [outpoint1],
-  )
+  let assert Ok(_) =
+    utxo_batch(handle, [#(outpoint2, coin2), #(outpoint3, coin3)], [outpoint1])
 
   // Verify batch results
   should.be_false(utxo_has(handle, outpoint1))
@@ -219,15 +230,16 @@ pub fn chainstate_put_and_get_test() {
   let assert Ok(handle) = persistent_storage_open(path)
 
   let genesis_hash = create_test_block_hash(0)
-  let chainstate = oni_storage.Chainstate(
-    best_block: genesis_hash,
-    best_height: 0,
-    total_tx: 1,
-    total_coins: 1,
-    total_amount: 5_000_000_000,
-    pruned: False,
-    pruned_height: None,
-  )
+  let chainstate =
+    oni_storage.Chainstate(
+      best_block: genesis_hash,
+      best_height: 0,
+      total_tx: 1,
+      total_coins: 1,
+      total_amount: 5_000_000_000,
+      pruned: False,
+      pruned_height: None,
+    )
 
   // Put chainstate
   let assert Ok(_) = chainstate_put(handle, chainstate)
@@ -252,27 +264,29 @@ pub fn chainstate_update_test() {
   let assert Ok(handle) = persistent_storage_open(path)
 
   let genesis_hash = create_test_block_hash(0)
-  let chainstate1 = oni_storage.Chainstate(
-    best_block: genesis_hash,
-    best_height: 0,
-    total_tx: 1,
-    total_coins: 1,
-    total_amount: 5_000_000_000,
-    pruned: False,
-    pruned_height: None,
-  )
+  let chainstate1 =
+    oni_storage.Chainstate(
+      best_block: genesis_hash,
+      best_height: 0,
+      total_tx: 1,
+      total_coins: 1,
+      total_amount: 5_000_000_000,
+      pruned: False,
+      pruned_height: None,
+    )
 
   let assert Ok(_) = chainstate_put(handle, chainstate1)
 
   // Update chainstate
   let new_hash = create_test_block_hash(1)
-  let chainstate2 = oni_storage.Chainstate(
-    ..chainstate1,
-    best_block: new_hash,
-    best_height: 1,
-    total_tx: 5,
-    total_coins: 10,
-  )
+  let chainstate2 =
+    oni_storage.Chainstate(
+      ..chainstate1,
+      best_block: new_hash,
+      best_height: 1,
+      total_tx: 5,
+      total_coins: 10,
+    )
 
   let assert Ok(_) = chainstate_put(handle, chainstate2)
 
@@ -291,15 +305,16 @@ pub fn chainstate_persists_test() {
   cleanup_dir(path)
 
   let genesis_hash = create_test_block_hash(0)
-  let chainstate = oni_storage.Chainstate(
-    best_block: genesis_hash,
-    best_height: 500,
-    total_tx: 1000,
-    total_coins: 2000,
-    total_amount: 10_000_000_000,
-    pruned: False,
-    pruned_height: None,
-  )
+  let chainstate =
+    oni_storage.Chainstate(
+      best_block: genesis_hash,
+      best_height: 500,
+      total_tx: 1000,
+      total_coins: 2000,
+      total_amount: 10_000_000_000,
+      pruned: False,
+      pruned_height: None,
+    )
 
   // Open, write, close
   let assert Ok(handle1) = persistent_storage_open(path)
@@ -329,7 +344,8 @@ pub fn undo_put_and_get_test() {
 
   let block_hash = create_test_block_hash(1)
   let coin = create_test_coin(1000, 50, False)
-  let tx_undo = oni_storage.TxUndo(spent_coins: [oni_storage.TxInputUndo(coin: coin)])
+  let tx_undo =
+    oni_storage.TxUndo(spent_coins: [oni_storage.TxInputUndo(coin: coin)])
   let block_undo = oni_storage.BlockUndo(tx_undos: [tx_undo])
 
   // Put undo data
@@ -378,10 +394,11 @@ pub fn undo_persists_test() {
   let block_hash = create_test_block_hash(3)
   let coin1 = create_test_coin(100, 10, False)
   let coin2 = create_test_coin(200, 20, True)
-  let tx_undo = oni_storage.TxUndo(spent_coins: [
-    oni_storage.TxInputUndo(coin: coin1),
-    oni_storage.TxInputUndo(coin: coin2),
-  ])
+  let tx_undo =
+    oni_storage.TxUndo(spent_coins: [
+      oni_storage.TxInputUndo(coin: coin1),
+      oni_storage.TxInputUndo(coin: coin2),
+    ])
   let block_undo = oni_storage.BlockUndo(tx_undos: [tx_undo])
 
   // Open, write, close
@@ -413,7 +430,11 @@ fn create_test_outpoint(tx_num: Int, vout: Int) -> oni_bitcoin.OutPoint {
 }
 
 /// Create a test coin
-fn create_test_coin(value: Int, height: Int, is_coinbase: Bool) -> oni_storage.Coin {
+fn create_test_coin(
+  value: Int,
+  height: Int,
+  is_coinbase: Bool,
+) -> oni_storage.Coin {
   oni_storage.Coin(
     output: oni_bitcoin.TxOut(
       value: oni_bitcoin.Amount(sats: value),
@@ -441,7 +462,7 @@ fn create_test_block_index_entry(height: Int) -> oni_storage.BlockIndexEntry {
     total_work: 1000 * height,
     file_pos: Some(height * 1000),
     undo_pos: Some(height * 100),
-    timestamp: 1234567890 + height,
+    timestamp: 1_234_567_890 + height,
     bits: 0x207fffff,
     nonce: height * 17,
     version: 1,

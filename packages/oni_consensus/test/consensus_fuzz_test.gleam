@@ -54,7 +54,8 @@ pub fn script_parse_push_data_truncated_test() {
   let script = <<0x05, 0x01, 0x02, 0x03>>
   case oni_consensus.parse_script(script) {
     Error(_) -> should.be_ok(Ok(Nil))
-    Ok(_) -> should.fail()  // Should fail due to truncation
+    Ok(_) -> should.fail()
+    // Should fail due to truncation
   }
 }
 
@@ -101,7 +102,8 @@ pub fn script_parse_max_script_element_size_test() {
   let script = bit_array.concat([<<0x4d, 0x08, 0x02>>, data])
   case oni_consensus.parse_script(script) {
     Ok(_) -> should.be_ok(Ok(Nil))
-    Error(_) -> should.be_ok(Ok(Nil))  // Also acceptable if strict
+    Error(_) -> should.be_ok(Ok(Nil))
+    // Also acceptable if strict
   }
 }
 
@@ -111,7 +113,8 @@ pub fn script_parse_exceeds_max_element_size_test() {
   let script = bit_array.concat([<<0x4d, 0x09, 0x02>>, data])
   case oni_consensus.parse_script(script) {
     Error(_) -> should.be_ok(Ok(Nil))
-    Ok(_) -> should.be_ok(Ok(Nil))  // May parse but fail on execution
+    Ok(_) -> should.be_ok(Ok(Nil))
+    // May parse but fail on execution
   }
 }
 
@@ -120,13 +123,15 @@ pub fn script_parse_max_script_size_test() {
   let script = create_bytes(10_000)
   case oni_consensus.parse_script(script) {
     Ok(_) -> should.be_ok(Ok(Nil))
-    Error(_) -> should.be_ok(Ok(Nil))  // Also acceptable
+    Error(_) -> should.be_ok(Ok(Nil))
+    // Also acceptable
   }
 }
 
 pub fn script_parse_nested_if_without_endif_test() {
   // Multiple IF without ENDIF
-  let script = <<0x51, 0x63, 0x63, 0x63>>  // OP_1 OP_IF OP_IF OP_IF
+  let script = <<0x51, 0x63, 0x63, 0x63>>
+  // OP_1 OP_IF OP_IF OP_IF
   case oni_consensus.parse_script(script) {
     // Should parse (syntax is valid), but execution would fail
     Ok(_) -> should.be_ok(Ok(Nil))
@@ -143,8 +148,27 @@ pub fn execute_max_stack_test() {
   // We can't easily create a 1000-element script here, so test a smaller case
   let flags = oni_consensus.default_script_flags()
   // Push 10 elements then drop them
-  let script = <<0x51, 0x51, 0x51, 0x51, 0x51, 0x51, 0x51, 0x51, 0x51, 0x51,
-                 0x75, 0x75, 0x75, 0x75, 0x75, 0x75, 0x75, 0x75, 0x75>>
+  let script = <<
+    0x51,
+    0x51,
+    0x51,
+    0x51,
+    0x51,
+    0x51,
+    0x51,
+    0x51,
+    0x51,
+    0x51,
+    0x75,
+    0x75,
+    0x75,
+    0x75,
+    0x75,
+    0x75,
+    0x75,
+    0x75,
+    0x75,
+  >>
   let ctx = oni_consensus.script_context_new(script, flags)
   let result = oni_consensus.execute_script(ctx)
   result |> should.be_ok
@@ -157,7 +181,7 @@ pub fn execute_disabled_opcode_test() {
   // Test OP_CAT (0x7e)
   let ctx = oni_consensus.script_context_new(<<0x51, 0x51, 0x7e>>, flags)
   case oni_consensus.execute_script(ctx) {
-    Error(oni_consensus.ScriptDisabledOpcode(_)) -> should.be_ok(Ok(Nil))
+    Error(oni_consensus.ScriptDisabledOpcode) -> should.be_ok(Ok(Nil))
     Error(_) -> should.be_ok(Ok(Nil))
     Ok(_) -> should.fail()
   }
@@ -167,11 +191,27 @@ pub fn execute_op_return_data_test() {
   // OP_RETURN with data should fail
   let flags = oni_consensus.default_script_flags()
   // OP_RETURN followed by some data
-  let script = <<0x6a, 0x0e, 0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x20,
-                 0x77, 0x6f, 0x72, 0x6c, 0x64, 0x21, 0x21, 0x21>>
+  let script = <<
+    0x6a,
+    0x0e,
+    0x68,
+    0x65,
+    0x6c,
+    0x6c,
+    0x6f,
+    0x20,
+    0x77,
+    0x6f,
+    0x72,
+    0x6c,
+    0x64,
+    0x21,
+    0x21,
+    0x21,
+  >>
   let ctx = oni_consensus.script_context_new(script, flags)
   case oni_consensus.execute_script(ctx) {
-    Error(oni_consensus.ScriptOpReturnEncountered) -> should.be_ok(Ok(Nil))
+    Error(oni_consensus.ScriptInvalid) -> should.be_ok(Ok(Nil))
     Error(_) -> should.be_ok(Ok(Nil))
     Ok(_) -> should.fail()
   }
@@ -195,11 +235,14 @@ pub fn execute_arithmetic_overflow_test() {
   let flags = oni_consensus.default_script_flags()
   // Push max int32 (0x7FFFFFFF) and add 1 - should handle overflow
   // In script number format: 0x04 0xFF 0xFF 0xFF 0x7F
-  let script = <<0x04, 0xff, 0xff, 0xff, 0x7f, 0x8b>>  // push max_int32, OP_1ADD
+  let script = <<0x04, 0xff, 0xff, 0xff, 0x7f, 0x8b>>
+  // push max_int32, OP_1ADD
   let ctx = oni_consensus.script_context_new(script, flags)
   case oni_consensus.execute_script(ctx) {
-    Ok(_) -> should.be_ok(Ok(Nil))  // May succeed with larger int
-    Error(_) -> should.be_ok(Ok(Nil))  // Or fail on overflow
+    Ok(_) -> should.be_ok(Ok(Nil))
+    // May succeed with larger int
+    Error(_) -> should.be_ok(Ok(Nil))
+    // Or fail on overflow
   }
 }
 
@@ -220,7 +263,8 @@ pub fn script_num_encode_max_positive_test() {
 pub fn script_num_encode_min_negative_test() {
   // -2147483648
   let encoded = oni_consensus.encode_script_num(-2_147_483_648)
-  bit_array.byte_size(encoded) |> should.equal(5)  // Needs extra byte for sign
+  bit_array.byte_size(encoded) |> should.equal(5)
+  // Needs extra byte for sign
 }
 
 pub fn script_num_decode_empty_test() {
@@ -248,8 +292,8 @@ pub fn script_num_roundtrip_test() {
   test_script_num_roundtrip(255)
   test_script_num_roundtrip(256)
   test_script_num_roundtrip(-256)
-  test_script_num_roundtrip(32767)
-  test_script_num_roundtrip(-32768)
+  test_script_num_roundtrip(32_767)
+  test_script_num_roundtrip(-32_768)
   test_script_num_roundtrip(2_147_483_647)
   test_script_num_roundtrip(-2_147_483_647)
 }
@@ -297,20 +341,40 @@ pub fn tx_decode_truncated_input_count_test() {
 
 pub fn tx_decode_zero_inputs_and_outputs_test() {
   // Version + 0 inputs + 0 outputs + locktime (should fail - invalid tx)
-  let tx = <<0x01, 0x00, 0x00, 0x00,  // version 1
-             0x00,                      // 0 inputs
-             0x00,                      // 0 outputs
-             0x00, 0x00, 0x00, 0x00>>   // locktime
+  let tx = <<
+    0x01,
+    0x00,
+    0x00,
+    0x00,
+    // version 1
+    0x00,
+    // 0 inputs
+    0x00,
+    // 0 outputs
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+  >>
+  // locktime
   case oni_bitcoin.decode_tx(tx) {
     Error(_) -> should.be_ok(Ok(Nil))
-    Ok(_) -> should.be_ok(Ok(Nil))  // May parse but validation would fail
+    Ok(_) -> should.be_ok(Ok(Nil))
+    // May parse but validation would fail
   }
 }
 
 pub fn tx_decode_witness_marker_no_flag_test() {
   // SegWit marker (0x00) but missing flag byte
-  let tx = <<0x01, 0x00, 0x00, 0x00,  // version
-             0x00>>                     // marker, but no flag
+  let tx = <<
+    0x01,
+    0x00,
+    0x00,
+    0x00,
+    // version
+    0x00,
+  >>
+  // marker, but no flag
   case oni_bitcoin.decode_tx(tx) {
     Error(_) -> should.be_ok(Ok(Nil))
     Ok(_) -> should.fail()
@@ -319,19 +383,41 @@ pub fn tx_decode_witness_marker_no_flag_test() {
 
 pub fn tx_decode_large_input_count_test() {
   // Claim to have 0xFFFFFFFF inputs (will fail due to bounds)
-  let tx = <<0x01, 0x00, 0x00, 0x00,  // version
-             0xff, 0xff, 0xff, 0xff, 0xff>>  // Huge compact size
+  let tx = <<
+    0x01,
+    0x00,
+    0x00,
+    0x00,
+    // version
+    0xff,
+    0xff,
+    0xff,
+    0xff,
+    0xff,
+  >>
+  // Huge compact size
   case oni_bitcoin.decode_tx(tx) {
     Error(_) -> should.be_ok(Ok(Nil))
-    Ok(_) -> should.fail()  // Should fail bounds check
+    Ok(_) -> should.fail()
+    // Should fail bounds check
   }
 }
 
 pub fn tx_decode_truncated_prevout_test() {
   // 1 input but prevout is truncated
-  let tx = <<0x01, 0x00, 0x00, 0x00,  // version
-             0x01,                      // 1 input
-             0x00, 0x00, 0x00>>         // only 3 bytes of 36-byte prevout
+  let tx = <<
+    0x01,
+    0x00,
+    0x00,
+    0x00,
+    // version
+    0x01,
+    // 1 input
+    0x00,
+    0x00,
+    0x00,
+  >>
+  // only 3 bytes of 36-byte prevout
   case oni_bitcoin.decode_tx(tx) {
     Error(_) -> should.be_ok(Ok(Nil))
     Ok(_) -> should.fail()
@@ -341,19 +427,51 @@ pub fn tx_decode_truncated_prevout_test() {
 pub fn tx_decode_negative_output_value_test() {
   // Transaction with negative output value (invalid)
   // This tests the Amount bounds checking
-  let tx = <<0x01, 0x00, 0x00, 0x00,   // version
-             0x01,                       // 1 input
-             0:256,                      // null prevout txid
-             0xff, 0xff, 0xff, 0xff,     // prevout vout
-             0x00,                       // empty scriptsig
-             0xff, 0xff, 0xff, 0xff,     // sequence
-             0x01,                       // 1 output
-             0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,  // max uint64 (negative in signed)
-             0x00,                       // empty scriptpubkey
-             0x00, 0x00, 0x00, 0x00>>    // locktime
+  let tx = <<
+    0x01,
+    0x00,
+    0x00,
+    0x00,
+    // version
+    0x01,
+    // 1 input
+    0:256,
+    // null prevout txid
+    0xff,
+    0xff,
+    0xff,
+    0xff,
+    // prevout vout
+    0x00,
+    // empty scriptsig
+    0xff,
+    0xff,
+    0xff,
+    0xff,
+    // sequence
+    0x01,
+    // 1 output
+    0xff,
+    0xff,
+    0xff,
+    0xff,
+    0xff,
+    0xff,
+    0xff,
+    0xff,
+    // max uint64 (negative in signed)
+    0x00,
+    // empty scriptpubkey
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+  >>
+  // locktime
   case oni_bitcoin.decode_tx(tx) {
     Error(_) -> should.be_ok(Ok(Nil))
-    Ok(_) -> should.be_ok(Ok(Nil))  // Parsing may succeed, validation fails
+    Ok(_) -> should.be_ok(Ok(Nil))
+    // Parsing may succeed, validation fails
   }
 }
 
@@ -370,7 +488,8 @@ pub fn header_decode_empty_test() {
 
 pub fn header_decode_truncated_test() {
   // Less than 80 bytes
-  case oni_bitcoin.decode_block_header(<<0:320>>) {  // 40 bytes
+  case oni_bitcoin.decode_block_header(<<0:320>>) {
+    // 40 bytes
     Error(_) -> should.be_ok(Ok(Nil))
     Ok(_) -> should.fail()
   }
@@ -381,7 +500,8 @@ pub fn header_decode_exact_size_test() {
   let header = create_bytes(80)
   case oni_bitcoin.decode_block_header(header) {
     Ok(_) -> should.be_ok(Ok(Nil))
-    Error(_) -> should.be_ok(Ok(Nil))  // May fail due to invalid data
+    Error(_) -> should.be_ok(Ok(Nil))
+    // May fail due to invalid data
   }
 }
 
@@ -454,8 +574,8 @@ pub fn compact_size_roundtrip_test() {
   test_compact_size_roundtrip(0)
   test_compact_size_roundtrip(252)
   test_compact_size_roundtrip(253)
-  test_compact_size_roundtrip(65535)
-  test_compact_size_roundtrip(65536)
+  test_compact_size_roundtrip(65_535)
+  test_compact_size_roundtrip(65_536)
   test_compact_size_roundtrip(4_294_967_295)
 }
 
@@ -478,15 +598,18 @@ fn test_compact_size_roundtrip(n: Int) -> Nil {
 
 pub fn sighash_type_all_variants_test() {
   // All standard sighash types should parse
-  oni_consensus.sighash_type_from_byte(0x01) |> should.equal(oni_consensus.SighashAll)
-  oni_consensus.sighash_type_from_byte(0x02) |> should.equal(oni_consensus.SighashNone)
-  oni_consensus.sighash_type_from_byte(0x03) |> should.equal(oni_consensus.SighashSingle)
+  oni_consensus.sighash_type_from_byte(0x01)
+  |> should.equal(oni_consensus.SighashAll)
+  oni_consensus.sighash_type_from_byte(0x02)
+  |> should.equal(oni_consensus.SighashNone)
+  oni_consensus.sighash_type_from_byte(0x03)
+  |> should.equal(oni_consensus.SighashSingle)
   oni_consensus.sighash_type_from_byte(0x81)
-    |> should.equal(oni_consensus.SighashAnyoneCanPay(oni_consensus.SighashAll))
+  |> should.equal(oni_consensus.SighashAnyoneCanPay(oni_consensus.SighashAll))
   oni_consensus.sighash_type_from_byte(0x82)
-    |> should.equal(oni_consensus.SighashAnyoneCanPay(oni_consensus.SighashNone))
+  |> should.equal(oni_consensus.SighashAnyoneCanPay(oni_consensus.SighashNone))
   oni_consensus.sighash_type_from_byte(0x83)
-    |> should.equal(oni_consensus.SighashAnyoneCanPay(oni_consensus.SighashSingle))
+  |> should.equal(oni_consensus.SighashAnyoneCanPay(oni_consensus.SighashSingle))
 }
 
 // ============================================================================
@@ -546,7 +669,8 @@ fn test_opcode_byte_range(current: Int, max: Int) -> Nil {
       let op = oni_consensus.opcode_from_byte(current)
       // Every byte must map to some opcode (push data, opcode, or reserved)
       case op {
-        _ -> Nil  // Any result is valid, just shouldn't crash
+        _ -> Nil
+        // Any result is valid, just shouldn't crash
       }
       test_opcode_byte_range(current + 1, max)
     }

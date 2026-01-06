@@ -44,7 +44,8 @@ pub fn message_preimage_includes_magic_test() {
 
 pub fn parse_valid_signature_test() {
   // 65 bytes: 1 header + 32 r + 32 s
-  let sig_bytes = <<31, 0:256, 1:256>>  // Header 31 = compressed P2PKH
+  let sig_bytes = <<31, 0:256, 1:256>>
+  // Header 31 = compressed P2PKH
   let sig_base64 = base64_encode(sig_bytes)
 
   let result = message.parse_signature(sig_base64)
@@ -74,8 +75,40 @@ pub fn get_signature_header_test() {
 }
 
 pub fn get_signature_r_test() {
-  let r_bytes = <<1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
-                  17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32>>
+  let r_bytes = <<
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+  >>
   let sig = message.MessageSignature(<<31, r_bytes:bits, 0:256>>)
 
   let result = message.get_signature_r(sig)
@@ -143,11 +176,12 @@ pub fn prepare_verification_valid_test() {
   let sig_bytes = <<31, 0:256, 1:256>>
   let sig_base64 = base64_encode(sig_bytes)
 
-  let result = message.prepare_verification(
-    "Test message",
-    sig_base64,
-    "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2",
-  )
+  let result =
+    message.prepare_verification(
+      "Test message",
+      sig_base64,
+      "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2",
+    )
 
   case result {
     Ok(ctx) -> {
@@ -163,11 +197,13 @@ pub fn prepare_verification_address_mismatch_test() {
   let sig_bytes = <<31, 0:256, 1:256>>
   let sig_base64 = base64_encode(sig_bytes)
 
-  let result = message.prepare_verification(
-    "Test message",
-    sig_base64,
-    "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4",  // P2WPKH address
-  )
+  let result =
+    message.prepare_verification(
+      "Test message",
+      sig_base64,
+      "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4",
+      // P2WPKH address
+    )
 
   let assert True = result == Error(AddressMismatch)
 }
@@ -216,28 +252,26 @@ pub fn validate_message_empty_test() {
 pub fn format_signed_message_test() {
   let sig = message.MessageSignature(<<31, 0:256, 1:256>>)
 
-  let formatted = message.format_signed_message(
-    "Hello, Bitcoin!",
-    "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2",
-    sig,
-  )
+  let formatted =
+    message.format_signed_message(
+      "Hello, Bitcoin!",
+      "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2",
+      sig,
+    )
 
   // Should contain the expected sections
   let assert True = string_contains(formatted, "BEGIN BITCOIN SIGNED MESSAGE")
   let assert True = string_contains(formatted, "Hello, Bitcoin!")
   let assert True = string_contains(formatted, "BEGIN SIGNATURE")
-  let assert True = string_contains(formatted, "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2")
+  let assert True =
+    string_contains(formatted, "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2")
   let assert True = string_contains(formatted, "END BITCOIN SIGNED MESSAGE")
 }
 
 pub fn parse_formatted_message_test() {
   let sig = message.MessageSignature(<<31, 0:256, 1:256>>)
 
-  let formatted = message.format_signed_message(
-    "Test",
-    "1TestAddr",
-    sig,
-  )
+  let formatted = message.format_signed_message("Test", "1TestAddr", sig)
 
   let result = message.parse_signed_message(formatted)
 
@@ -255,10 +289,74 @@ pub fn parse_formatted_message_test() {
 // ============================================================================
 
 pub fn create_signature_valid_test() {
-  let r = <<1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
-            17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32>>
-  let s = <<33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48,
-            49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64>>
+  let r = <<
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+  >>
+  let s = <<
+    33,
+    34,
+    35,
+    36,
+    37,
+    38,
+    39,
+    40,
+    41,
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    49,
+    50,
+    51,
+    52,
+    53,
+    54,
+    55,
+    56,
+    57,
+    58,
+    59,
+    60,
+    61,
+    62,
+    63,
+    64,
+  >>
 
   let result = message.create_signature(31, r, s)
 
@@ -272,7 +370,8 @@ pub fn create_signature_valid_test() {
 }
 
 pub fn create_signature_invalid_r_length_test() {
-  let r = <<1, 2, 3>>  // Too short
+  let r = <<1, 2, 3>>
+  // Too short
   let s = <<0:256>>
 
   let result = message.create_signature(31, r, s)

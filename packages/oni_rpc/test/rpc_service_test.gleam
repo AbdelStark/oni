@@ -5,9 +5,9 @@
 // - Request handling statistics
 // - Integration with handlers
 
+import gleam/option.{None}
 import gleeunit
 import gleeunit/should
-import gleam/option.{None}
 import oni_rpc
 import rpc_service
 
@@ -53,11 +53,12 @@ pub fn handle_getblockcount_test() {
   let assert Ok(service) = rpc_service.start(config, None)
 
   // Send a request
-  let response = rpc_service.handle_request_sync(
-    service,
-    "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getblockcount\"}",
-    True,
-  )
+  let response =
+    rpc_service.handle_request_sync(
+      service,
+      "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getblockcount\"}",
+      True,
+    )
 
   // Response should contain result
   should.be_true(contains(response, "result"))
@@ -72,11 +73,12 @@ pub fn handle_getbestblockhash_test() {
   let assert Ok(service) = rpc_service.start(config, None)
 
   // Send a request
-  let response = rpc_service.handle_request_sync(
-    service,
-    "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getbestblockhash\"}",
-    True,
-  )
+  let response =
+    rpc_service.handle_request_sync(
+      service,
+      "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getbestblockhash\"}",
+      True,
+    )
 
   // Response should contain a 64-character hex hash
   should.be_true(contains(response, "result"))
@@ -90,11 +92,12 @@ pub fn handle_help_test() {
   let assert Ok(service) = rpc_service.start(config, None)
 
   // Send a request
-  let response = rpc_service.handle_request_sync(
-    service,
-    "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"help\"}",
-    True,
-  )
+  let response =
+    rpc_service.handle_request_sync(
+      service,
+      "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"help\"}",
+      True,
+    )
 
   // Response should contain help text
   should.be_true(contains(response, "Blockchain"))
@@ -108,15 +111,17 @@ pub fn handle_unknown_method_test() {
   let assert Ok(service) = rpc_service.start(config, None)
 
   // Send a request for unknown method
-  let response = rpc_service.handle_request_sync(
-    service,
-    "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"unknownmethod\"}",
-    True,
-  )
+  let response =
+    rpc_service.handle_request_sync(
+      service,
+      "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"unknownmethod\"}",
+      True,
+    )
 
   // Response should contain error
   should.be_true(contains(response, "error"))
-  should.be_true(contains(response, "-32601"))  // Method not found
+  should.be_true(contains(response, "-32601"))
+  // Method not found
 
   // Cleanup
   rpc_service.shutdown(service)
@@ -127,11 +132,8 @@ pub fn handle_invalid_json_test() {
   let assert Ok(service) = rpc_service.start(config, None)
 
   // Send invalid JSON
-  let response = rpc_service.handle_request_sync(
-    service,
-    "not valid json",
-    True,
-  )
+  let response =
+    rpc_service.handle_request_sync(service, "not valid json", True)
 
   // Response should contain error
   should.be_true(contains(response, "error"))
@@ -149,16 +151,18 @@ pub fn stats_increment_on_success_test() {
   let assert Ok(service) = rpc_service.start(config, None)
 
   // Send successful requests
-  let _ = rpc_service.handle_request_sync(
-    service,
-    "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getblockcount\"}",
-    True,
-  )
-  let _ = rpc_service.handle_request_sync(
-    service,
-    "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"help\"}",
-    True,
-  )
+  let _ =
+    rpc_service.handle_request_sync(
+      service,
+      "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getblockcount\"}",
+      True,
+    )
+  let _ =
+    rpc_service.handle_request_sync(
+      service,
+      "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"help\"}",
+      True,
+    )
 
   // Get stats
   let stats = rpc_service.get_stats_sync(service)
@@ -175,11 +179,12 @@ pub fn stats_increment_on_failure_test() {
   let assert Ok(service) = rpc_service.start(config, None)
 
   // Send failed requests
-  let _ = rpc_service.handle_request_sync(
-    service,
-    "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"unknownmethod\"}",
-    True,
-  )
+  let _ =
+    rpc_service.handle_request_sync(
+      service,
+      "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"unknownmethod\"}",
+      True,
+    )
 
   // Get stats
   let stats = rpc_service.get_stats_sync(service)
@@ -201,21 +206,24 @@ pub fn handle_multiple_requests_test() {
   let assert Ok(service) = rpc_service.start(config, None)
 
   // Send multiple requests
-  let r1 = rpc_service.handle_request_sync(
-    service,
-    "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getblockcount\"}",
-    True,
-  )
-  let r2 = rpc_service.handle_request_sync(
-    service,
-    "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"getbestblockhash\"}",
-    True,
-  )
-  let r3 = rpc_service.handle_request_sync(
-    service,
-    "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"getblockchaininfo\"}",
-    True,
-  )
+  let r1 =
+    rpc_service.handle_request_sync(
+      service,
+      "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getblockcount\"}",
+      True,
+    )
+  let r2 =
+    rpc_service.handle_request_sync(
+      service,
+      "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"getbestblockhash\"}",
+      True,
+    )
+  let r3 =
+    rpc_service.handle_request_sync(
+      service,
+      "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"getblockchaininfo\"}",
+      True,
+    )
 
   // All should have results
   should.be_true(contains(r1, "result"))
@@ -275,11 +283,12 @@ pub fn handle_submitblock_missing_param_test() {
   let assert Ok(service) = rpc_service.start(config, None)
 
   // Send submitblock without parameters
-  let response = rpc_service.handle_request_sync(
-    service,
-    "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"submitblock\",\"params\":[]}",
-    True,
-  )
+  let response =
+    rpc_service.handle_request_sync(
+      service,
+      "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"submitblock\",\"params\":[]}",
+      True,
+    )
 
   // Response should contain error for invalid params
   should.be_true(contains(response, "error"))
@@ -293,11 +302,12 @@ pub fn handle_submitblock_invalid_hex_test() {
   let assert Ok(service) = rpc_service.start(config, None)
 
   // Send submitblock with invalid hex
-  let response = rpc_service.handle_request_sync(
-    service,
-    "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"submitblock\",\"params\":[\"notvalidhex\"]}",
-    True,
-  )
+  let response =
+    rpc_service.handle_request_sync(
+      service,
+      "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"submitblock\",\"params\":[\"notvalidhex\"]}",
+      True,
+    )
 
   // Response should contain error for invalid hex
   should.be_true(contains(response, "error"))
@@ -312,11 +322,12 @@ pub fn handle_submitblock_truncated_block_test() {
 
   // Send submitblock with valid hex but truncated block data
   // This is only the first 40 bytes of a block header (should be 80 bytes)
-  let response = rpc_service.handle_request_sync(
-    service,
-    "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"submitblock\",\"params\":[\"0100000000000000000000000000000000000000000000000000000000000000\"]}",
-    True,
-  )
+  let response =
+    rpc_service.handle_request_sync(
+      service,
+      "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"submitblock\",\"params\":[\"0100000000000000000000000000000000000000000000000000000000000000\"]}",
+      True,
+    )
 
   // Response should contain error for invalid block data
   should.be_true(contains(response, "error"))
@@ -334,11 +345,12 @@ pub fn handle_sendrawtransaction_missing_param_test() {
   let assert Ok(service) = rpc_service.start(config, None)
 
   // Send sendrawtransaction without parameters
-  let response = rpc_service.handle_request_sync(
-    service,
-    "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"sendrawtransaction\",\"params\":[]}",
-    True,
-  )
+  let response =
+    rpc_service.handle_request_sync(
+      service,
+      "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"sendrawtransaction\",\"params\":[]}",
+      True,
+    )
 
   // Response should contain error for invalid params
   should.be_true(contains(response, "error"))
@@ -352,11 +364,12 @@ pub fn handle_sendrawtransaction_invalid_hex_test() {
   let assert Ok(service) = rpc_service.start(config, None)
 
   // Send sendrawtransaction with invalid hex
-  let response = rpc_service.handle_request_sync(
-    service,
-    "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"sendrawtransaction\",\"params\":[\"gggg\"]}",
-    True,
-  )
+  let response =
+    rpc_service.handle_request_sync(
+      service,
+      "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"sendrawtransaction\",\"params\":[\"gggg\"]}",
+      True,
+    )
 
   // Response should contain error for invalid hex
   should.be_true(contains(response, "error"))
@@ -370,11 +383,12 @@ pub fn handle_sendrawtransaction_truncated_tx_test() {
   let assert Ok(service) = rpc_service.start(config, None)
 
   // Send sendrawtransaction with truncated transaction data (just version bytes)
-  let response = rpc_service.handle_request_sync(
-    service,
-    "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"sendrawtransaction\",\"params\":[\"01000000\"]}",
-    True,
-  )
+  let response =
+    rpc_service.handle_request_sync(
+      service,
+      "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"sendrawtransaction\",\"params\":[\"01000000\"]}",
+      True,
+    )
 
   // Response should contain error for invalid transaction data
   should.be_true(contains(response, "error"))

@@ -17,10 +17,14 @@ import oni_bitcoin.{type BlockHash}
 // ============================================================================
 
 /// Target timespan for difficulty adjustment (2 weeks = 14 days)
-pub const target_timespan = 1_209_600  // 14 * 24 * 60 * 60 seconds
+pub const target_timespan = 1_209_600
+
+// 14 * 24 * 60 * 60 seconds
 
 /// Target block time (10 minutes)
-pub const target_spacing = 600  // 10 * 60 seconds
+pub const target_spacing = 600
+
+// 10 * 60 seconds
 
 /// Number of blocks per difficulty adjustment
 pub const difficulty_adjustment_interval = 2016
@@ -78,10 +82,12 @@ pub fn target_from_compact(compact: Int) -> Target {
 
   // Check for negative (high bit of coefficient set)
   case int.bitwise_and(compact, 0x00800000) != 0 {
-    True -> Target(<<0:256>>)  // Negative treated as zero
+    True -> Target(<<0:256>>)
+    // Negative treated as zero
     False -> {
       case exponent == 0 {
-        True -> Target(<<0:256>>)  // Zero exponent = zero target
+        True -> Target(<<0:256>>)
+        // Zero exponent = zero target
         False -> {
           // Calculate the full target value
           // Target = coefficient * 2^(8 * (exponent - 3))
@@ -133,7 +139,9 @@ pub fn target_to_compact(target: Target) -> Int {
         Error(_) -> 0
         Ok(coefficient) -> {
           // If high bit is set, shift right and increment exponent
-          let #(final_coef, final_exp) = case int.bitwise_and(coefficient, 0x00800000) != 0 {
+          let #(final_coef, final_exp) = case
+            int.bitwise_and(coefficient, 0x00800000) != 0
+          {
             True -> #(int.bitwise_shift_right(coefficient, 8), exponent + 1)
             False -> #(coefficient, exponent)
           }
@@ -155,9 +163,9 @@ fn find_first_nonzero(bytes: BitArray, pos: Int) -> Option(#(Int, Int)) {
 
 fn extract_coefficient(bytes: BitArray, start: Int) -> Result(Int, Nil) {
   case bit_array.slice(bytes, start, 3) {
-    Ok(<<a:8, b:8, c:8>>) -> Ok(a * 65536 + b * 256 + c)
-    Ok(<<a:8, b:8>>) -> Ok(a * 65536 + b * 256)
-    Ok(<<a:8>>) -> Ok(a * 65536)
+    Ok(<<a:8, b:8, c:8>>) -> Ok(a * 65_536 + b * 256 + c)
+    Ok(<<a:8, b:8>>) -> Ok(a * 65_536 + b * 256)
+    Ok(<<a:8>>) -> Ok(a * 65_536)
     _ -> Error(Nil)
   }
 }
@@ -228,10 +236,7 @@ pub fn difficulty_value(d: Difficulty) -> Float {
 
 /// Calculate the next target based on the previous period
 /// This implements the Bitcoin difficulty adjustment algorithm
-pub fn calculate_next_target(
-  prev_target_bits: Int,
-  actual_timespan: Int,
-) -> Int {
+pub fn calculate_next_target(prev_target_bits: Int, actual_timespan: Int) -> Int {
   // Clamp the timespan to prevent extreme adjustments
   let clamped_timespan = clamp_timespan(actual_timespan)
 
@@ -310,7 +315,8 @@ fn int_to_bytes_acc(value: Int, remaining: Int, acc: BitArray) -> BitArray {
 fn clamp_target(target: Target, limit_bits: Int) -> Target {
   let limit = target_from_compact(limit_bits)
   case compare_targets(target, limit) {
-    order if order > 0 -> limit  // Target exceeds limit, use limit
+    order if order > 0 -> limit
+    // Target exceeds limit, use limit
     _ -> target
   }
 }
@@ -442,19 +448,24 @@ pub fn hash_rate_display(rate: HashRate) -> String {
   let h = rate.hashes_per_second
 
   case h >=. 1_000_000_000_000_000_000.0 {
-    True -> float_to_string_approx(h /. 1_000_000_000_000_000_000.0, 2) <> " EH/s"
+    True ->
+      float_to_string_approx(h /. 1_000_000_000_000_000_000.0, 2) <> " EH/s"
     False -> {
       case h >=. 1_000_000_000_000_000.0 {
-        True -> float_to_string_approx(h /. 1_000_000_000_000_000.0, 2) <> " PH/s"
+        True ->
+          float_to_string_approx(h /. 1_000_000_000_000_000.0, 2) <> " PH/s"
         False -> {
           case h >=. 1_000_000_000_000.0 {
-            True -> float_to_string_approx(h /. 1_000_000_000_000.0, 2) <> " TH/s"
+            True ->
+              float_to_string_approx(h /. 1_000_000_000_000.0, 2) <> " TH/s"
             False -> {
               case h >=. 1_000_000_000.0 {
-                True -> float_to_string_approx(h /. 1_000_000_000.0, 2) <> " GH/s"
+                True ->
+                  float_to_string_approx(h /. 1_000_000_000.0, 2) <> " GH/s"
                 False -> {
                   case h >=. 1_000_000.0 {
-                    True -> float_to_string_approx(h /. 1_000_000.0, 2) <> " MH/s"
+                    True ->
+                      float_to_string_approx(h /. 1_000_000.0, 2) <> " MH/s"
                     False -> float_to_string_approx(h, 2) <> " H/s"
                   }
                 }

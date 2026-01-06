@@ -1,8 +1,8 @@
 // Tests for difficulty calculation module
 
+import difficulty
 import gleeunit
 import gleeunit/should
-import difficulty
 import oni_bitcoin
 
 pub fn main() {
@@ -87,7 +87,8 @@ pub fn retarget_normal_test() {
 pub fn retarget_too_fast_test() {
   // If blocks came too fast, difficulty should increase
   let bits = 0x1d00ffff
-  let actual_timespan = difficulty.target_timespan / 2  // Half the expected time
+  let actual_timespan = difficulty.target_timespan / 2
+  // Half the expected time
 
   let new_bits = difficulty.calculate_next_target(bits, actual_timespan)
 
@@ -98,7 +99,8 @@ pub fn retarget_too_fast_test() {
 pub fn retarget_too_slow_test() {
   // If blocks came too slow, difficulty should decrease
   let bits = 0x1d00ffff
-  let actual_timespan = difficulty.target_timespan * 2  // Double the expected time
+  let actual_timespan = difficulty.target_timespan * 2
+  // Double the expected time
 
   let new_bits = difficulty.calculate_next_target(bits, actual_timespan)
 
@@ -109,7 +111,8 @@ pub fn retarget_too_slow_test() {
 pub fn retarget_clamp_min_test() {
   // Difficulty should not increase more than 4x
   let bits = 0x1d00ffff
-  let actual_timespan = difficulty.target_timespan / 8  // Very fast
+  let actual_timespan = difficulty.target_timespan / 8
+  // Very fast
 
   let new_bits = difficulty.calculate_next_target(bits, actual_timespan)
 
@@ -120,7 +123,8 @@ pub fn retarget_clamp_min_test() {
 pub fn retarget_clamp_max_test() {
   // Difficulty should not decrease more than 4x
   let bits = 0x1d00ffff
-  let actual_timespan = difficulty.target_timespan * 8  // Very slow
+  let actual_timespan = difficulty.target_timespan * 8
+  // Very slow
 
   let new_bits = difficulty.calculate_next_target(bits, actual_timespan)
 
@@ -156,7 +160,8 @@ pub fn chainwork_add_test() {
 
 pub fn estimate_hash_rate_test() {
   let diff = difficulty.Difficulty(1.0)
-  let rate = difficulty.estimate_hash_rate(diff, 600)  // 10 minute blocks
+  let rate = difficulty.estimate_hash_rate(diff, 600)
+  // 10 minute blocks
 
   // At difficulty 1, hash rate should be approximately 2^32 / 600
   let hps = rate.hashes_per_second
@@ -164,7 +169,8 @@ pub fn estimate_hash_rate_test() {
 }
 
 pub fn hash_rate_display_test() {
-  let rate = difficulty.HashRate(1_000_000_000_000.0)  // 1 TH/s
+  let rate = difficulty.HashRate(1_000_000_000_000.0)
+  // 1 TH/s
   let display = difficulty.hash_rate_display(rate)
 
   display |> should.not_equal("")

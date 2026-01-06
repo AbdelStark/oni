@@ -35,9 +35,14 @@ pub type TokenBucket {
 }
 
 /// Create a new token bucket
-pub fn token_bucket_new(max_tokens: Float, refill_rate: Float, now: Int) -> TokenBucket {
+pub fn token_bucket_new(
+  max_tokens: Float,
+  refill_rate: Float,
+  now: Int,
+) -> TokenBucket {
   TokenBucket(
-    tokens: max_tokens,  // Start full
+    tokens: max_tokens,
+    // Start full
     max_tokens: max_tokens,
     refill_rate: refill_rate,
     last_refill: now,
@@ -56,10 +61,7 @@ pub fn token_bucket_try_consume(
 
   case refilled.tokens >=. amount {
     True -> {
-      let updated = TokenBucket(
-        ..refilled,
-        tokens: refilled.tokens -. amount,
-      )
+      let updated = TokenBucket(..refilled, tokens: refilled.tokens -. amount)
       #(updated, True)
     }
     False -> #(refilled, False)
@@ -74,11 +76,7 @@ fn token_bucket_refill(bucket: TokenBucket, now: Int) -> TokenBucket {
       let elapsed_secs = int_to_float(elapsed_ms) /. 1000.0
       let new_tokens = bucket.tokens +. bucket.refill_rate *. elapsed_secs
       let capped = float_min(new_tokens, bucket.max_tokens)
-      TokenBucket(
-        ..bucket,
-        tokens: capped,
-        last_refill: now,
-      )
+      TokenBucket(..bucket, tokens: capped, last_refill: now)
     }
     False -> bucket
   }
@@ -141,12 +139,16 @@ pub type PeerRateLimiter {
 }
 
 /// Create a rate limiter for a peer
-pub fn peer_rate_limiter_new(peer_id: oni_p2p.PeerId, now: Int) -> PeerRateLimiter {
+pub fn peer_rate_limiter_new(
+  peer_id: oni_p2p.PeerId,
+  now: Int,
+) -> PeerRateLimiter {
   let limits = default_rate_limits()
   PeerRateLimiter(
     peer_id: peer_id,
     general: token_bucket_new(
-      int_to_float(limits.generic_per_sec * 10),  // 10 second burst
+      int_to_float(limits.generic_per_sec * 10),
+      // 10 second burst
       int_to_float(limits.generic_per_sec),
       now,
     ),
@@ -181,32 +183,31 @@ pub fn peer_rate_check(
 
   // Reset counters every minute
   let limiter_reset = case now - limiter.last_reset > 60_000 {
-    True -> PeerRateLimiter(
-      ..limiter,
-      inv_count: 0,
-      getdata_count: 0,
-      addr_count: 0,
-      tx_count: 0,
-      block_count: 0,
-      last_reset: now,
-    )
+    True ->
+      PeerRateLimiter(
+        ..limiter,
+        inv_count: 0,
+        getdata_count: 0,
+        addr_count: 0,
+        tx_count: 0,
+        block_count: 0,
+        last_reset: now,
+      )
     False -> limiter
   }
 
   // Check general rate limit first
-  let #(new_general, general_ok) = token_bucket_try_consume(
-    limiter_reset.general,
-    1.0,
-    now,
-  )
+  let #(new_general, general_ok) =
+    token_bucket_try_consume(limiter_reset.general, 1.0, now)
 
   case general_ok {
     False -> {
-      let blocked = PeerRateLimiter(
-        ..limiter_reset,
-        general: new_general,
-        blocked_count: limiter_reset.blocked_count + 1,
-      )
+      let blocked =
+        PeerRateLimiter(
+          ..limiter_reset,
+          general: new_general,
+          blocked_count: limiter_reset.blocked_count + 1,
+        )
       #(blocked, False)
     }
     True -> {
@@ -215,7 +216,10 @@ pub fn peer_rate_check(
         CatInv -> {
           case limiter_reset.inv_count < limits.inv_per_min {
             True -> #(
-              PeerRateLimiter(..limiter_reset, inv_count: limiter_reset.inv_count + 1),
+              PeerRateLimiter(
+                ..limiter_reset,
+                inv_count: limiter_reset.inv_count + 1,
+              ),
               True,
             )
             False -> #(limiter_reset, False)
@@ -224,7 +228,10 @@ pub fn peer_rate_check(
         CatGetData -> {
           case limiter_reset.getdata_count < limits.getdata_per_min {
             True -> #(
-              PeerRateLimiter(..limiter_reset, getdata_count: limiter_reset.getdata_count + 1),
+              PeerRateLimiter(
+                ..limiter_reset,
+                getdata_count: limiter_reset.getdata_count + 1,
+              ),
               True,
             )
             False -> #(limiter_reset, False)
@@ -233,7 +240,10 @@ pub fn peer_rate_check(
         CatAddr -> {
           case limiter_reset.addr_count < limits.addr_per_min {
             True -> #(
-              PeerRateLimiter(..limiter_reset, addr_count: limiter_reset.addr_count + 1),
+              PeerRateLimiter(
+                ..limiter_reset,
+                addr_count: limiter_reset.addr_count + 1,
+              ),
               True,
             )
             False -> #(limiter_reset, False)
@@ -242,7 +252,10 @@ pub fn peer_rate_check(
         CatTx -> {
           case limiter_reset.tx_count < limits.tx_per_min {
             True -> #(
-              PeerRateLimiter(..limiter_reset, tx_count: limiter_reset.tx_count + 1),
+              PeerRateLimiter(
+                ..limiter_reset,
+                tx_count: limiter_reset.tx_count + 1,
+              ),
               True,
             )
             False -> #(limiter_reset, False)
@@ -253,14 +266,19 @@ pub fn peer_rate_check(
           // Simplified: allow if under limit
           case limiter_reset.block_count < limits.block_per_hour {
             True -> #(
-              PeerRateLimiter(..limiter_reset, block_count: limiter_reset.block_count + 1),
+              PeerRateLimiter(
+                ..limiter_reset,
+                block_count: limiter_reset.block_count + 1,
+              ),
               True,
             )
             False -> #(limiter_reset, False)
           }
         }
-        CatPing -> #(limiter_reset, True)  // Always allow pings
-        CatOther -> #(limiter_reset, True)  // Allow other with just general limit
+        CatPing -> #(limiter_reset, True)
+        // Always allow pings
+        CatOther -> #(limiter_reset, True)
+        // Allow other with just general limit
       }
 
       case allowed {
@@ -339,24 +357,24 @@ pub fn subnet_check_connection(
     Error(_) -> 0
   }
 
-  let new_tracker = SubnetTracker(
-    ..tracker,
-    total_attempts: tracker.total_attempts + 1,
-  )
+  let new_tracker =
+    SubnetTracker(..tracker, total_attempts: tracker.total_attempts + 1)
 
   case current < tracker.max_per_subnet {
     True -> {
-      let updated = SubnetTracker(
-        ..new_tracker,
-        by_subnet: dict.insert(tracker.by_subnet, key, current + 1),
-      )
+      let updated =
+        SubnetTracker(
+          ..new_tracker,
+          by_subnet: dict.insert(tracker.by_subnet, key, current + 1),
+        )
       #(updated, True)
     }
     False -> {
-      let blocked = SubnetTracker(
-        ..new_tracker,
-        blocked_attempts: tracker.blocked_attempts + 1,
-      )
+      let blocked =
+        SubnetTracker(
+          ..new_tracker,
+          blocked_attempts: tracker.blocked_attempts + 1,
+        )
       #(blocked, False)
     }
   }
@@ -376,10 +394,7 @@ pub fn subnet_remove_connection(
       )
     }
     Ok(_) -> {
-      SubnetTracker(
-        ..tracker,
-        by_subnet: dict.delete(tracker.by_subnet, key),
-      )
+      SubnetTracker(..tracker, by_subnet: dict.delete(tracker.by_subnet, key))
     }
     Error(_) -> tracker
   }
@@ -426,14 +441,27 @@ pub type BandwidthThrottler {
 }
 
 /// Create a new bandwidth throttler
-pub fn bandwidth_throttler_new(config: BandwidthConfig, now: Int) -> BandwidthThrottler {
-  let upload_burst = int_to_float(config.max_upload_bps) *. config.burst_multiplier
-  let download_burst = int_to_float(config.max_download_bps) *. config.burst_multiplier
+pub fn bandwidth_throttler_new(
+  config: BandwidthConfig,
+  now: Int,
+) -> BandwidthThrottler {
+  let upload_burst =
+    int_to_float(config.max_upload_bps) *. config.burst_multiplier
+  let download_burst =
+    int_to_float(config.max_download_bps) *. config.burst_multiplier
 
   BandwidthThrottler(
     config: config,
-    upload: token_bucket_new(upload_burst, int_to_float(config.max_upload_bps), now),
-    download: token_bucket_new(download_burst, int_to_float(config.max_download_bps), now),
+    upload: token_bucket_new(
+      upload_burst,
+      int_to_float(config.max_upload_bps),
+      now,
+    ),
+    download: token_bucket_new(
+      download_burst,
+      int_to_float(config.max_download_bps),
+      now,
+    ),
     total_uploaded: 0,
     total_downloaded: 0,
   )
@@ -445,18 +473,16 @@ pub fn bandwidth_check_upload(
   bytes: Int,
   now: Int,
 ) -> #(BandwidthThrottler, Bool) {
-  let #(new_bucket, allowed) = token_bucket_try_consume(
-    throttler.upload,
-    int_to_float(bytes),
-    now,
-  )
+  let #(new_bucket, allowed) =
+    token_bucket_try_consume(throttler.upload, int_to_float(bytes), now)
 
   let updated = case allowed {
-    True -> BandwidthThrottler(
-      ..throttler,
-      upload: new_bucket,
-      total_uploaded: throttler.total_uploaded + bytes,
-    )
+    True ->
+      BandwidthThrottler(
+        ..throttler,
+        upload: new_bucket,
+        total_uploaded: throttler.total_uploaded + bytes,
+      )
     False -> BandwidthThrottler(..throttler, upload: new_bucket)
   }
 
@@ -469,18 +495,16 @@ pub fn bandwidth_check_download(
   bytes: Int,
   now: Int,
 ) -> #(BandwidthThrottler, Bool) {
-  let #(new_bucket, allowed) = token_bucket_try_consume(
-    throttler.download,
-    int_to_float(bytes),
-    now,
-  )
+  let #(new_bucket, allowed) =
+    token_bucket_try_consume(throttler.download, int_to_float(bytes), now)
 
   let updated = case allowed {
-    True -> BandwidthThrottler(
-      ..throttler,
-      download: new_bucket,
-      total_downloaded: throttler.total_downloaded + bytes,
-    )
+    True ->
+      BandwidthThrottler(
+        ..throttler,
+        download: new_bucket,
+        total_downloaded: throttler.total_downloaded + bytes,
+      )
     False -> BandwidthThrottler(..throttler, download: new_bucket)
   }
 
@@ -529,7 +553,8 @@ pub type BanManager {
 pub fn ban_manager_new() -> BanManager {
   BanManager(
     bans: dict.new(),
-    default_duration: 86_400,  // 24 hours
+    default_duration: 86_400,
+    // 24 hours
   )
 }
 
@@ -552,34 +577,30 @@ pub fn ban_ip(
   reason: BanReason,
   now: Int,
 ) -> BanManager {
-  let entry = BanEntry(
-    ip: ip,
-    reason: reason,
-    banned_at: now,
-    duration: manager.default_duration,
-  )
+  let entry =
+    BanEntry(
+      ip: ip,
+      reason: reason,
+      banned_at: now,
+      duration: manager.default_duration,
+    )
   let key = ip_to_key(ip)
-  BanManager(
-    ..manager,
-    bans: dict.insert(manager.bans, key, entry),
-  )
+  BanManager(..manager, bans: dict.insert(manager.bans, key, entry))
 }
 
 /// Unban an IP address
 pub fn unban_ip(manager: BanManager, ip: oni_p2p.IpAddr) -> BanManager {
   let key = ip_to_key(ip)
-  BanManager(
-    ..manager,
-    bans: dict.delete(manager.bans, key),
-  )
+  BanManager(..manager, bans: dict.delete(manager.bans, key))
 }
 
 /// Clean up expired bans
 pub fn cleanup_expired_bans(manager: BanManager, now: Int) -> BanManager {
-  let active_bans = dict.filter(manager.bans, fn(_key, entry) {
-    let expires_at = entry.banned_at + entry.duration
-    now < expires_at
-  })
+  let active_bans =
+    dict.filter(manager.bans, fn(_key, entry) {
+      let expires_at = entry.banned_at + entry.duration
+      now < expires_at
+    })
   BanManager(..manager, bans: active_bans)
 }
 
@@ -666,22 +687,20 @@ pub fn check_message(
   let new_limiters = dict.insert(protection.peer_limiters, id_str, new_limiter)
 
   let new_stats = case allowed {
-    True -> DoSStats(
-      ..protection.stats,
-      messages_allowed: protection.stats.messages_allowed + 1,
-    )
-    False -> DoSStats(
-      ..protection.stats,
-      messages_blocked: protection.stats.messages_blocked + 1,
-    )
+    True ->
+      DoSStats(
+        ..protection.stats,
+        messages_allowed: protection.stats.messages_allowed + 1,
+      )
+    False ->
+      DoSStats(
+        ..protection.stats,
+        messages_blocked: protection.stats.messages_blocked + 1,
+      )
   }
 
   #(
-    DoSProtection(
-      ..protection,
-      peer_limiters: new_limiters,
-      stats: new_stats,
-    ),
+    DoSProtection(..protection, peer_limiters: new_limiters, stats: new_stats),
     allowed,
   )
 }
@@ -697,20 +716,20 @@ pub fn check_connection(
     True -> #(protection, False)
     False -> {
       // Check subnet limits
-      let #(new_tracker, allowed) = subnet_check_connection(
-        protection.subnet_tracker,
-        ip,
-      )
+      let #(new_tracker, allowed) =
+        subnet_check_connection(protection.subnet_tracker, ip)
 
       let new_stats = case allowed {
-        True -> DoSStats(
-          ..protection.stats,
-          connections_allowed: protection.stats.connections_allowed + 1,
-        )
-        False -> DoSStats(
-          ..protection.stats,
-          connections_blocked: protection.stats.connections_blocked + 1,
-        )
+        True ->
+          DoSStats(
+            ..protection.stats,
+            connections_allowed: protection.stats.connections_allowed + 1,
+          )
+        False ->
+          DoSStats(
+            ..protection.stats,
+            connections_blocked: protection.stats.connections_blocked + 1,
+          )
       }
 
       #(
@@ -736,11 +755,12 @@ pub fn get_stats(protection: DoSProtection) -> DoSStats {
 
 fn ip_to_key(ip: oni_p2p.IpAddr) -> Int {
   case ip {
-    oni_p2p.IPv4(a, b, c, d) -> a * 16777216 + b * 65536 + c * 256 + d
+    oni_p2p.IPv4(a, b, c, d) -> a * 16_777_216 + b * 65_536 + c * 256 + d
     oni_p2p.IPv6(bytes) -> {
       // Use first 4 bytes as key
       case bytes {
-        <<a:8, b:8, c:8, d:8, _:bits>> -> a * 16777216 + b * 65536 + c * 256 + d
+        <<a:8, b:8, c:8, d:8, _:bits>> ->
+          a * 16_777_216 + b * 65_536 + c * 256 + d
         _ -> 0
       }
     }

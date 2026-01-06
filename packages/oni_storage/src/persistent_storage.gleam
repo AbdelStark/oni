@@ -15,13 +15,13 @@
 //   2. Use the returned handle with storage operations
 //   3. Call persistent_storage_close(handle) on shutdown
 
+import db_backend.{
+  type DbError, type DbHandle, BatchDelete, BatchPut, default_options,
+}
 import gleam/bit_array
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
-import db_backend.{
-  type DbError, type DbHandle, BatchDelete, BatchPut, default_options,
-}
 import oni_bitcoin.{type BlockHash, type OutPoint}
 import oni_storage.{
   type BlockIndexEntry, type BlockStatus, type BlockUndo, type Chainstate,
@@ -50,11 +50,17 @@ pub type PersistentStorageHandle {
 
 /// Chainstate keys in database
 const chainstate_best_block_key = <<"chainstate:best_block">>
+
 const chainstate_best_height_key = <<"chainstate:best_height">>
+
 const chainstate_total_tx_key = <<"chainstate:total_tx">>
+
 const chainstate_total_coins_key = <<"chainstate:total_coins">>
+
 const chainstate_total_amount_key = <<"chainstate:total_amount">>
+
 const chainstate_pruned_key = <<"chainstate:pruned">>
+
 const chainstate_pruned_height_key = <<"chainstate:pruned_height">>
 
 // ============================================================================
@@ -73,25 +79,25 @@ pub fn persistent_storage_open(
   // Open UTXO database
   use utxo_db <- result.try(
     db_backend.db_open(data_dir <> "/utxo.db", options)
-    |> result.map_error(db_error_to_storage_error)
+    |> result.map_error(db_error_to_storage_error),
   )
 
   // Open block index database
   use block_index_db <- result.try(
     db_backend.db_open(data_dir <> "/block_index.db", options)
-    |> result.map_error(db_error_to_storage_error)
+    |> result.map_error(db_error_to_storage_error),
   )
 
   // Open chainstate database
   use chainstate_db <- result.try(
     db_backend.db_open(data_dir <> "/chainstate.db", options)
-    |> result.map_error(db_error_to_storage_error)
+    |> result.map_error(db_error_to_storage_error),
   )
 
   // Open undo database
   use undo_db <- result.try(
     db_backend.db_open(data_dir <> "/undo.db", options)
-    |> result.map_error(db_error_to_storage_error)
+    |> result.map_error(db_error_to_storage_error),
   )
 
   Ok(PersistentStorageHandle(
@@ -110,19 +116,19 @@ pub fn persistent_storage_close(
   // Close all databases
   use _ <- result.try(
     db_backend.db_close(handle.utxo_db)
-    |> result.map_error(db_error_to_storage_error)
+    |> result.map_error(db_error_to_storage_error),
   )
   use _ <- result.try(
     db_backend.db_close(handle.block_index_db)
-    |> result.map_error(db_error_to_storage_error)
+    |> result.map_error(db_error_to_storage_error),
   )
   use _ <- result.try(
     db_backend.db_close(handle.chainstate_db)
-    |> result.map_error(db_error_to_storage_error)
+    |> result.map_error(db_error_to_storage_error),
   )
   use _ <- result.try(
     db_backend.db_close(handle.undo_db)
-    |> result.map_error(db_error_to_storage_error)
+    |> result.map_error(db_error_to_storage_error),
   )
   Ok(Nil)
 }
@@ -133,19 +139,19 @@ pub fn persistent_storage_sync(
 ) -> Result(Nil, StorageError) {
   use _ <- result.try(
     db_backend.db_sync(handle.utxo_db)
-    |> result.map_error(db_error_to_storage_error)
+    |> result.map_error(db_error_to_storage_error),
   )
   use _ <- result.try(
     db_backend.db_sync(handle.block_index_db)
-    |> result.map_error(db_error_to_storage_error)
+    |> result.map_error(db_error_to_storage_error),
   )
   use _ <- result.try(
     db_backend.db_sync(handle.chainstate_db)
-    |> result.map_error(db_error_to_storage_error)
+    |> result.map_error(db_error_to_storage_error),
   )
   use _ <- result.try(
     db_backend.db_sync(handle.undo_db)
-    |> result.map_error(db_error_to_storage_error)
+    |> result.map_error(db_error_to_storage_error),
   )
   Ok(Nil)
 }
@@ -162,7 +168,7 @@ pub fn utxo_get(
   let key = serialize_outpoint(outpoint)
   use data <- result.try(
     db_backend.db_get(handle.utxo_db, key)
-    |> result.map_error(db_error_to_storage_error)
+    |> result.map_error(db_error_to_storage_error),
   )
   deserialize_coin(data)
 }
@@ -190,18 +196,13 @@ pub fn utxo_delete(
 }
 
 /// Check if UTXO exists
-pub fn utxo_has(
-  handle: PersistentStorageHandle,
-  outpoint: OutPoint,
-) -> Bool {
+pub fn utxo_has(handle: PersistentStorageHandle, outpoint: OutPoint) -> Bool {
   let key = serialize_outpoint(outpoint)
   db_backend.db_has(handle.utxo_db, key)
 }
 
 /// Get UTXO count
-pub fn utxo_count(
-  handle: PersistentStorageHandle,
-) -> Result(Int, StorageError) {
+pub fn utxo_count(handle: PersistentStorageHandle) -> Result(Int, StorageError) {
   db_backend.db_count(handle.utxo_db)
   |> result.map_error(db_error_to_storage_error)
 }
@@ -213,14 +214,16 @@ pub fn utxo_batch(
   removals: List(OutPoint),
 ) -> Result(Nil, StorageError) {
   // Build batch operations
-  let add_ops = list.map(additions, fn(entry) {
-    let #(outpoint, coin) = entry
-    BatchPut(serialize_outpoint(outpoint), serialize_coin(coin))
-  })
+  let add_ops =
+    list.map(additions, fn(entry) {
+      let #(outpoint, coin) = entry
+      BatchPut(serialize_outpoint(outpoint), serialize_coin(coin))
+    })
 
-  let remove_ops = list.map(removals, fn(outpoint) {
-    BatchDelete(serialize_outpoint(outpoint))
-  })
+  let remove_ops =
+    list.map(removals, fn(outpoint) {
+      BatchDelete(serialize_outpoint(outpoint))
+    })
 
   let ops = list.append(remove_ops, add_ops)
 
@@ -240,7 +243,7 @@ pub fn block_index_get(
   let key = serialize_block_hash(hash)
   use data <- result.try(
     db_backend.db_get(handle.block_index_db, key)
-    |> result.map_error(db_error_to_storage_error)
+    |> result.map_error(db_error_to_storage_error),
   )
   deserialize_block_index_entry(data)
 }
@@ -257,10 +260,7 @@ pub fn block_index_put(
 }
 
 /// Check if block index entry exists
-pub fn block_index_has(
-  handle: PersistentStorageHandle,
-  hash: BlockHash,
-) -> Bool {
+pub fn block_index_has(handle: PersistentStorageHandle, hash: BlockHash) -> Bool {
   let key = serialize_block_hash(hash)
   db_backend.db_has(handle.block_index_db, key)
 }
@@ -276,27 +276,27 @@ pub fn chainstate_get(
   // Read all chainstate values
   use best_block_data <- result.try(
     db_backend.db_get(handle.chainstate_db, chainstate_best_block_key)
-    |> result.map_error(db_error_to_storage_error)
+    |> result.map_error(db_error_to_storage_error),
   )
   use best_height_data <- result.try(
     db_backend.db_get(handle.chainstate_db, chainstate_best_height_key)
-    |> result.map_error(db_error_to_storage_error)
+    |> result.map_error(db_error_to_storage_error),
   )
   use total_tx_data <- result.try(
     db_backend.db_get(handle.chainstate_db, chainstate_total_tx_key)
-    |> result.map_error(db_error_to_storage_error)
+    |> result.map_error(db_error_to_storage_error),
   )
   use total_coins_data <- result.try(
     db_backend.db_get(handle.chainstate_db, chainstate_total_coins_key)
-    |> result.map_error(db_error_to_storage_error)
+    |> result.map_error(db_error_to_storage_error),
   )
   use total_amount_data <- result.try(
     db_backend.db_get(handle.chainstate_db, chainstate_total_amount_key)
-    |> result.map_error(db_error_to_storage_error)
+    |> result.map_error(db_error_to_storage_error),
   )
   use pruned_data <- result.try(
     db_backend.db_get(handle.chainstate_db, chainstate_pruned_key)
-    |> result.map_error(db_error_to_storage_error)
+    |> result.map_error(db_error_to_storage_error),
   )
 
   // Deserialize
@@ -311,7 +311,9 @@ pub fn chainstate_get(
   let pruned_height = case pruned {
     False -> None
     True -> {
-      case db_backend.db_get(handle.chainstate_db, chainstate_pruned_height_key) {
+      case
+        db_backend.db_get(handle.chainstate_db, chainstate_pruned_height_key)
+      {
         Ok(data) -> {
           case deserialize_int(data) {
             Ok(h) -> Some(h)
@@ -341,11 +343,17 @@ pub fn chainstate_put(
 ) -> Result(Nil, StorageError) {
   // Build batch operations
   let ops = [
-    BatchPut(chainstate_best_block_key, serialize_block_hash(chainstate.best_block)),
+    BatchPut(
+      chainstate_best_block_key,
+      serialize_block_hash(chainstate.best_block),
+    ),
     BatchPut(chainstate_best_height_key, serialize_int(chainstate.best_height)),
     BatchPut(chainstate_total_tx_key, serialize_int(chainstate.total_tx)),
     BatchPut(chainstate_total_coins_key, serialize_int(chainstate.total_coins)),
-    BatchPut(chainstate_total_amount_key, serialize_int(chainstate.total_amount)),
+    BatchPut(
+      chainstate_total_amount_key,
+      serialize_int(chainstate.total_amount),
+    ),
     BatchPut(chainstate_pruned_key, serialize_bool(chainstate.pruned)),
   ]
 
@@ -370,7 +378,7 @@ pub fn undo_get(
   let key = serialize_block_hash(hash)
   use data <- result.try(
     db_backend.db_get(handle.undo_db, key)
-    |> result.map_error(db_error_to_storage_error)
+    |> result.map_error(db_error_to_storage_error),
   )
   deserialize_block_undo(data)
 }
@@ -437,12 +445,17 @@ fn deserialize_coin(data: BitArray) -> Result(Coin, StorageError) {
     >> -> {
       case bit_array_slice(rest, 0, script_len) {
         Ok(script_bytes) -> {
-          let output = oni_bitcoin.TxOut(
-            value: oni_bitcoin.Amount(sats: value),
-            script_pubkey: oni_bitcoin.Script(bytes: script_bytes),
-          )
+          let output =
+            oni_bitcoin.TxOut(
+              value: oni_bitcoin.Amount(sats: value),
+              script_pubkey: oni_bitcoin.Script(bytes: script_bytes),
+            )
           let is_coinbase = is_coinbase_byte == 1
-          Ok(oni_storage.Coin(output: output, height: height, is_coinbase: is_coinbase))
+          Ok(oni_storage.Coin(
+            output: output,
+            height: height,
+            is_coinbase: is_coinbase,
+          ))
         }
         Error(_) -> Error(oni_storage.CorruptData)
       }
@@ -501,14 +514,18 @@ fn serialize_block_index_entry(entry: BlockIndexEntry) -> BitArray {
   let undo_pos = option_int_to_bytes(entry.undo_pos)
 
   <<
-    entry.hash.hash.bytes:bits,           // 32 bytes
-    entry.prev_hash.hash.bytes:bits,      // 32 bytes
+    entry.hash.hash.bytes:bits,
+    // 32 bytes
+    entry.prev_hash.hash.bytes:bits,
+    // 32 bytes
     entry.height:32-little,
     status_byte:8,
     entry.num_tx:32-little,
     entry.total_work:64-little,
-    file_pos:bits,                        // 9 bytes (1 flag + 8 int)
-    undo_pos:bits,                        // 9 bytes (1 flag + 8 int)
+    file_pos:bits,
+    // 9 bytes (1 flag + 8 int)
+    undo_pos:bits,
+    // 9 bytes (1 flag + 8 int)
     entry.timestamp:32-little,
     entry.bits:32-little,
     entry.nonce:32-little,
@@ -517,7 +534,9 @@ fn serialize_block_index_entry(entry: BlockIndexEntry) -> BitArray {
 }
 
 /// Deserialize a block index entry
-fn deserialize_block_index_entry(data: BitArray) -> Result(BlockIndexEntry, StorageError) {
+fn deserialize_block_index_entry(
+  data: BitArray,
+) -> Result(BlockIndexEntry, StorageError) {
   case data {
     <<
       hash_bytes:bytes-size(32),
@@ -535,8 +554,10 @@ fn deserialize_block_index_entry(data: BitArray) -> Result(BlockIndexEntry, Stor
       nonce:32-little,
       version:32-little,
     >> -> {
-      let hash = oni_bitcoin.BlockHash(hash: oni_bitcoin.Hash256(bytes: hash_bytes))
-      let prev_hash = oni_bitcoin.BlockHash(hash: oni_bitcoin.Hash256(bytes: prev_hash_bytes))
+      let hash =
+        oni_bitcoin.BlockHash(hash: oni_bitcoin.Hash256(bytes: hash_bytes))
+      let prev_hash =
+        oni_bitcoin.BlockHash(hash: oni_bitcoin.Hash256(bytes: prev_hash_bytes))
       let status = byte_to_status(status_byte)
       let file_pos = case file_pos_flag {
         1 -> Some(file_pos_value)
@@ -603,10 +624,11 @@ fn option_int_to_bytes(opt: Option(Int)) -> BitArray {
 /// Serialize block undo data
 fn serialize_block_undo(undo: BlockUndo) -> BitArray {
   let tx_count = list.length(undo.tx_undos)
-  let tx_data = list.fold(undo.tx_undos, <<>>, fn(acc, tx_undo) {
-    let tx_undo_bytes = serialize_tx_undo(tx_undo)
-    <<acc:bits, tx_undo_bytes:bits>>
-  })
+  let tx_data =
+    list.fold(undo.tx_undos, <<>>, fn(acc, tx_undo) {
+      let tx_undo_bytes = serialize_tx_undo(tx_undo)
+      <<acc:bits, tx_undo_bytes:bits>>
+    })
 
   <<tx_count:32-little, tx_data:bits>>
 }
@@ -614,11 +636,12 @@ fn serialize_block_undo(undo: BlockUndo) -> BitArray {
 /// Serialize transaction undo data
 fn serialize_tx_undo(undo: TxUndo) -> BitArray {
   let coin_count = list.length(undo.spent_coins)
-  let coins_data = list.fold(undo.spent_coins, <<>>, fn(acc, input_undo) {
-    let coin_bytes = serialize_coin(input_undo.coin)
-    let coin_len = byte_size(coin_bytes)
-    <<acc:bits, coin_len:32-little, coin_bytes:bits>>
-  })
+  let coins_data =
+    list.fold(undo.spent_coins, <<>>, fn(acc, input_undo) {
+      let coin_bytes = serialize_coin(input_undo.coin)
+      let coin_len = byte_size(coin_bytes)
+      <<acc:bits, coin_len:32-little, coin_bytes:bits>>
+    })
 
   <<coin_count:32-little, coins_data:bits>>
 }
@@ -687,7 +710,10 @@ fn deserialize_input_undos(
                 Ok(coin) -> {
                   let new_rest = bit_array_drop(rest, coin_len)
                   let input_undo = oni_storage.TxInputUndo(coin: coin)
-                  deserialize_input_undos(new_rest, remaining - 1, [input_undo, ..acc])
+                  deserialize_input_undos(new_rest, remaining - 1, [
+                    input_undo,
+                    ..acc
+                  ])
                 }
                 Error(e) -> Error(e)
               }
@@ -728,7 +754,11 @@ fn byte_size(data: BitArray) -> Int
 fn make_dir(path: String) -> Result(Nil, Nil)
 
 /// Slice a bit array
-fn bit_array_slice(data: BitArray, start: Int, length: Int) -> Result(BitArray, Nil) {
+fn bit_array_slice(
+  data: BitArray,
+  start: Int,
+  length: Int,
+) -> Result(BitArray, Nil) {
   bit_array.slice(data, start, length)
 }
 

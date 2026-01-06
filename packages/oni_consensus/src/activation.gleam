@@ -16,7 +16,7 @@
 // - BIP 341: Taproot
 
 import gleam/option.{type Option, None, Some}
-import oni_bitcoin.{type Network, Mainnet, Testnet, Regtest, Signet}
+import oni_bitcoin.{type Network, Mainnet, Regtest, Signet, Testnet}
 
 // ============================================================================
 // Activation Heights by Network
@@ -107,12 +107,18 @@ pub fn testnet_activations() -> ActivationHeights {
 /// Regtest activation heights (all active from genesis)
 pub fn regtest_activations() -> ActivationHeights {
   ActivationHeights(
-    bip34_height: 500,  // BIP 34 after 500 blocks (for testing)
-    bip65_height: 1351, // BIP 65 after genesis
-    bip66_height: 1251, // BIP 66 after genesis
-    csv_height: 432,    // CSV after genesis
-    segwit_height: 0,   // SegWit always active
-    taproot_height: 0,  // Taproot always active
+    bip34_height: 500,
+    // BIP 34 after 500 blocks (for testing)
+    bip65_height: 1351,
+    // BIP 65 after genesis
+    bip66_height: 1251,
+    // BIP 66 after genesis
+    csv_height: 432,
+    // CSV after genesis
+    segwit_height: 0,
+    // SegWit always active
+    taproot_height: 0,
+    // Taproot always active
     difficulty_adjustment_start: 1,
     allow_min_difficulty_blocks: True,
     bip30_exception_height: 0,
@@ -126,8 +132,10 @@ pub fn signet_activations() -> ActivationHeights {
     bip65_height: 1,
     bip66_height: 1,
     csv_height: 1,
-    segwit_height: 1,    // SegWit always active on signet
-    taproot_height: 1,   // Taproot active from block 1
+    segwit_height: 1,
+    // SegWit always active on signet
+    taproot_height: 1,
+    // Taproot active from block 1
     difficulty_adjustment_start: 1,
     allow_min_difficulty_blocks: False,
     bip30_exception_height: 1,
@@ -213,30 +221,31 @@ pub type ScriptFlags {
 
 /// Get mandatory script flags for a given height and network
 pub fn get_mandatory_flags(height: Int, network: Network) -> ScriptFlags {
-  let base_flags = ScriptFlags(
-    // P2SH always enforced (since 2012)
-    verify_p2sh: True,
-    verify_strictenc: False,
-    verify_dersig: is_bip66_active(height, network),
-    verify_low_s: False,
-    verify_nulldummy: is_segwit_active(height, network),
-    verify_sigpushonly: False,
-    verify_minimaldata: False,
-    verify_discourage_upgradable_nops: False,
-    verify_cleanstack: False,
-    verify_checklocktimeverify: is_bip65_active(height, network),
-    verify_checksequenceverify: is_csv_active(height, network),
-    verify_witness: is_segwit_active(height, network),
-    verify_discourage_upgradable_witness_program: False,
-    verify_minimalif: is_segwit_active(height, network),
-    verify_nullfail: is_segwit_active(height, network),
-    verify_witness_pubkeytype: is_segwit_active(height, network),
-    verify_const_scriptcode: is_taproot_active(height, network),
-    verify_taproot: is_taproot_active(height, network),
-    verify_discourage_upgradable_taproot_version: False,
-    verify_discourage_op_success: False,
-    verify_discourage_upgradable_pubkeytype: False,
-  )
+  let base_flags =
+    ScriptFlags(
+      // P2SH always enforced (since 2012)
+      verify_p2sh: True,
+      verify_strictenc: False,
+      verify_dersig: is_bip66_active(height, network),
+      verify_low_s: False,
+      verify_nulldummy: is_segwit_active(height, network),
+      verify_sigpushonly: False,
+      verify_minimaldata: False,
+      verify_discourage_upgradable_nops: False,
+      verify_cleanstack: False,
+      verify_checklocktimeverify: is_bip65_active(height, network),
+      verify_checksequenceverify: is_csv_active(height, network),
+      verify_witness: is_segwit_active(height, network),
+      verify_discourage_upgradable_witness_program: False,
+      verify_minimalif: is_segwit_active(height, network),
+      verify_nullfail: is_segwit_active(height, network),
+      verify_witness_pubkeytype: is_segwit_active(height, network),
+      verify_const_scriptcode: is_taproot_active(height, network),
+      verify_taproot: is_taproot_active(height, network),
+      verify_discourage_upgradable_taproot_version: False,
+      verify_discourage_op_success: False,
+      verify_discourage_upgradable_pubkeytype: False,
+    )
 
   base_flags
 }
@@ -268,10 +277,7 @@ pub fn get_standard_flags(height: Int, network: Network) -> ScriptFlags {
 pub const coinbase_maturity: Int = 100
 
 /// Check if a coinbase output is mature
-pub fn is_coinbase_mature(
-  coinbase_height: Int,
-  spending_height: Int,
-) -> Bool {
+pub fn is_coinbase_mature(coinbase_height: Int, spending_height: Int) -> Bool {
   spending_height >= coinbase_height + coinbase_maturity
 }
 
@@ -289,7 +295,8 @@ pub const initial_subsidy: Int = 5_000_000_000
 pub fn get_block_subsidy(height: Int, network: Network) -> Int {
   // Regtest uses same halving schedule but shorter for testing
   let interval = case network {
-    Regtest -> 150  // Halve every 150 blocks in regtest
+    Regtest -> 150
+    // Halve every 150 blocks in regtest
     _ -> halving_interval
   }
 
@@ -355,7 +362,8 @@ pub fn get_max_target(network: Network) -> Int {
 pub type Checkpoint {
   Checkpoint(
     height: Int,
-    hash: String,  // Hex-encoded block hash
+    hash: String,
+    // Hex-encoded block hash
   )
 }
 
@@ -364,55 +372,108 @@ pub fn get_checkpoints(network: Network) -> List(Checkpoint) {
   case network {
     Mainnet -> mainnet_checkpoints()
     Testnet -> testnet_checkpoints()
-    Regtest -> []  // No checkpoints for regtest
-    Signet -> []   // No checkpoints for signet
+    Regtest -> []
+    // No checkpoints for regtest
+    Signet -> []
+    // No checkpoints for signet
   }
 }
 
 /// Mainnet checkpoints
 fn mainnet_checkpoints() -> List(Checkpoint) {
   [
-    Checkpoint(11_111, "0000000069e244f73d78e8fd29ba2fd2ed618bd6fa2ee92559f542fdb26e7c1d"),
-    Checkpoint(33_333, "000000002dd5588a74784eaa7ab0507a18ad16a236e7b1ce69f00d7ddfb5d0a6"),
-    Checkpoint(74_000, "0000000000573993a3c9e41ce34471c079dcf5f52a0e824a81e7f953b8661a20"),
-    Checkpoint(105_000, "00000000000291ce28027faea320c8d2b054b2e0fe44a773f3eefb151d6bdc97"),
-    Checkpoint(134_444, "00000000000005b12ffd4cd315cd34ffd4a594f430ac814c91184a0d42d2b0fe"),
-    Checkpoint(168_000, "000000000000099e61ea72015e79632f216fe6cb33d7899acb35b75c8303b763"),
-    Checkpoint(193_000, "000000000000059f452a5f7340de6682a977387c17010ff6e6c3bd83ca8b1317"),
-    Checkpoint(210_000, "000000000000048b95347e83192f69cf0366076336c639f9b7228e9ba171342e"),
-    Checkpoint(216_116, "00000000000001b4f4b433e81ee46494af945cf96014816a4e2370f11b23df4e"),
-    Checkpoint(225_430, "00000000000001c108384350f74090433e7fcf79a606b8e797f065b130575932"),
-    Checkpoint(250_000, "000000000000003887df1f29024b06fc2200b55f8af8f35453d7be294df2d214"),
-    Checkpoint(279_000, "0000000000000001ae8c72a0b0c301f67e3afca10e819efa9041e458e9bd7e40"),
-    Checkpoint(295_000, "00000000000000004d9b4ef50f0f9d686fd69db2e03af35a100370c64632a983"),
-    Checkpoint(478_559, "00000000000000000019f112ec0a9982926f1258cdcc558dd7c3b7e5dc7fa148"),
-    Checkpoint(556_766, "0000000000000000000f1c54590ee18d15ec70e68ae4f2e768ddce9a4cd2b0e3"),
-    Checkpoint(656_000, "0000000000000000000cc8c4b1eb7899c18c4b7c0b5e5e7b3e8f0b2b3e3c0f0e0"),
+    Checkpoint(
+      11_111,
+      "0000000069e244f73d78e8fd29ba2fd2ed618bd6fa2ee92559f542fdb26e7c1d",
+    ),
+    Checkpoint(
+      33_333,
+      "000000002dd5588a74784eaa7ab0507a18ad16a236e7b1ce69f00d7ddfb5d0a6",
+    ),
+    Checkpoint(
+      74_000,
+      "0000000000573993a3c9e41ce34471c079dcf5f52a0e824a81e7f953b8661a20",
+    ),
+    Checkpoint(
+      105_000,
+      "00000000000291ce28027faea320c8d2b054b2e0fe44a773f3eefb151d6bdc97",
+    ),
+    Checkpoint(
+      134_444,
+      "00000000000005b12ffd4cd315cd34ffd4a594f430ac814c91184a0d42d2b0fe",
+    ),
+    Checkpoint(
+      168_000,
+      "000000000000099e61ea72015e79632f216fe6cb33d7899acb35b75c8303b763",
+    ),
+    Checkpoint(
+      193_000,
+      "000000000000059f452a5f7340de6682a977387c17010ff6e6c3bd83ca8b1317",
+    ),
+    Checkpoint(
+      210_000,
+      "000000000000048b95347e83192f69cf0366076336c639f9b7228e9ba171342e",
+    ),
+    Checkpoint(
+      216_116,
+      "00000000000001b4f4b433e81ee46494af945cf96014816a4e2370f11b23df4e",
+    ),
+    Checkpoint(
+      225_430,
+      "00000000000001c108384350f74090433e7fcf79a606b8e797f065b130575932",
+    ),
+    Checkpoint(
+      250_000,
+      "000000000000003887df1f29024b06fc2200b55f8af8f35453d7be294df2d214",
+    ),
+    Checkpoint(
+      279_000,
+      "0000000000000001ae8c72a0b0c301f67e3afca10e819efa9041e458e9bd7e40",
+    ),
+    Checkpoint(
+      295_000,
+      "00000000000000004d9b4ef50f0f9d686fd69db2e03af35a100370c64632a983",
+    ),
+    Checkpoint(
+      478_559,
+      "00000000000000000019f112ec0a9982926f1258cdcc558dd7c3b7e5dc7fa148",
+    ),
+    Checkpoint(
+      556_766,
+      "0000000000000000000f1c54590ee18d15ec70e68ae4f2e768ddce9a4cd2b0e3",
+    ),
+    Checkpoint(
+      656_000,
+      "0000000000000000000cc8c4b1eb7899c18c4b7c0b5e5e7b3e8f0b2b3e3c0f0e0",
+    ),
   ]
 }
 
 /// Testnet checkpoints
 fn testnet_checkpoints() -> List(Checkpoint) {
   [
-    Checkpoint(546, "000000002a936ca763904c3c35fce2f3556c559c0214345d31b1bcebf76acb70"),
+    Checkpoint(
+      546,
+      "000000002a936ca763904c3c35fce2f3556c559c0214345d31b1bcebf76acb70",
+    ),
   ]
 }
 
 /// Verify a block matches a checkpoint (if one exists at that height)
-pub fn verify_checkpoint(
-  height: Int,
-  hash: String,
-  network: Network,
-) -> Bool {
+pub fn verify_checkpoint(height: Int, hash: String, network: Network) -> Bool {
   let checkpoints = get_checkpoints(network)
 
   case find_checkpoint(height, checkpoints) {
-    None -> True  // No checkpoint at this height
+    None -> True
+    // No checkpoint at this height
     Some(checkpoint) -> checkpoint.hash == hash
   }
 }
 
-fn find_checkpoint(height: Int, checkpoints: List(Checkpoint)) -> Option(Checkpoint) {
+fn find_checkpoint(
+  height: Int,
+  checkpoints: List(Checkpoint),
+) -> Option(Checkpoint) {
   case checkpoints {
     [] -> None
     [cp, ..rest] -> {

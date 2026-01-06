@@ -14,8 +14,13 @@ pub fn new_registry_test() {
 }
 
 pub fn register_gauge_test() {
-  let registry = prometheus.new_registry("oni")
-    |> prometheus.register("blockchain_height", "Current blockchain height", prometheus.Gauge)
+  let registry =
+    prometheus.new_registry("oni")
+    |> prometheus.register(
+      "blockchain_height",
+      "Current blockchain height",
+      prometheus.Gauge,
+    )
 
   // Metric should exist
   let metrics = dict.to_list(registry.metrics)
@@ -29,7 +34,8 @@ pub fn register_gauge_test() {
 }
 
 pub fn set_gauge_value_test() {
-  let registry = prometheus.new_registry("oni")
+  let registry =
+    prometheus.new_registry("oni")
     |> prometheus.register("height", "Height", prometheus.Gauge)
     |> prometheus.set("height", 100.0, dict.new())
 
@@ -45,8 +51,13 @@ pub fn set_gauge_value_test() {
 }
 
 pub fn register_counter_test() {
-  let registry = prometheus.new_registry("test")
-    |> prometheus.register("requests_total", "Total requests", prometheus.Counter)
+  let registry =
+    prometheus.new_registry("test")
+    |> prometheus.register(
+      "requests_total",
+      "Total requests",
+      prometheus.Counter,
+    )
 
   let output = prometheus.export(registry)
 
@@ -56,8 +67,13 @@ pub fn register_counter_test() {
 }
 
 pub fn increment_counter_test() {
-  let registry = prometheus.new_registry("test")
-    |> prometheus.register("requests_total", "Total requests", prometheus.Counter)
+  let registry =
+    prometheus.new_registry("test")
+    |> prometheus.register(
+      "requests_total",
+      "Total requests",
+      prometheus.Counter,
+    )
     |> prometheus.inc("requests_total", dict.new())
     |> prometheus.inc("requests_total", dict.new())
     |> prometheus.inc("requests_total", dict.new())
@@ -70,7 +86,8 @@ pub fn increment_counter_test() {
 }
 
 pub fn increment_by_test() {
-  let registry = prometheus.new_registry("test")
+  let registry =
+    prometheus.new_registry("test")
     |> prometheus.register("bytes_total", "Total bytes", prometheus.Counter)
     |> prometheus.inc_by("bytes_total", 1000.0, dict.new())
     |> prometheus.inc_by("bytes_total", 500.0, dict.new())
@@ -85,7 +102,8 @@ pub fn increment_by_test() {
 pub fn metric_with_labels_test() {
   let labels = dict.from_list([#("method", "getblock")])
 
-  let registry = prometheus.new_registry("rpc")
+  let registry =
+    prometheus.new_registry("rpc")
     |> prometheus.register("requests", "Requests", prometheus.Counter)
     |> prometheus.inc("requests", labels)
 
@@ -97,8 +115,13 @@ pub fn metric_with_labels_test() {
 }
 
 pub fn export_help_line_test() {
-  let registry = prometheus.new_registry("oni")
-    |> prometheus.register("height", "Current blockchain height", prometheus.Gauge)
+  let registry =
+    prometheus.new_registry("oni")
+    |> prometheus.register(
+      "height",
+      "Current blockchain height",
+      prometheus.Gauge,
+    )
 
   let output = prometheus.export(registry)
 
@@ -108,7 +131,8 @@ pub fn export_help_line_test() {
 }
 
 pub fn export_type_line_test() {
-  let registry = prometheus.new_registry("oni")
+  let registry =
+    prometheus.new_registry("oni")
     |> prometheus.register("height", "Height", prometheus.Gauge)
 
   let output = prometheus.export(registry)
@@ -142,24 +166,25 @@ pub fn new_collector_test() {
 pub fn update_node_metrics_test() {
   let collector = prometheus.new_collector("oni")
 
-  let state = prometheus.NodeMetricsState(
-    network: "mainnet",
-    height: 100_000,
-    difficulty: 1000.0,
-    best_time: 1234567890,
-    chain_size: 500_000_000,
-    verification_progress: 0.99,
-    mempool_size: 1000,
-    mempool_bytes: 5_000_000,
-    mempool_usage: 10_000_000,
-    mempool_fees: 1_000_000,
-    peers_connected: 8,
-    peers_inbound: 5,
-    peers_outbound: 3,
-    utxo_count: 80_000_000,
-    utxo_cache_size: 100_000,
-    uptime_seconds: 3600,
-  )
+  let state =
+    prometheus.NodeMetricsState(
+      network: "mainnet",
+      height: 100_000,
+      difficulty: 1000.0,
+      best_time: 1_234_567_890,
+      chain_size: 500_000_000,
+      verification_progress: 0.99,
+      mempool_size: 1000,
+      mempool_bytes: 5_000_000,
+      mempool_usage: 10_000_000,
+      mempool_fees: 1_000_000,
+      peers_connected: 8,
+      peers_inbound: 5,
+      peers_outbound: 3,
+      utxo_count: 80_000_000,
+      utxo_cache_size: 100_000,
+      uptime_seconds: 3600,
+    )
 
   let updated = prometheus.update_node_metrics(collector, state)
   let output = prometheus.export_metrics(updated)
@@ -177,7 +202,8 @@ pub fn record_counter_test() {
   let collector = prometheus.new_collector("oni")
 
   let labels = dict.from_list([#("status", "success")])
-  let updated = prometheus.record_counter(collector, "blocks_validated_total", labels)
+  let updated =
+    prometheus.record_counter(collector, "blocks_validated_total", labels)
 
   let output = prometheus.export_metrics(updated)
 
@@ -217,7 +243,8 @@ pub fn metrics_http_response_test() {
 pub fn escape_label_value_test() {
   let labels = dict.from_list([#("message", "hello \"world\"")])
 
-  let registry = prometheus.new_registry("test")
+  let registry =
+    prometheus.new_registry("test")
     |> prometheus.register("test_metric", "Test", prometheus.Gauge)
     |> prometheus.set("test_metric", 1.0, labels)
 

@@ -192,13 +192,14 @@ pub fn parse_nolisten_test() {
 }
 
 pub fn parse_multiple_args_test() {
-  let result = cli.parse_args([
-    "--regtest",
-    "--datadir=/data/regtest",
-    "--rpcport=18443",
-    "--port=18444",
-    "--debug",
-  ])
+  let result =
+    cli.parse_args([
+      "--regtest",
+      "--datadir=/data/regtest",
+      "--rpcport=18443",
+      "--port=18444",
+      "--debug",
+    ])
   should.be_ok(result)
 
   let args = case result {
@@ -213,20 +214,21 @@ pub fn parse_multiple_args_test() {
   |> should.equal(Some("/data/regtest"))
 
   args.rpc_port
-  |> should.equal(Some(18443))
+  |> should.equal(Some(18_443))
 
   args.p2p_port
-  |> should.equal(Some(18444))
+  |> should.equal(Some(18_444))
 
   args.debug
   |> should.be_true
 }
 
 pub fn parse_rpc_auth_test() {
-  let result = cli.parse_args([
-    "--rpcuser=myuser",
-    "--rpcpassword=mypassword",
-  ])
+  let result =
+    cli.parse_args([
+      "--rpcuser=myuser",
+      "--rpcpassword=mypassword",
+    ])
   should.be_ok(result)
 
   let args = case result {
@@ -242,10 +244,11 @@ pub fn parse_rpc_auth_test() {
 }
 
 pub fn parse_addnode_test() {
-  let result = cli.parse_args([
-    "--addnode=192.168.1.1:8333",
-    "--addnode=192.168.1.2:8333",
-  ])
+  let result =
+    cli.parse_args([
+      "--addnode=192.168.1.1:8333",
+      "--addnode=192.168.1.2:8333",
+    ])
   should.be_ok(result)
 
   let args = case result {
@@ -322,20 +325,21 @@ pub fn build_config_regtest_test() {
   |> should.equal(oni_bitcoin.Regtest)
 
   config.rpc_port
-  |> should.equal(18443)
+  |> should.equal(18_443)
 
   config.p2p_port
-  |> should.equal(18444)
+  |> should.equal(18_444)
 }
 
 pub fn build_config_with_overrides_test() {
-  let args = cli.CliArgs(
-    ..cli.default_args(),
-    network: oni_bitcoin.Testnet,
-    rpc_port: Some(9999),
-    p2p_port: Some(8888),
-    data_dir: Some("/custom/path"),
-  )
+  let args =
+    cli.CliArgs(
+      ..cli.default_args(),
+      network: oni_bitcoin.Testnet,
+      rpc_port: Some(9999),
+      p2p_port: Some(8888),
+      data_dir: Some("/custom/path"),
+    )
   let config = cli.build_config(args)
 
   config.network

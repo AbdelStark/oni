@@ -18,8 +18,8 @@ import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import oni_bitcoin.{
-  type Block, type BlockHash, type BlockHeader,
-  type OutPoint, type Transaction, type TxIn, type TxOut, type Txid,
+  type Block, type BlockHash, type BlockHeader, type OutPoint, type Transaction,
+  type TxIn, type TxOut, type Txid,
 }
 
 // ============================================================================
@@ -48,11 +48,7 @@ pub type StorageError {
 
 /// A coin (UTXO) in the database
 pub type Coin {
-  Coin(
-    output: TxOut,
-    height: Int,
-    is_coinbase: Bool,
-  )
+  Coin(output: TxOut, height: Int, is_coinbase: Bool)
 }
 
 /// Create a new Coin
@@ -128,10 +124,7 @@ fn outpoint_to_key(outpoint: OutPoint) -> String {
 
 /// A batch of UTXO changes
 pub type UtxoBatch {
-  UtxoBatch(
-    additions: List(#(OutPoint, Coin)),
-    removals: List(OutPoint),
-  )
+  UtxoBatch(additions: List(#(OutPoint, Coin)), removals: List(OutPoint))
 }
 
 /// Create an empty batch
@@ -140,7 +133,11 @@ pub fn utxo_batch_new() -> UtxoBatch {
 }
 
 /// Add a coin creation to the batch
-pub fn utxo_batch_add(batch: UtxoBatch, outpoint: OutPoint, coin: Coin) -> UtxoBatch {
+pub fn utxo_batch_add(
+  batch: UtxoBatch,
+  outpoint: OutPoint,
+  coin: Coin,
+) -> UtxoBatch {
   UtxoBatch(..batch, additions: [#(outpoint, coin), ..batch.additions])
 }
 
@@ -152,9 +149,8 @@ pub fn utxo_batch_remove(batch: UtxoBatch, outpoint: OutPoint) -> UtxoBatch {
 /// Apply batch to UTXO view
 pub fn utxo_apply_batch(view: UtxoView, batch: UtxoBatch) -> UtxoView {
   // First apply removals
-  let after_removals = list.fold(batch.removals, view, fn(v, outpoint) {
-    utxo_remove(v, outpoint)
-  })
+  let after_removals =
+    list.fold(batch.removals, view, fn(v, outpoint) { utxo_remove(v, outpoint) })
   // Then apply additions
   list.fold(batch.additions, after_removals, fn(v, entry) {
     let #(outpoint, coin) = entry
@@ -272,11 +268,7 @@ pub type BlockIndex {
 
 /// Create a new block index
 pub fn block_index_new() -> BlockIndex {
-  BlockIndex(
-    entries: dict.new(),
-    by_height: dict.new(),
-    tip: None,
-  )
+  BlockIndex(entries: dict.new(), by_height: dict.new(), tip: None)
 }
 
 /// Add an entry to the block index
@@ -295,14 +287,20 @@ pub fn block_index_add(index: BlockIndex, entry: BlockIndexEntry) -> BlockIndex 
 }
 
 /// Get entry by hash
-pub fn block_index_get(index: BlockIndex, hash: BlockHash) -> Option(BlockIndexEntry) {
+pub fn block_index_get(
+  index: BlockIndex,
+  hash: BlockHash,
+) -> Option(BlockIndexEntry) {
   let key = block_hash_to_key(hash)
   dict.get(index.entries, key)
   |> option.from_result
 }
 
 /// Get entry by height (main chain only)
-pub fn block_index_get_by_height(index: BlockIndex, height: Int) -> Option(BlockIndexEntry) {
+pub fn block_index_get_by_height(
+  index: BlockIndex,
+  height: Int,
+) -> Option(BlockIndexEntry) {
   case dict.get(index.by_height, height) {
     Ok(key) -> dict.get(index.entries, key) |> option.from_result
     Error(_) -> None
@@ -387,7 +385,8 @@ pub fn block_index_find_common_ancestor(
   hash2: BlockHash,
 ) -> Option(BlockIndexEntry) {
   case block_index_get(index, hash1), block_index_get(index, hash2) {
-    Some(entry1), Some(entry2) -> find_common_ancestor_walk(index, entry1, entry2)
+    Some(entry1), Some(entry2) ->
+      find_common_ancestor_walk(index, entry1, entry2)
     _, _ -> None
   }
 }
@@ -417,8 +416,10 @@ fn find_common_ancestor_walk(
             }
             False -> {
               // Same height, move both back
-              case block_index_get(index, entry1.prev_hash),
-                   block_index_get(index, entry2.prev_hash) {
+              case
+                block_index_get(index, entry1.prev_hash),
+                block_index_get(index, entry2.prev_hash)
+              {
                 Some(prev1), Some(prev2) ->
                   find_common_ancestor_walk(index, prev1, prev2)
                 _, _ -> None
@@ -437,12 +438,17 @@ pub fn block_index_is_ancestor(
   ancestor_hash: BlockHash,
   descendant_hash: BlockHash,
 ) -> Bool {
-  case block_index_get(index, ancestor_hash), block_index_get(index, descendant_hash) {
+  case
+    block_index_get(index, ancestor_hash),
+    block_index_get(index, descendant_hash)
+  {
     Some(ancestor), Some(descendant) -> {
       case ancestor.height > descendant.height {
         True -> False
         False -> {
-          case block_index_get_ancestor(index, descendant_hash, ancestor.height) {
+          case
+            block_index_get_ancestor(index, descendant_hash, ancestor.height)
+          {
             Some(at_height) -> block_hash_eq(at_height.hash, ancestor_hash)
             None -> False
           }
@@ -497,9 +503,7 @@ pub fn chainstate_genesis(genesis_hash: BlockHash) -> Chainstate {
 
 /// Undo data for a single transaction input (spent coin)
 pub type TxInputUndo {
-  TxInputUndo(
-    coin: Coin,
-  )
+  TxInputUndo(coin: Coin)
 }
 
 /// Undo data for a single transaction
@@ -557,13 +561,20 @@ pub fn block_store_new() -> BlockStore {
 }
 
 /// Store a block
-pub fn block_store_put(store: BlockStore, hash: BlockHash, block: Block) -> BlockStore {
+pub fn block_store_put(
+  store: BlockStore,
+  hash: BlockHash,
+  block: Block,
+) -> BlockStore {
   let key = oni_bitcoin.block_hash_to_hex(hash)
   BlockStore(dict.insert(store.blocks, key, block))
 }
 
 /// Get a block by hash
-pub fn block_store_get(store: BlockStore, hash: BlockHash) -> Result(Block, StorageError) {
+pub fn block_store_get(
+  store: BlockStore,
+  hash: BlockHash,
+) -> Result(Block, StorageError) {
   let key = oni_bitcoin.block_hash_to_hex(hash)
   case dict.get(store.blocks, key) {
     Ok(block) -> Ok(block)
@@ -603,13 +614,20 @@ pub fn header_store_new() -> HeaderStore {
 }
 
 /// Store a header
-pub fn header_store_put(store: HeaderStore, hash: BlockHash, header: BlockHeader) -> HeaderStore {
+pub fn header_store_put(
+  store: HeaderStore,
+  hash: BlockHash,
+  header: BlockHeader,
+) -> HeaderStore {
   let key = oni_bitcoin.block_hash_to_hex(hash)
   HeaderStore(dict.insert(store.headers, key, header))
 }
 
 /// Get a header by hash
-pub fn header_store_get(store: HeaderStore, hash: BlockHash) -> Result(BlockHeader, StorageError) {
+pub fn header_store_get(
+  store: HeaderStore,
+  hash: BlockHash,
+) -> Result(BlockHeader, StorageError) {
   let key = oni_bitcoin.block_hash_to_hex(hash)
   case dict.get(store.headers, key) {
     Ok(header) -> Ok(header)
@@ -638,13 +656,20 @@ pub fn undo_store_new() -> UndoStore {
 }
 
 /// Store undo data for a block
-pub fn undo_store_put(store: UndoStore, hash: BlockHash, undo: BlockUndo) -> UndoStore {
+pub fn undo_store_put(
+  store: UndoStore,
+  hash: BlockHash,
+  undo: BlockUndo,
+) -> UndoStore {
   let key = oni_bitcoin.block_hash_to_hex(hash)
   UndoStore(dict.insert(store.undos, key, undo))
 }
 
 /// Get undo data for a block
-pub fn undo_store_get(store: UndoStore, hash: BlockHash) -> Result(BlockUndo, StorageError) {
+pub fn undo_store_get(
+  store: UndoStore,
+  hash: BlockHash,
+) -> Result(BlockUndo, StorageError) {
   let key = oni_bitcoin.block_hash_to_hex(hash)
   case dict.get(store.undos, key) {
     Ok(undo) -> Ok(undo)
@@ -717,55 +742,64 @@ pub fn storage_connect_block(
     False -> Error(InvalidBlockHeight)
     True -> {
       // Process all transactions
-      let result = connect_block_txs(
-        block.transactions,
-        storage.utxo_view,
-        height,
-        block_undo_new(),
-      )
+      let result =
+        connect_block_txs(
+          block.transactions,
+          storage.utxo_view,
+          height,
+          block_undo_new(),
+        )
 
       case result {
         Error(e) -> Error(e)
         Ok(#(new_utxo_view, block_undo)) -> {
           // Store the block
-          let new_block_store = block_store_put(storage.block_store, block_hash, block)
+          let new_block_store =
+            block_store_put(storage.block_store, block_hash, block)
 
           // Store undo data
           let finalized_undo = block_undo_finalize(block_undo)
-          let new_undo_store = undo_store_put(storage.undo_store, block_hash, finalized_undo)
+          let new_undo_store =
+            undo_store_put(storage.undo_store, block_hash, finalized_undo)
 
           // Update block index
-          let entry = block_index_entry_from_header(
-            block.header,
-            block_hash,
-            height,
-            get_prev_work(storage.block_index, block.header.prev_block),
-          )
-          let entry_with_status = BlockIndexEntry(
-            ..entry,
-            status: BlockValidScripts,
-            num_tx: list.length(block.transactions),
-          )
-          let new_block_index = block_index_add(storage.block_index, entry_with_status)
+          let entry =
+            block_index_entry_from_header(
+              block.header,
+              block_hash,
+              height,
+              get_prev_work(storage.block_index, block.header.prev_block),
+            )
+          let entry_with_status =
+            BlockIndexEntry(
+              ..entry,
+              status: BlockValidScripts,
+              num_tx: list.length(block.transactions),
+            )
+          let new_block_index =
+            block_index_add(storage.block_index, entry_with_status)
           let new_block_index = block_index_set_tip(new_block_index, block_hash)
 
           // Update chainstate
-          let new_chainstate = Chainstate(
-            ..storage.chainstate,
-            best_block: block_hash,
-            best_height: height,
-            total_tx: storage.chainstate.total_tx + list.length(block.transactions),
-            total_coins: utxo_count(new_utxo_view),
-          )
+          let new_chainstate =
+            Chainstate(
+              ..storage.chainstate,
+              best_block: block_hash,
+              best_height: height,
+              total_tx: storage.chainstate.total_tx
+                + list.length(block.transactions),
+              total_coins: utxo_count(new_utxo_view),
+            )
 
-          let new_storage = Storage(
-            ..storage,
-            block_store: new_block_store,
-            undo_store: new_undo_store,
-            block_index: new_block_index,
-            utxo_view: new_utxo_view,
-            chainstate: new_chainstate,
-          )
+          let new_storage =
+            Storage(
+              ..storage,
+              block_store: new_block_store,
+              undo_store: new_undo_store,
+              block_index: new_block_index,
+              utxo_view: new_utxo_view,
+              chainstate: new_chainstate,
+            )
 
           Ok(#(new_storage, finalized_undo))
         }
@@ -821,7 +855,15 @@ fn connect_tx(
     Ok(#(after_spend, tx_undo)) -> {
       // Add outputs
       let txid = compute_txid(tx)
-      let after_add = add_outputs(tx.outputs, utxo_view: after_spend, txid: txid, height: height, is_coinbase: is_coinbase, vout: 0)
+      let after_add =
+        add_outputs(
+          tx.outputs,
+          utxo_view: after_spend,
+          txid: txid,
+          height: height,
+          is_coinbase: is_coinbase,
+          vout: 0,
+        )
       Ok(#(after_add, tx_undo))
     }
   }
@@ -863,7 +905,14 @@ fn add_outputs(
       let outpoint = oni_bitcoin.outpoint_new(txid, vout)
       let coin = coin_new(output, height, is_coinbase)
       let new_view = utxo_add(view, outpoint, coin)
-      add_outputs(rest, utxo_view: new_view, txid: txid, height: height, is_coinbase: is_coinbase, vout: vout + 1)
+      add_outputs(
+        rest,
+        utxo_view: new_view,
+        txid: txid,
+        height: height,
+        is_coinbase: is_coinbase,
+        vout: vout + 1,
+      )
     }
   }
 }
@@ -889,7 +938,9 @@ pub fn storage_disconnect_block(
               let txs_reversed = list.reverse(block.transactions)
               let tx_undos = block_undo_get_tx_undos(block_undo)
 
-              case disconnect_block_txs(txs_reversed, tx_undos, storage.utxo_view) {
+              case
+                disconnect_block_txs(txs_reversed, tx_undos, storage.utxo_view)
+              {
                 Error(e) -> Error(e)
                 Ok(new_utxo_view) -> {
                   // Get previous block info
@@ -897,32 +948,38 @@ pub fn storage_disconnect_block(
                   let prev_height = storage.chainstate.best_height - 1
 
                   // Update block index
-                  let new_block_index = block_index_update_status(
-                    storage.block_index,
-                    block_hash,
-                    BlockValidTransactions,
-                  )
-                  let new_block_index = block_index_set_tip(new_block_index, prev_hash)
+                  let new_block_index =
+                    block_index_update_status(
+                      storage.block_index,
+                      block_hash,
+                      BlockValidTransactions,
+                    )
+                  let new_block_index =
+                    block_index_set_tip(new_block_index, prev_hash)
 
                   // Update chainstate
-                  let new_chainstate = Chainstate(
-                    ..storage.chainstate,
-                    best_block: prev_hash,
-                    best_height: prev_height,
-                    total_tx: storage.chainstate.total_tx - list.length(block.transactions),
-                    total_coins: utxo_count(new_utxo_view),
-                  )
+                  let new_chainstate =
+                    Chainstate(
+                      ..storage.chainstate,
+                      best_block: prev_hash,
+                      best_height: prev_height,
+                      total_tx: storage.chainstate.total_tx
+                        - list.length(block.transactions),
+                      total_coins: utxo_count(new_utxo_view),
+                    )
 
                   // Remove undo data
-                  let new_undo_store = undo_store_remove(storage.undo_store, block_hash)
+                  let new_undo_store =
+                    undo_store_remove(storage.undo_store, block_hash)
 
-                  let new_storage = Storage(
-                    ..storage,
-                    undo_store: new_undo_store,
-                    block_index: new_block_index,
-                    utxo_view: new_utxo_view,
-                    chainstate: new_chainstate,
-                  )
+                  let new_storage =
+                    Storage(
+                      ..storage,
+                      undo_store: new_undo_store,
+                      block_index: new_block_index,
+                      utxo_view: new_utxo_view,
+                      chainstate: new_chainstate,
+                    )
 
                   Ok(new_storage)
                 }
@@ -963,7 +1020,8 @@ fn disconnect_tx(
   let txid = compute_txid(tx)
   let outputs_reversed = list.reverse(tx.outputs)
   let num_outputs = list.length(tx.outputs)
-  let after_remove = remove_outputs(outputs_reversed, utxo_view, txid, num_outputs - 1)
+  let after_remove =
+    remove_outputs(outputs_reversed, utxo_view, txid, num_outputs - 1)
 
   // Restore spent inputs (not for coinbase)
   case is_coinbase_tx(tx) {
@@ -1011,20 +1069,12 @@ fn restore_inputs(
 
 /// Database configuration
 pub type DbConfig {
-  DbConfig(
-    path: String,
-    cache_size: Int,
-    max_open_files: Int,
-  )
+  DbConfig(path: String, cache_size: Int, max_open_files: Int)
 }
 
 /// Default database configuration
 pub fn default_db_config(path: String) -> DbConfig {
-  DbConfig(
-    path: path,
-    cache_size: 450 * 1024 * 1024,
-    max_open_files: 64,
-  )
+  DbConfig(path: path, cache_size: 450 * 1024 * 1024, max_open_files: 64)
 }
 
 // ============================================================================
@@ -1072,28 +1122,30 @@ fn compute_txid(tx: Transaction) -> Txid {
 
 /// Serialize transaction without witness
 fn serialize_tx_legacy(tx: Transaction) -> BitArray {
-  let inputs_data = list.fold(tx.inputs, <<>>, fn(acc, input) {
-    let script = oni_bitcoin.script_to_bytes(input.script_sig)
-    let input_data = <<
-      input.prevout.txid.hash.bytes:bits,
-      input.prevout.vout:32-little,
-      { oni_bitcoin.compact_size_encode(bit_array_byte_size(script)) }:bits,
-      script:bits,
-      input.sequence:32-little,
-    >>
-    <<acc:bits, input_data:bits>>
-  })
+  let inputs_data =
+    list.fold(tx.inputs, <<>>, fn(acc, input) {
+      let script = oni_bitcoin.script_to_bytes(input.script_sig)
+      let input_data = <<
+        input.prevout.txid.hash.bytes:bits,
+        input.prevout.vout:32-little,
+        { oni_bitcoin.compact_size_encode(bit_array_byte_size(script)) }:bits,
+        script:bits,
+        input.sequence:32-little,
+      >>
+      <<acc:bits, input_data:bits>>
+    })
 
-  let outputs_data = list.fold(tx.outputs, <<>>, fn(acc, output) {
-    let script = oni_bitcoin.script_to_bytes(output.script_pubkey)
-    let value = oni_bitcoin.amount_to_sats(output.value)
-    let output_data = <<
-      value:64-little,
-      { oni_bitcoin.compact_size_encode(bit_array_byte_size(script)) }:bits,
-      script:bits,
-    >>
-    <<acc:bits, output_data:bits>>
-  })
+  let outputs_data =
+    list.fold(tx.outputs, <<>>, fn(acc, output) {
+      let script = oni_bitcoin.script_to_bytes(output.script_pubkey)
+      let value = oni_bitcoin.amount_to_sats(output.value)
+      let output_data = <<
+        value:64-little,
+        { oni_bitcoin.compact_size_encode(bit_array_byte_size(script)) }:bits,
+        script:bits,
+      >>
+      <<acc:bits, output_data:bits>>
+    })
 
   <<
     tx.version:32-little,

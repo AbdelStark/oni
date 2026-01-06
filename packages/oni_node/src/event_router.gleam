@@ -17,19 +17,15 @@ import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
 import oni_bitcoin
 import oni_p2p.{
-  type BlockHeaderNet, type InvItem, type Message, type VersionPayload,
-  InvBlock, InvTx, InvWitnessBlock, InvWitnessTx,
-  MsgAddr, MsgBlock, MsgGetBlocks, MsgGetData, MsgGetHeaders, MsgHeaders,
-  MsgInv, MsgMempool, MsgNotFound, MsgPing, MsgPong, MsgTx, MsgVerack,
-  MsgVersion,
+  type BlockHeaderNet, type InvItem, type Message, type VersionPayload, InvBlock,
+  InvTx, InvWitnessBlock, InvWitnessTx, MsgAddr, MsgBlock, MsgGetBlocks,
+  MsgGetData, MsgGetHeaders, MsgHeaders, MsgInv, MsgMempool, MsgNotFound,
+  MsgPing, MsgPong, MsgTx, MsgVerack, MsgVersion,
 }
-import oni_supervisor.{
-  type ChainstateMsg, type MempoolMsg, type SyncMsg,
-}
+import oni_supervisor.{type ChainstateMsg, type MempoolMsg, type SyncMsg}
 import p2p_network.{
-  type ListenerMsg, type PeerEvent,
-  BroadcastMessage, MessageReceived, PeerDisconnectedEvent,
-  PeerError, PeerHandshakeComplete,
+  type ListenerMsg, type PeerEvent, BroadcastMessage, MessageReceived,
+  PeerDisconnectedEvent, PeerError, PeerHandshakeComplete,
 }
 
 // ============================================================================
@@ -50,11 +46,7 @@ pub type RouterConfig {
 
 /// Default router configuration
 pub fn default_config() -> RouterConfig {
-  RouterConfig(
-    max_pending_blocks: 16,
-    max_pending_txs: 100,
-    debug: False,
-  )
+  RouterConfig(max_pending_blocks: 16, max_pending_txs: 100, debug: False)
 }
 
 // ============================================================================
@@ -138,25 +130,26 @@ pub fn start(
   config: RouterConfig,
   handles: RouterHandles,
 ) -> Result(Subject(RouterMsg), actor.StartError) {
-  let initial_state = RouterState(
-    config: config,
-    chainstate: handles.chainstate,
-    mempool: handles.mempool,
-    sync: handles.sync,
-    p2p: handles.p2p,
-    stats: RouterStats(
-      blocks_received: 0,
-      txs_received: 0,
-      headers_received: 0,
-      blocks_requested: 0,
-      txs_requested: 0,
-      peers_connected: 0,
-      peers_disconnected: 0,
-    ),
-    pending_blocks: [],
-    pending_txs: [],
-    peer_heights: [],
-  )
+  let initial_state =
+    RouterState(
+      config: config,
+      chainstate: handles.chainstate,
+      mempool: handles.mempool,
+      sync: handles.sync,
+      p2p: handles.p2p,
+      stats: RouterStats(
+        blocks_received: 0,
+        txs_received: 0,
+        headers_received: 0,
+        blocks_requested: 0,
+        txs_requested: 0,
+        peers_connected: 0,
+        peers_disconnected: 0,
+      ),
+      pending_blocks: [],
+      pending_txs: [],
+      peer_heights: [],
+    )
 
   actor.start(initial_state, handle_message)
 }
@@ -238,7 +231,10 @@ fn handle_p2p_event(event: PeerEvent, state: RouterState) -> RouterState {
 
     PeerError(peer_id, _error) -> {
       case state.config.debug {
-        True -> io.println("[EventRouter] Peer " <> int.to_string(peer_id) <> " error")
+        True ->
+          io.println(
+            "[EventRouter] Peer " <> int.to_string(peer_id) <> " error",
+          )
         False -> Nil
       }
       state
@@ -295,7 +291,10 @@ fn handle_message_received(
     // Address messages (for now, just log)
     MsgAddr(_addrs) -> {
       case state.config.debug {
-        True -> io.println("[EventRouter] Received addr from peer " <> int.to_string(peer_id))
+        True ->
+          io.println(
+            "[EventRouter] Received addr from peer " <> int.to_string(peer_id),
+          )
         False -> Nil
       }
       state
@@ -309,7 +308,11 @@ fn handle_message_received(
     // Other messages
     _ -> {
       case state.config.debug {
-        True -> io.println("[EventRouter] Unhandled message from peer " <> int.to_string(peer_id))
+        True ->
+          io.println(
+            "[EventRouter] Unhandled message from peer "
+            <> int.to_string(peer_id),
+          )
         False -> Nil
       }
       state
@@ -326,19 +329,28 @@ fn handle_headers(
   let header_count = list.length(headers)
 
   case state.config.debug {
-    True -> io.println("[EventRouter] Received " <> int.to_string(header_count) <>
-      " headers from peer " <> int.to_string(peer_id))
+    True ->
+      io.println(
+        "[EventRouter] Received "
+        <> int.to_string(header_count)
+        <> " headers from peer "
+        <> int.to_string(peer_id),
+      )
     False -> Nil
   }
 
   // Notify sync coordinator
-  process.send(state.sync, oni_supervisor.OnHeaders(int.to_string(peer_id), header_count))
+  process.send(
+    state.sync,
+    oni_supervisor.OnHeaders(int.to_string(peer_id), header_count),
+  )
 
   // Update stats
-  let new_stats = RouterStats(
-    ..state.stats,
-    headers_received: state.stats.headers_received + header_count,
-  )
+  let new_stats =
+    RouterStats(
+      ..state.stats,
+      headers_received: state.stats.headers_received + header_count,
+    )
 
   RouterState(..state, stats: new_stats)
 }
@@ -352,31 +364,37 @@ fn handle_block(
   let block_hash = oni_bitcoin.block_hash_from_header(block.header)
 
   case state.config.debug {
-    True -> io.println("[EventRouter] Received block " <>
-      oni_bitcoin.block_hash_to_hex(block_hash) <>
-      " from peer " <> int.to_string(peer_id))
+    True ->
+      io.println(
+        "[EventRouter] Received block "
+        <> oni_bitcoin.block_hash_to_hex(block_hash)
+        <> " from peer "
+        <> int.to_string(peer_id),
+      )
     False -> Nil
   }
 
   // Send to chainstate for validation and connection
   // In a full implementation, this would go through a validation pipeline
-  process.send(state.chainstate, oni_supervisor.ConnectBlock(block, process.new_subject()))
+  process.send(
+    state.chainstate,
+    oni_supervisor.ConnectBlock(block, process.new_subject()),
+  )
 
   // Notify sync coordinator
   process.send(state.sync, oni_supervisor.OnBlock(block_hash))
 
   // Remove from pending
   let hash_hex = oni_bitcoin.block_hash_to_hex(block_hash)
-  let new_pending = list.filter(state.pending_blocks, fn(entry) {
-    let #(h, _) = entry
-    h != hash_hex
-  })
+  let new_pending =
+    list.filter(state.pending_blocks, fn(entry) {
+      let #(h, _) = entry
+      h != hash_hex
+    })
 
   // Update stats
-  let new_stats = RouterStats(
-    ..state.stats,
-    blocks_received: state.stats.blocks_received + 1,
-  )
+  let new_stats =
+    RouterStats(..state.stats, blocks_received: state.stats.blocks_received + 1)
 
   RouterState(..state, stats: new_stats, pending_blocks: new_pending)
 }
@@ -390,9 +408,13 @@ fn handle_tx(
   let txid = oni_bitcoin.txid_from_tx(tx)
 
   case state.config.debug {
-    True -> io.println("[EventRouter] Received tx " <>
-      oni_bitcoin.txid_to_hex(txid) <>
-      " from peer " <> int.to_string(peer_id))
+    True ->
+      io.println(
+        "[EventRouter] Received tx "
+        <> oni_bitcoin.txid_to_hex(txid)
+        <> " from peer "
+        <> int.to_string(peer_id),
+      )
     False -> Nil
   }
 
@@ -401,16 +423,15 @@ fn handle_tx(
 
   // Remove from pending
   let txid_hex = oni_bitcoin.txid_to_hex(txid)
-  let new_pending = list.filter(state.pending_txs, fn(entry) {
-    let #(t, _) = entry
-    t != txid_hex
-  })
+  let new_pending =
+    list.filter(state.pending_txs, fn(entry) {
+      let #(t, _) = entry
+      t != txid_hex
+    })
 
   // Update stats
-  let new_stats = RouterStats(
-    ..state.stats,
-    txs_received: state.stats.txs_received + 1,
-  )
+  let new_stats =
+    RouterStats(..state.stats, txs_received: state.stats.txs_received + 1)
 
   RouterState(..state, stats: new_stats, pending_txs: new_pending)
 }
@@ -425,10 +446,15 @@ fn handle_inv(
   let #(block_items, tx_items) = partition_inv_items(items)
 
   case state.config.debug && list.length(items) > 0 {
-    True -> io.println("[EventRouter] Received inv with " <>
-      int.to_string(list.length(block_items)) <> " blocks, " <>
-      int.to_string(list.length(tx_items)) <> " txs from peer " <>
-      int.to_string(peer_id))
+    True ->
+      io.println(
+        "[EventRouter] Received inv with "
+        <> int.to_string(list.length(block_items))
+        <> " blocks, "
+        <> int.to_string(list.length(tx_items))
+        <> " txs from peer "
+        <> int.to_string(peer_id),
+      )
     False -> Nil
   }
 
@@ -463,9 +489,13 @@ fn handle_getdata(
   state: RouterState,
 ) -> RouterState {
   case state.config.debug {
-    True -> io.println("[EventRouter] Received getdata for " <>
-      int.to_string(list.length(items)) <>
-      " items from peer " <> int.to_string(peer_id))
+    True ->
+      io.println(
+        "[EventRouter] Received getdata for "
+        <> int.to_string(list.length(items))
+        <> " items from peer "
+        <> int.to_string(peer_id),
+      )
     False -> Nil
   }
 
@@ -481,8 +511,14 @@ fn handle_notfound(
   state: RouterState,
 ) -> RouterState {
   case state.config.debug {
-    True -> io.println("[EventRouter] Peer " <> int.to_string(peer_id) <>
-      " notfound for " <> int.to_string(list.length(items)) <> " items")
+    True ->
+      io.println(
+        "[EventRouter] Peer "
+        <> int.to_string(peer_id)
+        <> " notfound for "
+        <> int.to_string(list.length(items))
+        <> " items",
+      )
     False -> Nil
   }
   state
@@ -511,13 +547,12 @@ fn handle_get_blocks(
 }
 
 /// Handle mempool message
-fn handle_mempool_request(
-  peer_id: Int,
-  state: RouterState,
-) -> RouterState {
+fn handle_mempool_request(peer_id: Int, state: RouterState) -> RouterState {
   case state.config.debug {
-    True -> io.println("[EventRouter] Peer " <> int.to_string(peer_id) <>
-      " requested mempool")
+    True ->
+      io.println(
+        "[EventRouter] Peer " <> int.to_string(peer_id) <> " requested mempool",
+      )
     False -> Nil
   }
 
@@ -533,21 +568,28 @@ fn handle_peer_connected(
   version: VersionPayload,
   state: RouterState,
 ) -> RouterState {
-  io.println("[EventRouter] Peer " <> int.to_string(peer_id) <>
-    " connected (height: " <> int.to_string(version.start_height) <>
-    ", user_agent: " <> version.user_agent <> ")")
+  io.println(
+    "[EventRouter] Peer "
+    <> int.to_string(peer_id)
+    <> " connected (height: "
+    <> int.to_string(version.start_height)
+    <> ", user_agent: "
+    <> version.user_agent
+    <> ")",
+  )
 
   // Notify sync coordinator to potentially start syncing from this peer
   process.send(state.sync, oni_supervisor.StartSync(int.to_string(peer_id)))
 
   // Update peer heights
-  let new_peer_heights = [#(peer_id, version.start_height), ..state.peer_heights]
+  let new_peer_heights = [
+    #(peer_id, version.start_height),
+    ..state.peer_heights
+  ]
 
   // Update stats
-  let new_stats = RouterStats(
-    ..state.stats,
-    peers_connected: state.stats.peers_connected + 1,
-  )
+  let new_stats =
+    RouterStats(..state.stats, peers_connected: state.stats.peers_connected + 1)
 
   RouterState(..state, stats: new_stats, peer_heights: new_peer_heights)
 }
@@ -558,31 +600,39 @@ fn handle_peer_disconnected(
   reason: String,
   state: RouterState,
 ) -> RouterState {
-  io.println("[EventRouter] Peer " <> int.to_string(peer_id) <>
-    " disconnected: " <> reason)
+  io.println(
+    "[EventRouter] Peer "
+    <> int.to_string(peer_id)
+    <> " disconnected: "
+    <> reason,
+  )
 
   // Remove from peer heights
-  let new_peer_heights = list.filter(state.peer_heights, fn(entry) {
-    let #(id, _) = entry
-    id != peer_id
-  })
+  let new_peer_heights =
+    list.filter(state.peer_heights, fn(entry) {
+      let #(id, _) = entry
+      id != peer_id
+    })
 
   // Remove any pending requests from this peer
-  let new_pending_blocks = list.filter(state.pending_blocks, fn(entry) {
-    let #(_, id) = entry
-    id != peer_id
-  })
+  let new_pending_blocks =
+    list.filter(state.pending_blocks, fn(entry) {
+      let #(_, id) = entry
+      id != peer_id
+    })
 
-  let new_pending_txs = list.filter(state.pending_txs, fn(entry) {
-    let #(_, id) = entry
-    id != peer_id
-  })
+  let new_pending_txs =
+    list.filter(state.pending_txs, fn(entry) {
+      let #(_, id) = entry
+      id != peer_id
+    })
 
   // Update stats
-  let new_stats = RouterStats(
-    ..state.stats,
-    peers_disconnected: state.stats.peers_disconnected + 1,
-  )
+  let new_stats =
+    RouterStats(
+      ..state.stats,
+      peers_disconnected: state.stats.peers_disconnected + 1,
+    )
 
   RouterState(
     ..state,
@@ -609,15 +659,17 @@ fn request_blocks(
       process.send(state.p2p, BroadcastMessage(getdata))
 
       // Track pending (use peer_id 0 as placeholder for broadcast)
-      let new_pending = list.fold(hashes, state.pending_blocks, fn(acc, hash) {
-        let hash_hex = oni_bitcoin.block_hash_to_hex(hash)
-        [#(hash_hex, 0), ..acc]
-      })
+      let new_pending =
+        list.fold(hashes, state.pending_blocks, fn(acc, hash) {
+          let hash_hex = oni_bitcoin.block_hash_to_hex(hash)
+          [#(hash_hex, 0), ..acc]
+        })
 
-      let new_stats = RouterStats(
-        ..state.stats,
-        blocks_requested: state.stats.blocks_requested + list.length(hashes),
-      )
+      let new_stats =
+        RouterStats(
+          ..state.stats,
+          blocks_requested: state.stats.blocks_requested + list.length(hashes),
+        )
 
       RouterState(..state, stats: new_stats, pending_blocks: new_pending)
     }
@@ -635,15 +687,17 @@ fn request_transactions(
       let getdata = oni_p2p.create_getdata_txs(txids, True)
       process.send(state.p2p, BroadcastMessage(getdata))
 
-      let new_pending = list.fold(txids, state.pending_txs, fn(acc, txid) {
-        let txid_hex = oni_bitcoin.txid_to_hex(txid)
-        [#(txid_hex, 0), ..acc]
-      })
+      let new_pending =
+        list.fold(txids, state.pending_txs, fn(acc, txid) {
+          let txid_hex = oni_bitcoin.txid_to_hex(txid)
+          [#(txid_hex, 0), ..acc]
+        })
 
-      let new_stats = RouterStats(
-        ..state.stats,
-        txs_requested: state.stats.txs_requested + list.length(txids),
-      )
+      let new_stats =
+        RouterStats(
+          ..state.stats,
+          txs_requested: state.stats.txs_requested + list.length(txids),
+        )
 
       RouterState(..state, stats: new_stats, pending_txs: new_pending)
     }
@@ -669,9 +723,7 @@ fn broadcast_block(block: oni_bitcoin.Block, state: RouterState) -> Nil {
 // ============================================================================
 
 /// Partition inventory items into blocks and transactions
-fn partition_inv_items(
-  items: List(InvItem),
-) -> #(List(InvItem), List(InvItem)) {
+fn partition_inv_items(items: List(InvItem)) -> #(List(InvItem), List(InvItem)) {
   list.fold(items, #([], []), fn(acc, item) {
     let #(blocks, txs) = acc
     case item.inv_type {
@@ -689,9 +741,7 @@ fn filter_unknown_blocks(
 ) -> List(oni_bitcoin.BlockHash) {
   // In a full implementation, check against block index
   // For now, request all
-  list.map(items, fn(item) {
-    oni_bitcoin.BlockHash(hash: item.hash)
-  })
+  list.map(items, fn(item) { oni_bitcoin.BlockHash(hash: item.hash) })
 }
 
 /// Filter out transactions we already have
@@ -701,9 +751,7 @@ fn filter_unknown_txs(
 ) -> List(oni_bitcoin.Txid) {
   // In a full implementation, check against mempool
   // For now, request all
-  list.map(items, fn(item) {
-    oni_bitcoin.Txid(hash: item.hash)
-  })
+  list.map(items, fn(item) { oni_bitcoin.Txid(hash: item.hash) })
 }
 
 /// Add blocks to pending list
@@ -712,10 +760,11 @@ fn add_pending_blocks(
   peer_id: Int,
   state: RouterState,
 ) -> RouterState {
-  let new_pending = list.fold(hashes, state.pending_blocks, fn(acc, hash) {
-    let hash_hex = oni_bitcoin.block_hash_to_hex(hash)
-    [#(hash_hex, peer_id), ..acc]
-  })
+  let new_pending =
+    list.fold(hashes, state.pending_blocks, fn(acc, hash) {
+      let hash_hex = oni_bitcoin.block_hash_to_hex(hash)
+      [#(hash_hex, peer_id), ..acc]
+    })
   RouterState(..state, pending_blocks: new_pending)
 }
 
@@ -725,9 +774,10 @@ fn add_pending_txs(
   peer_id: Int,
   state: RouterState,
 ) -> RouterState {
-  let new_pending = list.fold(txids, state.pending_txs, fn(acc, txid) {
-    let txid_hex = oni_bitcoin.txid_to_hex(txid)
-    [#(txid_hex, peer_id), ..acc]
-  })
+  let new_pending =
+    list.fold(txids, state.pending_txs, fn(acc, txid) {
+      let txid_hex = oni_bitcoin.txid_to_hex(txid)
+      [#(txid_hex, peer_id), ..acc]
+    })
   RouterState(..state, pending_txs: new_pending)
 }

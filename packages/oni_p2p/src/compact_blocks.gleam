@@ -310,9 +310,7 @@ pub fn create_compact_block(
   // Compute short IDs for remaining transactions
   let short_ids = case block.transactions {
     [_, ..rest] -> {
-      list.map(rest, fn(tx) {
-        compute_short_txid(tx, siphash_key, use_segwit)
-      })
+      list.map(rest, fn(tx) { compute_short_txid(tx, siphash_key, use_segwit) })
     }
     [] -> []
   }
@@ -327,31 +325,36 @@ pub fn create_compact_block(
 
 /// Encode a compact block to bytes
 pub fn encode_compact_block(cb: CompactBlock) -> BitArray {
-  let builder = bytes_builder.new()
+  let builder =
+    bytes_builder.new()
     |> bytes_builder.append(oni_bitcoin.encode_block_header(cb.header))
     |> bytes_builder.append(encode_le_u64(cb.nonce))
 
   // Encode short IDs count and IDs
   let short_id_count = list.length(cb.short_ids)
-  let builder = builder
+  let builder =
+    builder
     |> bytes_builder.append(oni_bitcoin.compact_size_encode(short_id_count))
 
-  let builder = list.fold(cb.short_ids, builder, fn(b, sid) {
-    bytes_builder.append(b, sid.bytes)
-  })
+  let builder =
+    list.fold(cb.short_ids, builder, fn(b, sid) {
+      bytes_builder.append(b, sid.bytes)
+    })
 
   // Encode prefilled transactions
   let prefilled_count = list.length(cb.prefilled_txns)
-  let builder = builder
+  let builder =
+    builder
     |> bytes_builder.append(oni_bitcoin.compact_size_encode(prefilled_count))
 
-  let builder = list.fold(cb.prefilled_txns, builder, fn(b, ptx) {
-    let idx_bytes = oni_bitcoin.compact_size_encode(ptx.index)
-    let tx_bytes = oni_bitcoin.encode_tx(ptx.tx)
-    b
-    |> bytes_builder.append(idx_bytes)
-    |> bytes_builder.append(tx_bytes)
-  })
+  let builder =
+    list.fold(cb.prefilled_txns, builder, fn(b, ptx) {
+      let idx_bytes = oni_bitcoin.compact_size_encode(ptx.index)
+      let tx_bytes = oni_bitcoin.encode_tx(ptx.tx)
+      b
+      |> bytes_builder.append(idx_bytes)
+      |> bytes_builder.append(tx_bytes)
+    })
 
   bytes_builder.to_bit_array(builder)
 }
@@ -363,7 +366,7 @@ pub fn decode_compact_block(
   // Decode header (80 bytes)
   use #(header, rest) <- result.try(
     oni_bitcoin.decode_block_header(data)
-    |> result.map_error(fn(_) { "Invalid block header" })
+    |> result.map_error(fn(_) { "Invalid block header" }),
   )
 
   // Decode nonce
@@ -372,7 +375,7 @@ pub fn decode_compact_block(
       // Decode short ID count
       use #(short_id_count, rest3) <- result.try(
         oni_bitcoin.compact_size_decode(rest2)
-        |> result.map_error(fn(_) { "Invalid short ID count" })
+        |> result.map_error(fn(_) { "Invalid short ID count" }),
       )
 
       // Validate count
@@ -383,13 +386,13 @@ pub fn decode_compact_block(
 
       // Decode short IDs
       use #(short_ids, rest4) <- result.try(
-        decode_short_ids(rest3, short_id_count, [])
+        decode_short_ids(rest3, short_id_count, []),
       )
 
       // Decode prefilled count
       use #(prefilled_count, rest5) <- result.try(
         oni_bitcoin.compact_size_decode(rest4)
-        |> result.map_error(fn(_) { "Invalid prefilled count" })
+        |> result.map_error(fn(_) { "Invalid prefilled count" }),
       )
 
       // Validate count
@@ -399,9 +402,12 @@ pub fn decode_compact_block(
       })
 
       // Decode prefilled transactions
-      use #(prefilled_txns, rest6) <- result.try(
-        decode_prefilled_txns(rest5, prefilled_count, [], 0)
-      )
+      use #(prefilled_txns, rest6) <- result.try(decode_prefilled_txns(
+        rest5,
+        prefilled_count,
+        [],
+        0,
+      ))
 
       Ok(#(
         CompactBlock(
@@ -448,7 +454,7 @@ fn decode_prefilled_txns(
       // Decode differential index
       use #(diff_index, rest1) <- result.try(
         oni_bitcoin.compact_size_decode(data)
-        |> result.map_error(fn(_) { "Invalid prefilled index" })
+        |> result.map_error(fn(_) { "Invalid prefilled index" }),
       )
 
       // Calculate absolute index
@@ -457,7 +463,7 @@ fn decode_prefilled_txns(
       // Decode transaction
       use #(tx, rest2) <- result.try(
         oni_bitcoin.decode_tx(rest1)
-        |> result.map_error(fn(_) { "Invalid prefilled transaction" })
+        |> result.map_error(fn(_) { "Invalid prefilled transaction" }),
       )
 
       let ptx = PrefilledTx(index: absolute_index, tx: tx)
@@ -477,44 +483,39 @@ pub fn start_reconstruction(
   use_segwit: Bool,
 ) -> ReconstructionState {
   let block_hash = oni_bitcoin.block_hash_from_header(compact_block.header)
-  let siphash_key = compute_siphash_key(compact_block.header, compact_block.nonce)
+  let siphash_key =
+    compute_siphash_key(compact_block.header, compact_block.nonce)
 
   // Build short ID to index mapping
-  let #(short_id_to_index, _) = list.fold(
-    compact_block.short_ids,
-    #(dict.new(), 0),
-    fn(acc, sid) {
+  let #(short_id_to_index, _) =
+    list.fold(compact_block.short_ids, #(dict.new(), 0), fn(acc, sid) {
       let #(d, idx) = acc
       // Account for prefilled transactions before this index
-      let adjusted_idx = adjust_index_for_prefilled(
-        idx,
-        compact_block.prefilled_txns,
-      )
+      let adjusted_idx =
+        adjust_index_for_prefilled(idx, compact_block.prefilled_txns)
       #(dict.insert(d, sid.bytes, adjusted_idx), idx + 1)
-    }
-  )
+    })
 
   // Start with prefilled transactions
-  let available_txs = list.fold(
-    compact_block.prefilled_txns,
-    dict.new(),
-    fn(d, ptx) {
+  let available_txs =
+    list.fold(compact_block.prefilled_txns, dict.new(), fn(d, ptx) {
       dict.insert(d, ptx.index, ptx.tx)
-    }
-  )
+    })
 
   // Try to fill in from mempool
-  let available_txs = list.fold(mempool_txs, available_txs, fn(d, tx) {
-    let sid = compute_short_txid(tx, siphash_key, use_segwit)
-    case dict.get(short_id_to_index, sid.bytes) {
-      Ok(idx) -> dict.insert(d, idx, tx)
-      Error(_) -> d
-    }
-  })
+  let available_txs =
+    list.fold(mempool_txs, available_txs, fn(d, tx) {
+      let sid = compute_short_txid(tx, siphash_key, use_segwit)
+      case dict.get(short_id_to_index, sid.bytes) {
+        Ok(idx) -> dict.insert(d, idx, tx)
+        Error(_) -> d
+      }
+    })
 
   // Calculate total transaction count
-  let total_txs = list.length(compact_block.short_ids) +
-    list.length(compact_block.prefilled_txns)
+  let total_txs =
+    list.length(compact_block.short_ids)
+    + list.length(compact_block.prefilled_txns)
 
   // Find missing indices
   let missing_indices = find_missing_indices(0, total_txs, available_txs, [])
@@ -534,12 +535,13 @@ fn adjust_index_for_prefilled(
   prefilled: List(PrefilledTx),
 ) -> Int {
   // Count prefilled transactions with index <= short_id_index
-  let prefilled_before = list.fold(prefilled, 0, fn(count, ptx) {
-    case ptx.index <= short_id_index + count {
-      True -> count + 1
-      False -> count
-    }
-  })
+  let prefilled_before =
+    list.fold(prefilled, 0, fn(count, ptx) {
+      case ptx.index <= short_id_index + count {
+        True -> count + 1
+        False -> count
+      }
+    })
   short_id_index + prefilled_before
 }
 
@@ -554,7 +556,8 @@ fn find_missing_indices(
     False -> {
       case dict.has_key(available, current) {
         True -> find_missing_indices(current + 1, total, available, acc)
-        False -> find_missing_indices(current + 1, total, available, [current, ..acc])
+        False ->
+          find_missing_indices(current + 1, total, available, [current, ..acc])
       }
     }
   }
@@ -565,17 +568,23 @@ pub fn add_transactions(
   state: ReconstructionState,
   txs: List(#(Int, oni_bitcoin.Transaction)),
 ) -> ReconstructionState {
-  let available = list.fold(txs, state.available_txs, fn(d, pair) {
-    let #(idx, tx) = pair
-    dict.insert(d, idx, tx)
-  })
+  let available =
+    list.fold(txs, state.available_txs, fn(d, pair) {
+      let #(idx, tx) = pair
+      dict.insert(d, idx, tx)
+    })
 
-  let total_txs = list.length(state.compact_block.short_ids) +
-    list.length(state.compact_block.prefilled_txns)
+  let total_txs =
+    list.length(state.compact_block.short_ids)
+    + list.length(state.compact_block.prefilled_txns)
 
   let missing = find_missing_indices(0, total_txs, available, [])
 
-  ReconstructionState(..state, available_txs: available, missing_indices: missing)
+  ReconstructionState(
+    ..state,
+    available_txs: available,
+    missing_indices: missing,
+  )
 }
 
 /// Try to finalize block reconstruction
@@ -585,17 +594,20 @@ pub fn finalize_reconstruction(
   case state.missing_indices {
     [] -> {
       // All transactions available, build the block
-      let total_txs = list.length(state.compact_block.short_ids) +
-        list.length(state.compact_block.prefilled_txns)
+      let total_txs =
+        list.length(state.compact_block.short_ids)
+        + list.length(state.compact_block.prefilled_txns)
 
-      let transactions = collect_transactions(0, total_txs, state.available_txs, [])
+      let transactions =
+        collect_transactions(0, total_txs, state.available_txs, [])
 
       case transactions {
         Ok(txs) -> {
-          let block = oni_bitcoin.Block(
-            header: state.compact_block.header,
-            transactions: txs,
-          )
+          let block =
+            oni_bitcoin.Block(
+              header: state.compact_block.header,
+              transactions: txs,
+            )
           Complete(block)
         }
         Error(msg) -> Failed(msg)
@@ -615,8 +627,10 @@ fn collect_transactions(
     True -> Ok(list.reverse(acc))
     False -> {
       case dict.get(available, current) {
-        Ok(tx) -> collect_transactions(current + 1, total, available, [tx, ..acc])
-        Error(_) -> Error("Missing transaction at index " <> int.to_string(current))
+        Ok(tx) ->
+          collect_transactions(current + 1, total, available, [tx, ..acc])
+        Error(_) ->
+          Error("Missing transaction at index " <> int.to_string(current))
       }
     }
   }
@@ -636,16 +650,12 @@ pub fn encode_sendcmpct(msg: SendCmpct) -> BitArray {
 }
 
 /// Decode sendcmpct message
-pub fn decode_sendcmpct(data: BitArray) -> Result(#(SendCmpct, BitArray), String) {
+pub fn decode_sendcmpct(
+  data: BitArray,
+) -> Result(#(SendCmpct, BitArray), String) {
   case data {
     <<announce:size(8), version:little-size(64), rest:bytes>> -> {
-      Ok(#(
-        SendCmpct(
-          announce: announce != 0,
-          version: version,
-        ),
-        rest,
-      ))
+      Ok(#(SendCmpct(announce: announce != 0, version: version), rest))
     }
     _ -> Error("Invalid sendcmpct message")
   }
@@ -653,13 +663,17 @@ pub fn decode_sendcmpct(data: BitArray) -> Result(#(SendCmpct, BitArray), String
 
 /// Encode getblocktxn message
 pub fn encode_getblocktxn(req: BlockTxnRequest) -> BitArray {
-  let builder = bytes_builder.new()
+  let builder =
+    bytes_builder.new()
     |> bytes_builder.append(req.block_hash.hash.bytes)
-    |> bytes_builder.append(oni_bitcoin.compact_size_encode(list.length(req.indexes)))
+    |> bytes_builder.append(
+      oni_bitcoin.compact_size_encode(list.length(req.indexes)),
+    )
 
-  let builder = list.fold(req.indexes, builder, fn(b, idx) {
-    bytes_builder.append(b, oni_bitcoin.compact_size_encode(idx))
-  })
+  let builder =
+    list.fold(req.indexes, builder, fn(b, idx) {
+      bytes_builder.append(b, oni_bitcoin.compact_size_encode(idx))
+    })
 
   bytes_builder.to_bit_array(builder)
 }
@@ -672,16 +686,16 @@ pub fn decode_getblocktxn(
     <<hash_bytes:bytes-size(32), rest:bytes>> -> {
       use #(count, rest2) <- result.try(
         oni_bitcoin.compact_size_decode(rest)
-        |> result.map_error(fn(_) { "Invalid index count" })
+        |> result.map_error(fn(_) { "Invalid index count" }),
       )
 
-      use #(indexes, rest3) <- result.try(
-        decode_indexes(rest2, count, [], 0)
-      )
+      use #(indexes, rest3) <- result.try(decode_indexes(rest2, count, [], 0))
 
       Ok(#(
         BlockTxnRequest(
-          block_hash: oni_bitcoin.BlockHash(hash: oni_bitcoin.Hash256(bytes: hash_bytes)),
+          block_hash: oni_bitcoin.BlockHash(hash: oni_bitcoin.Hash256(
+            bytes: hash_bytes,
+          )),
           indexes: indexes,
         ),
         rest3,
@@ -702,7 +716,7 @@ fn decode_indexes(
     _ -> {
       use #(diff, rest) <- result.try(
         oni_bitcoin.compact_size_decode(data)
-        |> result.map_error(fn(_) { "Invalid index" })
+        |> result.map_error(fn(_) { "Invalid index" }),
       )
       let absolute = last_idx + diff
       decode_indexes(rest, count - 1, [absolute, ..acc], absolute + 1)
@@ -712,13 +726,17 @@ fn decode_indexes(
 
 /// Encode blocktxn message
 pub fn encode_blocktxn(msg: BlockTxn) -> BitArray {
-  let builder = bytes_builder.new()
+  let builder =
+    bytes_builder.new()
     |> bytes_builder.append(msg.block_hash.hash.bytes)
-    |> bytes_builder.append(oni_bitcoin.compact_size_encode(list.length(msg.transactions)))
+    |> bytes_builder.append(
+      oni_bitcoin.compact_size_encode(list.length(msg.transactions)),
+    )
 
-  let builder = list.fold(msg.transactions, builder, fn(b, tx) {
-    bytes_builder.append(b, oni_bitcoin.encode_tx(tx))
-  })
+  let builder =
+    list.fold(msg.transactions, builder, fn(b, tx) {
+      bytes_builder.append(b, oni_bitcoin.encode_tx(tx))
+    })
 
   bytes_builder.to_bit_array(builder)
 }
@@ -729,16 +747,18 @@ pub fn decode_blocktxn(data: BitArray) -> Result(#(BlockTxn, BitArray), String) 
     <<hash_bytes:bytes-size(32), rest:bytes>> -> {
       use #(count, rest2) <- result.try(
         oni_bitcoin.compact_size_decode(rest)
-        |> result.map_error(fn(_) { "Invalid tx count" })
+        |> result.map_error(fn(_) { "Invalid tx count" }),
       )
 
       use #(transactions, rest3) <- result.try(
-        decode_transactions(rest2, count, [])
+        decode_transactions(rest2, count, []),
       )
 
       Ok(#(
         BlockTxn(
-          block_hash: oni_bitcoin.BlockHash(hash: oni_bitcoin.Hash256(bytes: hash_bytes)),
+          block_hash: oni_bitcoin.BlockHash(hash: oni_bitcoin.Hash256(
+            bytes: hash_bytes,
+          )),
           transactions: transactions,
         ),
         rest3,
@@ -758,7 +778,7 @@ fn decode_transactions(
     _ -> {
       use #(tx, rest) <- result.try(
         oni_bitcoin.decode_tx(data)
-        |> result.map_error(fn(_) { "Invalid transaction" })
+        |> result.map_error(fn(_) { "Invalid transaction" }),
       )
       decode_transactions(rest, count - 1, [tx, ..acc])
     }
@@ -783,11 +803,7 @@ pub type PeerCompactState {
 
 /// Create new peer compact block state
 pub fn new_peer_state() -> PeerCompactState {
-  PeerCompactState(
-    high_bandwidth_mode: False,
-    version: 0,
-    pending: dict.new(),
-  )
+  PeerCompactState(high_bandwidth_mode: False, version: 0, pending: dict.new())
 }
 
 /// Update peer state from sendcmpct message

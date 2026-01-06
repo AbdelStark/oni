@@ -96,12 +96,7 @@ pub type PeerSyncState {
 
 /// Block download request
 pub type BlockRequest {
-  BlockRequest(
-    hash: BlockHash,
-    height: Int,
-    peer_id: String,
-    requested_at: Int,
-  )
+  BlockRequest(hash: BlockHash, height: Int, peer_id: String, requested_at: Int)
 }
 
 /// Header chain segment (for validation)
@@ -213,21 +208,22 @@ pub fn start(
 ) -> Result(Subject(IbdMsg), actor.StartError) {
   let params = get_network_params(config.network)
 
-  let initial_state = IbdCoordinatorState(
-    config: config,
-    state: IbdWaitingForPeers,
-    p2p: p2p,
-    peers: dict.new(),
-    headers: [],
-    headers_height: 0,
-    blocks_height: 0,
-    target_height: 0,
-    inflight: dict.new(),
-    download_queue: [],
-    sync_peer: None,
-    genesis_hash: params.genesis_hash,
-    last_activity: now_ms(),
-  )
+  let initial_state =
+    IbdCoordinatorState(
+      config: config,
+      state: IbdWaitingForPeers,
+      p2p: p2p,
+      peers: dict.new(),
+      headers: [],
+      headers_height: 0,
+      blocks_height: 0,
+      target_height: 0,
+      inflight: dict.new(),
+      download_queue: [],
+      sync_peer: None,
+      genesis_hash: params.genesis_hash,
+      last_activity: now_ms(),
+    )
 
   actor.start(initial_state, handle_message)
 }
@@ -306,27 +302,35 @@ fn handle_peer_connected(
   state: IbdCoordinatorState,
 ) -> IbdCoordinatorState {
   case state.config.debug {
-    True -> io.println("[IBD] Peer " <> peer_id <> " connected at height " <> int.to_string(height))
+    True ->
+      io.println(
+        "[IBD] Peer "
+        <> peer_id
+        <> " connected at height "
+        <> int.to_string(height),
+      )
     False -> Nil
   }
 
-  let peer_state = PeerSyncState(
-    peer_id: peer_id,
-    height: height,
-    last_request: 0,
-    inflight_blocks: 0,
-    headers_synced: False,
-  )
+  let peer_state =
+    PeerSyncState(
+      peer_id: peer_id,
+      height: height,
+      last_request: 0,
+      inflight_blocks: 0,
+      headers_synced: False,
+    )
 
   let new_peers = dict.insert(state.peers, peer_id, peer_state)
   let new_target = int.max(state.target_height, height)
 
-  let new_state = IbdCoordinatorState(
-    ..state,
-    peers: new_peers,
-    target_height: new_target,
-    last_activity: now_ms(),
-  )
+  let new_state =
+    IbdCoordinatorState(
+      ..state,
+      peers: new_peers,
+      target_height: new_target,
+      last_activity: now_ms(),
+    )
 
   // Check if we should start IBD
   case state.state {
@@ -358,12 +362,13 @@ fn handle_peer_disconnected(
   // Re-queue cancelled blocks
   let new_queue = list.append(cancelled, state.download_queue)
 
-  let new_state = IbdCoordinatorState(
-    ..state,
-    peers: new_peers,
-    inflight: new_inflight,
-    download_queue: new_queue,
-  )
+  let new_state =
+    IbdCoordinatorState(
+      ..state,
+      peers: new_peers,
+      inflight: new_inflight,
+      download_queue: new_queue,
+    )
 
   // Check if we lost our sync peer
   case state.sync_peer {
@@ -373,7 +378,11 @@ fn handle_peer_disconnected(
         Some(new_sync_peer) ->
           IbdCoordinatorState(..new_state, sync_peer: Some(new_sync_peer))
         None ->
-          IbdCoordinatorState(..new_state, sync_peer: None, state: IbdWaitingForPeers)
+          IbdCoordinatorState(
+            ..new_state,
+            sync_peer: None,
+            state: IbdWaitingForPeers,
+          )
       }
     }
     _ -> new_state
@@ -389,16 +398,23 @@ fn handle_headers_received(
   let header_count = list.length(headers)
 
   case state.config.debug {
-    True -> io.println("[IBD] Received " <> int.to_string(header_count) <>
-      " headers from " <> peer_id)
+    True ->
+      io.println(
+        "[IBD] Received "
+        <> int.to_string(header_count)
+        <> " headers from "
+        <> peer_id,
+      )
     False -> Nil
   }
 
   case header_count {
     0 -> {
       // No more headers - switch to block download
-      io.println("[IBD] Headers sync complete at height " <>
-        int.to_string(state.headers_height))
+      io.println(
+        "[IBD] Headers sync complete at height "
+        <> int.to_string(state.headers_height),
+      )
       start_block_download(state)
     }
     _ -> {
@@ -410,12 +426,13 @@ fn handle_headers_received(
         }
         Ok(new_height) -> {
           let new_headers = list.append(state.headers, headers)
-          let new_state = IbdCoordinatorState(
-            ..state,
-            headers: new_headers,
-            headers_height: new_height,
-            last_activity: now_ms(),
-          )
+          let new_state =
+            IbdCoordinatorState(
+              ..state,
+              headers: new_headers,
+              headers_height: new_height,
+              last_activity: now_ms(),
+            )
 
           // Request more headers if we got a full batch
           case header_count >= state.config.headers_batch_size {
@@ -446,22 +463,30 @@ fn handle_block_received(
   }
 
   case state.config.debug && new_blocks_height != state.blocks_height {
-    True -> io.println("[IBD] Block " <> int.to_string(new_blocks_height) <>
-      " of " <> int.to_string(state.target_height))
+    True ->
+      io.println(
+        "[IBD] Block "
+        <> int.to_string(new_blocks_height)
+        <> " of "
+        <> int.to_string(state.target_height),
+      )
     False -> Nil
   }
 
-  let new_state = IbdCoordinatorState(
-    ..state,
-    inflight: new_inflight,
-    blocks_height: new_blocks_height,
-    last_activity: now_ms(),
-  )
+  let new_state =
+    IbdCoordinatorState(
+      ..state,
+      inflight: new_inflight,
+      blocks_height: new_blocks_height,
+      last_activity: now_ms(),
+    )
 
   // Check if we're done
   case new_blocks_height >= state.target_height {
     True -> {
-      io.println("[IBD] Sync complete at height " <> int.to_string(new_blocks_height))
+      io.println(
+        "[IBD] Sync complete at height " <> int.to_string(new_blocks_height),
+      )
       IbdCoordinatorState(..new_state, state: IbdSynced)
     }
     False -> {
@@ -500,11 +525,12 @@ fn handle_timer_tick(state: IbdCoordinatorState) -> IbdCoordinatorState {
   // Re-queue timed out blocks
   let new_queue = list.append(timed_out, state.download_queue)
 
-  let new_state = IbdCoordinatorState(
-    ..state,
-    inflight: new_inflight,
-    download_queue: new_queue,
-  )
+  let new_state =
+    IbdCoordinatorState(
+      ..state,
+      inflight: new_inflight,
+      download_queue: new_queue,
+    )
 
   // Schedule more downloads if needed
   schedule_block_downloads(new_state)
@@ -567,18 +593,22 @@ fn request_more_headers(state: IbdCoordinatorState) -> IbdCoordinatorState {
 
 /// Start block download phase
 fn start_block_download(state: IbdCoordinatorState) -> IbdCoordinatorState {
-  io.println("[IBD] Starting block download from height " <>
-    int.to_string(state.blocks_height) <>
-    " to " <> int.to_string(state.headers_height))
+  io.println(
+    "[IBD] Starting block download from height "
+    <> int.to_string(state.blocks_height)
+    <> " to "
+    <> int.to_string(state.headers_height),
+  )
 
   // Build download queue from headers
   let queue = build_download_queue(state.headers, state.blocks_height)
 
-  let new_state = IbdCoordinatorState(
-    ..state,
-    state: IbdDownloadingBlocks,
-    download_queue: queue,
-  )
+  let new_state =
+    IbdCoordinatorState(
+      ..state,
+      state: IbdDownloadingBlocks,
+      download_queue: queue,
+    )
 
   schedule_block_downloads(new_state)
 }
@@ -586,10 +616,15 @@ fn start_block_download(state: IbdCoordinatorState) -> IbdCoordinatorState {
 /// Schedule block downloads to available peers
 fn schedule_block_downloads(state: IbdCoordinatorState) -> IbdCoordinatorState {
   // Find available peers
-  let available_peers = get_available_peers(state.peers, state.config.blocks_per_peer)
+  let available_peers =
+    get_available_peers(state.peers, state.config.blocks_per_peer)
   let slots = state.config.max_inflight_blocks - dict.size(state.inflight)
 
-  case list.is_empty(available_peers), list.is_empty(state.download_queue), slots > 0 {
+  case
+    list.is_empty(available_peers),
+    list.is_empty(state.download_queue),
+    slots > 0
+  {
     True, _, _ -> state
     _, True, _ -> state
     _, _, False -> state
@@ -624,11 +659,12 @@ fn find_best_peer(peers: Dict(String, PeerSyncState)) -> Option(String) {
   case peer_list {
     [] -> None
     _ -> {
-      let sorted = list.sort(peer_list, fn(a, b) {
-        let #(_, state_a) = a
-        let #(_, state_b) = b
-        int.compare(state_b.height, state_a.height)
-      })
+      let sorted =
+        list.sort(peer_list, fn(a, b) {
+          let #(_, state_a) = a
+          let #(_, state_b) = b
+          int.compare(state_b.height, state_a.height)
+        })
       case sorted {
         [#(peer_id, _), ..] -> Some(peer_id)
         [] -> None
@@ -719,12 +755,15 @@ fn add_inflight_requests(
   let now = now_ms()
   list.fold(hashes, inflight, fn(acc, hash) {
     let hash_hex = oni_bitcoin.block_hash_to_hex(hash)
-    let request = BlockRequest(
-      hash: hash,
-      height: 0,  // Would track actual height
-      peer_id: "",  // Would track actual peer
-      requested_at: now,
-    )
+    let request =
+      BlockRequest(
+        hash: hash,
+        height: 0,
+        // Would track actual height
+        peer_id: "",
+        // Would track actual peer
+        requested_at: now,
+      )
     dict.insert(acc, hash_hex, request)
   })
 }
@@ -761,7 +800,9 @@ fn check_timeouts(
 /// Build status response
 fn build_status(state: IbdCoordinatorState) -> IbdStatus {
   let progress = case state.target_height > 0 {
-    True -> int.to_float(state.blocks_height * 100) /. int.to_float(state.target_height)
+    True ->
+      int.to_float(state.blocks_height * 100)
+      /. int.to_float(state.target_height)
     False -> 0.0
   }
 
@@ -789,7 +830,8 @@ fn build_progress(state: IbdCoordinatorState) -> IbdProgress {
 
   // Estimate remaining time (very rough)
   let remaining_blocks = state.target_height - state.blocks_height
-  let estimated_secs = remaining_blocks / 10  // Assume 10 blocks/sec
+  let estimated_secs = remaining_blocks / 10
+  // Assume 10 blocks/sec
 
   IbdProgress(
     state: state_str,
@@ -837,5 +879,6 @@ fn utf8_atom() -> Atom {
 fn list_to_atom(list: List(Int)) -> Atom
 
 fn latin1_atom() -> Atom {
-  list_to_atom([108, 97, 116, 105, 110, 49])  // "latin1"
+  list_to_atom([108, 97, 116, 105, 110, 49])
+  // "latin1"
 }

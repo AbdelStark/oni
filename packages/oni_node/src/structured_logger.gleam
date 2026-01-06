@@ -216,11 +216,7 @@ pub fn new_logger(level: LogLevel, format: LogFormat) -> Logger {
 
 /// Create a logger with full configuration
 pub fn new_logger_with_config(config: LoggerConfig) -> Logger {
-  Logger(
-    config: config,
-    category: None,
-    fields: dict.new(),
-  )
+  Logger(config: config, category: None, fields: dict.new())
 }
 
 // ============================================================================
@@ -257,10 +253,11 @@ pub fn with_fields(
   logger: Logger,
   fields: List(#(String, FieldValue)),
 ) -> Logger {
-  let new_fields = list.fold(fields, logger.fields, fn(d, pair) {
-    let #(key, value) = pair
-    dict.insert(d, key, value)
-  })
+  let new_fields =
+    list.fold(fields, logger.fields, fn(d, pair) {
+      let #(key, value) = pair
+      dict.insert(d, key, value)
+    })
   Logger(..logger, fields: new_fields)
 }
 
@@ -319,14 +316,16 @@ pub fn log_at_level(logger: Logger, level: LogLevel, message: String) -> Nil {
       case should_log_category(logger.config, logger.category) {
         False -> Nil
         True -> {
-          let entry = LogEntry(
-            level: level,
-            message: message,
-            timestamp: 0,  // Would use actual timestamp in production
-            category: logger.category,
-            fields: logger.fields,
-            source: None,
-          )
+          let entry =
+            LogEntry(
+              level: level,
+              message: message,
+              timestamp: 0,
+              // Would use actual timestamp in production
+              category: logger.category,
+              fields: logger.fields,
+              source: None,
+            )
           output_entry(logger.config, entry)
         }
       }
@@ -376,19 +375,25 @@ fn format_text(config: LoggerConfig, entry: LogEntry) -> String {
 
   // Timestamp
   let sb = case config.timestamps {
-    True -> string_builder.append(sb, "[" <> format_timestamp(entry.timestamp) <> "] ")
+    True ->
+      string_builder.append(
+        sb,
+        "[" <> format_timestamp(entry.timestamp) <> "] ",
+      )
     False -> sb
   }
 
   // Level
-  let sb = sb
+  let sb =
+    sb
     |> string_builder.append("[")
     |> string_builder.append(level_to_string(entry.level))
     |> string_builder.append("] ")
 
   // Category
   let sb = case entry.category {
-    Some(cat) -> sb
+    Some(cat) ->
+      sb
       |> string_builder.append("[")
       |> string_builder.append(cat)
       |> string_builder.append("] ")
@@ -414,10 +419,11 @@ fn format_text(config: LoggerConfig, entry: LogEntry) -> String {
 
 fn format_fields_text(fields: Dict(String, FieldValue)) -> String {
   let pairs = dict.to_list(fields)
-  let formatted = list.map(pairs, fn(pair) {
-    let #(key, value) = pair
-    key <> "=" <> format_field_value_text(value)
-  })
+  let formatted =
+    list.map(pairs, fn(pair) {
+      let #(key, value) = pair
+      key <> "=" <> format_field_value_text(value)
+    })
   string.join(formatted, " ")
 }
 
@@ -437,25 +443,29 @@ fn format_json(entry: LogEntry) -> String {
   let sb = string_builder.append(sb, "{")
 
   // Level
-  let sb = sb
+  let sb =
+    sb
     |> string_builder.append("\"level\":\"")
     |> string_builder.append(level_to_lower(entry.level))
     |> string_builder.append("\"")
 
   // Timestamp
-  let sb = sb
+  let sb =
+    sb
     |> string_builder.append(",\"timestamp\":")
     |> string_builder.append(int.to_string(entry.timestamp))
 
   // Message
-  let sb = sb
+  let sb =
+    sb
     |> string_builder.append(",\"message\":\"")
     |> string_builder.append(escape_json(entry.message))
     |> string_builder.append("\"")
 
   // Category
   let sb = case entry.category {
-    Some(cat) -> sb
+    Some(cat) ->
+      sb
       |> string_builder.append(",\"category\":\"")
       |> string_builder.append(escape_json(cat))
       |> string_builder.append("\"")

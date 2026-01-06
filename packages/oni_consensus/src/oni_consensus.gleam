@@ -83,125 +83,226 @@ pub type ConsensusError {
 /// Bitcoin Script opcodes
 pub type Opcode {
   // Push value
-  OpFalse          // 0x00 - Push empty array
-  OpPushBytes(Int) // 0x01-0x4b - Push N bytes
-  OpPushData1      // 0x4c - Next byte is length
-  OpPushData2      // 0x4d - Next 2 bytes are length
-  OpPushData4      // 0x4e - Next 4 bytes are length
-  Op1Negate        // 0x4f - Push -1
-  OpReserved       // 0x50 - Transaction invalid unless in unexecuted IF
-  OpTrue           // 0x51 - Push 1 (OP_1)
-  OpNum(Int)       // 0x52-0x60 - Push 2-16
+  OpFalse
+  // 0x00 - Push empty array
+  OpPushBytes(Int)
+  // 0x01-0x4b - Push N bytes
+  OpPushData1
+  // 0x4c - Next byte is length
+  OpPushData2
+  // 0x4d - Next 2 bytes are length
+  OpPushData4
+  // 0x4e - Next 4 bytes are length
+  Op1Negate
+  // 0x4f - Push -1
+  OpReserved
+  // 0x50 - Transaction invalid unless in unexecuted IF
+  OpTrue
+  // 0x51 - Push 1 (OP_1)
+  OpNum(Int)
 
+  // 0x52-0x60 - Push 2-16
   // Control
-  OpNop            // 0x61 - Do nothing
-  OpVer            // 0x62 - Transaction invalid
-  OpIf             // 0x63 - If top stack is true, execute
-  OpNotIf          // 0x64 - If top stack is false, execute
-  OpVerIf          // 0x65 - Transaction invalid
-  OpVerNotIf       // 0x66 - Transaction invalid
-  OpElse           // 0x67 - Else branch
-  OpEndIf          // 0x68 - End if block
-  OpVerify         // 0x69 - Fail if top is false
-  OpReturn         // 0x6a - Marks output as unspendable
+  OpNop
+  // 0x61 - Do nothing
+  OpVer
+  // 0x62 - Transaction invalid
+  OpIf
+  // 0x63 - If top stack is true, execute
+  OpNotIf
+  // 0x64 - If top stack is false, execute
+  OpVerIf
+  // 0x65 - Transaction invalid
+  OpVerNotIf
+  // 0x66 - Transaction invalid
+  OpElse
+  // 0x67 - Else branch
+  OpEndIf
+  // 0x68 - End if block
+  OpVerify
+  // 0x69 - Fail if top is false
+  OpReturn
 
+  // 0x6a - Marks output as unspendable
   // Stack
-  OpToAltStack     // 0x6b
-  OpFromAltStack   // 0x6c
-  Op2Drop          // 0x6d
-  Op2Dup           // 0x6e
-  Op3Dup           // 0x6f
-  Op2Over          // 0x70
-  Op2Rot           // 0x71
-  Op2Swap          // 0x72
-  OpIfDup          // 0x73
-  OpDepth          // 0x74
-  OpDrop           // 0x75
-  OpDup            // 0x76
-  OpNip            // 0x77
-  OpOver           // 0x78
-  OpPick           // 0x79
-  OpRoll           // 0x7a
-  OpRot            // 0x7b
-  OpSwap           // 0x7c
-  OpTuck           // 0x7d
+  OpToAltStack
+  // 0x6b
+  OpFromAltStack
+  // 0x6c
+  Op2Drop
+  // 0x6d
+  Op2Dup
+  // 0x6e
+  Op3Dup
+  // 0x6f
+  Op2Over
+  // 0x70
+  Op2Rot
+  // 0x71
+  Op2Swap
+  // 0x72
+  OpIfDup
+  // 0x73
+  OpDepth
+  // 0x74
+  OpDrop
+  // 0x75
+  OpDup
+  // 0x76
+  OpNip
+  // 0x77
+  OpOver
+  // 0x78
+  OpPick
+  // 0x79
+  OpRoll
+  // 0x7a
+  OpRot
+  // 0x7b
+  OpSwap
+  // 0x7c
+  OpTuck
 
+  // 0x7d
   // Splice (disabled except OP_SIZE)
-  OpCat            // 0x7e - disabled
-  OpSubstr         // 0x7f - disabled
-  OpLeft           // 0x80 - disabled
-  OpRight          // 0x81 - disabled
-  OpSize           // 0x82
+  OpCat
+  // 0x7e - disabled
+  OpSubstr
+  // 0x7f - disabled
+  OpLeft
+  // 0x80 - disabled
+  OpRight
+  // 0x81 - disabled
+  OpSize
 
+  // 0x82
   // Bitwise logic (disabled except OP_EQUAL)
-  OpInvert         // 0x83 - disabled
-  OpAnd            // 0x84 - disabled
-  OpOr             // 0x85 - disabled
-  OpXor            // 0x86 - disabled
-  OpEqual          // 0x87
-  OpEqualVerify    // 0x88
-  OpReserved1      // 0x89
-  OpReserved2      // 0x8a
+  OpInvert
+  // 0x83 - disabled
+  OpAnd
+  // 0x84 - disabled
+  OpOr
+  // 0x85 - disabled
+  OpXor
+  // 0x86 - disabled
+  OpEqual
+  // 0x87
+  OpEqualVerify
+  // 0x88
+  OpReserved1
+  // 0x89
+  OpReserved2
 
+  // 0x8a
   // Arithmetic
-  Op1Add           // 0x8b
-  Op1Sub           // 0x8c
-  Op2Mul           // 0x8d - disabled
-  Op2Div           // 0x8e - disabled
-  OpNegate         // 0x8f
-  OpAbs            // 0x90
-  OpNot            // 0x91
-  Op0NotEqual      // 0x92
-  OpAdd            // 0x93
-  OpSub            // 0x94
-  OpMul            // 0x95 - disabled
-  OpDiv            // 0x96 - disabled
-  OpMod            // 0x97 - disabled
-  OpLShift         // 0x98 - disabled
-  OpRShift         // 0x99 - disabled
-  OpBoolAnd        // 0x9a
-  OpBoolOr         // 0x9b
-  OpNumEqual       // 0x9c
-  OpNumEqualVerify // 0x9d
-  OpNumNotEqual    // 0x9e
-  OpLessThan       // 0x9f
-  OpGreaterThan    // 0xa0
-  OpLessThanOrEqual    // 0xa1
-  OpGreaterThanOrEqual // 0xa2
-  OpMin            // 0xa3
-  OpMax            // 0xa4
-  OpWithin         // 0xa5
+  Op1Add
+  // 0x8b
+  Op1Sub
+  // 0x8c
+  Op2Mul
+  // 0x8d - disabled
+  Op2Div
+  // 0x8e - disabled
+  OpNegate
+  // 0x8f
+  OpAbs
+  // 0x90
+  OpNot
+  // 0x91
+  Op0NotEqual
+  // 0x92
+  OpAdd
+  // 0x93
+  OpSub
+  // 0x94
+  OpMul
+  // 0x95 - disabled
+  OpDiv
+  // 0x96 - disabled
+  OpMod
+  // 0x97 - disabled
+  OpLShift
+  // 0x98 - disabled
+  OpRShift
+  // 0x99 - disabled
+  OpBoolAnd
+  // 0x9a
+  OpBoolOr
+  // 0x9b
+  OpNumEqual
+  // 0x9c
+  OpNumEqualVerify
+  // 0x9d
+  OpNumNotEqual
+  // 0x9e
+  OpLessThan
+  // 0x9f
+  OpGreaterThan
+  // 0xa0
+  OpLessThanOrEqual
+  // 0xa1
+  OpGreaterThanOrEqual
+  // 0xa2
+  OpMin
+  // 0xa3
+  OpMax
+  // 0xa4
+  OpWithin
 
+  // 0xa5
   // Crypto
-  OpRipeMd160      // 0xa6
-  OpSha1           // 0xa7
-  OpSha256         // 0xa8
-  OpHash160        // 0xa9
-  OpHash256        // 0xaa
-  OpCodeSeparator  // 0xab
-  OpCheckSig       // 0xac
-  OpCheckSigVerify // 0xad
-  OpCheckMultiSig  // 0xae
-  OpCheckMultiSigVerify // 0xaf
+  OpRipeMd160
+  // 0xa6
+  OpSha1
+  // 0xa7
+  OpSha256
+  // 0xa8
+  OpHash160
+  // 0xa9
+  OpHash256
+  // 0xaa
+  OpCodeSeparator
+  // 0xab
+  OpCheckSig
+  // 0xac
+  OpCheckSigVerify
+  // 0xad
+  OpCheckMultiSig
+  // 0xae
+  OpCheckMultiSigVerify
 
+  // 0xaf
   // Expansion
-  OpNop1           // 0xb0
-  OpCheckLockTimeVerify  // 0xb1 (BIP65)
-  OpCheckSequenceVerify  // 0xb2 (BIP112)
-  OpNop4           // 0xb3
-  OpNop5           // 0xb4
-  OpNop6           // 0xb5
-  OpNop7           // 0xb6
-  OpNop8           // 0xb7
-  OpNop9           // 0xb8
-  OpNop10          // 0xb9
+  OpNop1
+  // 0xb0
+  OpCheckLockTimeVerify
+  // 0xb1 (BIP65)
+  OpCheckSequenceVerify
+  // 0xb2 (BIP112)
+  OpNop4
+  // 0xb3
+  OpNop5
+  // 0xb4
+  OpNop6
+  // 0xb5
+  OpNop7
+  // 0xb6
+  OpNop8
+  // 0xb7
+  OpNop9
+  // 0xb8
+  OpNop10
 
+  // 0xb9
   // Taproot
-  OpCheckSigAdd    // 0xba (BIP342)
-  OpSuccess(Int)   // 0xbb-0xfe - Reserved for upgrades
+  OpCheckSigAdd
+  // 0xba (BIP342)
+  OpSuccess(Int)
 
+  // 0xbb-0xfe - Reserved for upgrades
   // Invalid
-  OpInvalidOpcode  // 0xff
+  OpInvalidOpcode
+  // 0xff
 }
 
 /// Decode an opcode from a byte
@@ -402,7 +503,8 @@ pub type ScriptContext {
     script_pos: Int,
     codesep_pos: Int,
     flags: ScriptFlags,
-    exec_stack: List(Bool),  // For IF/ELSE/ENDIF
+    exec_stack: List(Bool),
+    // For IF/ELSE/ENDIF
     /// Optional signature context for CHECKSIG operations
     sig_ctx: SigContextOption,
   )
@@ -526,24 +628,25 @@ pub fn validate_tx_structure(tx: Transaction) -> Result(Nil, ConsensusError) {
 
 fn validate_tx_outputs(outputs: List(TxOut)) -> Result(Nil, ConsensusError) {
   // Check that all output values are valid
-  let total = list.fold(outputs, Ok(0), fn(acc, out) {
-    case acc {
-      Error(e) -> Error(e)
-      Ok(sum) -> {
-        let sats = oni_bitcoin.amount_to_sats(out.value)
-        case sats >= 0 && sats <= oni_bitcoin.max_satoshis {
-          True -> {
-            let new_sum = sum + sats
-            case new_sum <= oni_bitcoin.max_satoshis {
-              True -> Ok(new_sum)
-              False -> Error(TxOutputValueOverflow)
+  let total =
+    list.fold(outputs, Ok(0), fn(acc, out) {
+      case acc {
+        Error(e) -> Error(e)
+        Ok(sum) -> {
+          let sats = oni_bitcoin.amount_to_sats(out.value)
+          case sats >= 0 && sats <= oni_bitcoin.max_satoshis {
+            True -> {
+              let new_sum = sum + sats
+              case new_sum <= oni_bitcoin.max_satoshis {
+                True -> Ok(new_sum)
+                False -> Error(TxOutputValueOverflow)
+              }
             }
+            False -> Error(TxInvalidAmount)
           }
-          False -> Error(TxInvalidAmount)
         }
       }
-    }
-  })
+    })
 
   case total {
     Ok(_) -> Ok(Nil)
@@ -571,7 +674,9 @@ pub fn tx_is_coinbase(tx: Transaction) -> Bool {
 // ============================================================================
 
 /// Validate block header structure
-pub fn validate_block_header(_header: BlockHeader) -> Result(Nil, ConsensusError) {
+pub fn validate_block_header(
+  _header: BlockHeader,
+) -> Result(Nil, ConsensusError) {
   // Check timestamp is not too far in the future (2 hours)
   // Note: This would need current time from context
   Ok(Nil)
@@ -610,7 +715,8 @@ pub fn target_from_compact(compact: Int) -> Target {
 
   // Handle negative and overflow
   let value = case mantissa > 0x7FFFFF {
-    True -> 0  // Negative, treat as 0
+    True -> 0
+    // Negative, treat as 0
     False -> mantissa
   }
 
@@ -670,7 +776,8 @@ fn compare_bytes(a: BitArray, b: BitArray) -> Int {
     <<_:8, _:bits>>, <<>> -> 1
     <<>>, <<_:8, _:bits>> -> -1
     <<>>, <<>> -> 0
-    _, _ -> 0  // Fallback for any other case
+    _, _ -> 0
+    // Fallback for any other case
   }
 }
 
@@ -743,8 +850,11 @@ pub type SighashType {
 
 /// Sighash type byte value
 pub const sighash_all = 0x01
+
 pub const sighash_none = 0x02
+
 pub const sighash_single = 0x03
+
 pub const sighash_anyonecanpay = 0x80
 
 /// Parse sighash type from byte
@@ -766,7 +876,10 @@ pub fn sighash_type_from_byte(b: Int) -> SighashType {
 
 /// Compute sighash for a transaction input
 /// Returns the hash to be signed/verified
-pub fn compute_sighash(sig_ctx: SigContext, sighash_type: SighashType) -> BitArray {
+pub fn compute_sighash(
+  sig_ctx: SigContext,
+  sighash_type: SighashType,
+) -> BitArray {
   let type_byte = sighash_type_to_byte(sighash_type)
   let hash = compute_sighash_for_verify(sig_ctx, type_byte)
   hash.bytes
@@ -801,23 +914,21 @@ pub fn verify_script(
   flags: ScriptFlags,
 ) -> Result(Nil, ConsensusError) {
   // Create initial context with script_sig
-  let ctx = script_context_new(
-    oni_bitcoin.script_to_bytes(script_sig),
-    flags,
-  )
+  let ctx = script_context_new(oni_bitcoin.script_to_bytes(script_sig), flags)
 
   // Execute script_sig to populate stack
   case execute_script(ctx) {
     Error(e) -> Error(e)
     Ok(ctx_after_sig) -> {
       // Now execute script_pubkey with the stack from script_sig
-      let pubkey_ctx = ScriptContext(
-        ..ctx_after_sig,
-        script: oni_bitcoin.script_to_bytes(script_pubkey),
-        script_pos: 0,
-        op_count: 0,
-        codesep_pos: 0,
-      )
+      let pubkey_ctx =
+        ScriptContext(
+          ..ctx_after_sig,
+          script: oni_bitcoin.script_to_bytes(script_pubkey),
+          script_pos: 0,
+          op_count: 0,
+          codesep_pos: 0,
+        )
       case execute_script(pubkey_ctx) {
         Error(e) -> Error(e)
         Ok(final_ctx) -> {
@@ -846,24 +957,26 @@ pub fn verify_script_with_sig(
   sig_ctx: SigContext,
 ) -> Result(Nil, ConsensusError) {
   // Create initial context with signature context
-  let ctx = script_context_with_sig(
-    oni_bitcoin.script_to_bytes(script_sig),
-    flags,
-    sig_ctx,
-  )
+  let ctx =
+    script_context_with_sig(
+      oni_bitcoin.script_to_bytes(script_sig),
+      flags,
+      sig_ctx,
+    )
 
   // Execute script_sig to populate stack
   case execute_script(ctx) {
     Error(e) -> Error(e)
     Ok(ctx_after_sig) -> {
       // Now execute script_pubkey with the stack from script_sig
-      let pubkey_ctx = ScriptContext(
-        ..ctx_after_sig,
-        script: oni_bitcoin.script_to_bytes(script_pubkey),
-        script_pos: 0,
-        op_count: 0,
-        codesep_pos: 0,
-      )
+      let pubkey_ctx =
+        ScriptContext(
+          ..ctx_after_sig,
+          script: oni_bitcoin.script_to_bytes(script_pubkey),
+          script_pos: 0,
+          op_count: 0,
+          codesep_pos: 0,
+        )
       case execute_script(pubkey_ctx) {
         Error(e) -> Error(e)
         Ok(final_ctx) -> {
@@ -894,7 +1007,9 @@ pub type ScriptElement {
 }
 
 /// Parse a script into elements
-pub fn parse_script(script: BitArray) -> Result(List(ScriptElement), ConsensusError) {
+pub fn parse_script(
+  script: BitArray,
+) -> Result(List(ScriptElement), ConsensusError) {
   parse_script_loop(script, [])
 }
 
@@ -981,7 +1096,9 @@ fn extract_bytes(data: BitArray, n: Int) -> Result(#(BitArray, BitArray), Nil) {
 }
 
 /// Execute a script in the given context
-pub fn execute_script(ctx: ScriptContext) -> Result(ScriptContext, ConsensusError) {
+pub fn execute_script(
+  ctx: ScriptContext,
+) -> Result(ScriptContext, ConsensusError) {
   // Parse the script first
   case parse_script(ctx.script) {
     Error(e) -> Error(e)
@@ -1057,7 +1174,8 @@ fn execute_elements(
                     Error(e) -> Error(e)
                     Ok(ctx3) -> {
                       // Check stack size
-                      let stack_size = list.length(ctx3.stack) + list.length(ctx3.alt_stack)
+                      let stack_size =
+                        list.length(ctx3.stack) + list.length(ctx3.alt_stack)
                       case stack_size > max_stack_size {
                         True -> Error(ScriptStackOverflow)
                         False -> execute_elements(ctx3, rest)
@@ -1127,11 +1245,12 @@ fn execute_if(
             OpNotIf -> !is_truthy(top)
             _ -> False
           }
-          Ok(ScriptContext(
-            ..ctx,
-            stack: rest,
-            exec_stack: [condition, ..ctx.exec_stack],
-          ))
+          Ok(
+            ScriptContext(..ctx, stack: rest, exec_stack: [
+              condition,
+              ..ctx.exec_stack
+            ]),
+          )
         }
       }
     }
@@ -1172,7 +1291,8 @@ fn is_all_zeros(data: BitArray) -> Bool {
   case data {
     <<>> -> True
     <<0:8, rest:bits>> -> is_all_zeros(rest)
-    <<0x80:8>> -> True  // Negative zero
+    <<0x80:8>> -> True
+    // Negative zero
     _ -> False
   }
 }
@@ -1187,7 +1307,8 @@ fn execute_opcode_impl(
     OpFalse -> Ok(ScriptContext(..ctx, stack: [<<>>, ..ctx.stack]))
     OpTrue -> Ok(ScriptContext(..ctx, stack: [<<1:8>>, ..ctx.stack]))
     Op1Negate -> Ok(ScriptContext(..ctx, stack: [<<0x81:8>>, ..ctx.stack]))
-    OpNum(n) -> Ok(ScriptContext(..ctx, stack: [encode_script_num(n), ..ctx.stack]))
+    OpNum(n) ->
+      Ok(ScriptContext(..ctx, stack: [encode_script_num(n), ..ctx.stack]))
 
     // Stack operations
     OpDup -> execute_dup(ctx)
@@ -1243,13 +1364,22 @@ fn execute_opcode_impl(
     OpHash256 -> execute_hash256(ctx)
 
     // NOPs (do nothing)
-    OpNop | OpNop1 | OpNop4 | OpNop5 | OpNop6 | OpNop7 | OpNop8 | OpNop9 | OpNop10 -> Ok(ctx)
+    OpNop
+    | OpNop1
+    | OpNop4
+    | OpNop5
+    | OpNop6
+    | OpNop7
+    | OpNop8
+    | OpNop9
+    | OpNop10 -> Ok(ctx)
 
     // OP_RETURN makes script fail
     OpReturn -> Error(ScriptInvalid)
 
     // Reserved/Invalid ops fail
-    OpReserved | OpReserved1 | OpReserved2 | OpVer | OpVerIf | OpVerNotIf -> Error(ScriptBadOpcode)
+    OpReserved | OpReserved1 | OpReserved2 | OpVer | OpVerIf | OpVerNotIf ->
+      Error(ScriptBadOpcode)
     OpInvalidOpcode -> Error(ScriptBadOpcode)
 
     // Signature verification opcodes
@@ -1319,7 +1449,8 @@ fn execute_2drop(ctx: ScriptContext) -> Result(ScriptContext, ConsensusError) {
 
 fn execute_3dup(ctx: ScriptContext) -> Result(ScriptContext, ConsensusError) {
   case ctx.stack {
-    [a, b, c, ..rest] -> Ok(ScriptContext(..ctx, stack: [a, b, c, a, b, c, ..rest]))
+    [a, b, c, ..rest] ->
+      Ok(ScriptContext(..ctx, stack: [a, b, c, a, b, c, ..rest]))
     _ -> Error(ScriptStackUnderflow)
   }
 }
@@ -1392,7 +1523,8 @@ fn execute_roll(ctx: ScriptContext) -> Result(ScriptContext, ConsensusError) {
             False -> {
               case list_remove_nth(rest, n) {
                 Error(_) -> Error(ScriptStackUnderflow)
-                Ok(#(item, remaining)) -> Ok(ScriptContext(..ctx, stack: [item, ..remaining]))
+                Ok(#(item, remaining)) ->
+                  Ok(ScriptContext(..ctx, stack: [item, ..remaining]))
               }
             }
           }
@@ -1430,37 +1562,45 @@ fn execute_ifdup(ctx: ScriptContext) -> Result(ScriptContext, ConsensusError) {
   }
 }
 
-fn execute_toaltstack(ctx: ScriptContext) -> Result(ScriptContext, ConsensusError) {
+fn execute_toaltstack(
+  ctx: ScriptContext,
+) -> Result(ScriptContext, ConsensusError) {
   case ctx.stack {
     [] -> Error(ScriptStackUnderflow)
-    [top, ..rest] -> Ok(ScriptContext(..ctx, stack: rest, alt_stack: [top, ..ctx.alt_stack]))
+    [top, ..rest] ->
+      Ok(ScriptContext(..ctx, stack: rest, alt_stack: [top, ..ctx.alt_stack]))
   }
 }
 
-fn execute_fromaltstack(ctx: ScriptContext) -> Result(ScriptContext, ConsensusError) {
+fn execute_fromaltstack(
+  ctx: ScriptContext,
+) -> Result(ScriptContext, ConsensusError) {
   case ctx.alt_stack {
     [] -> Error(ScriptStackUnderflow)
-    [top, ..rest] -> Ok(ScriptContext(..ctx, stack: [top, ..ctx.stack], alt_stack: rest))
+    [top, ..rest] ->
+      Ok(ScriptContext(..ctx, stack: [top, ..ctx.stack], alt_stack: rest))
   }
 }
 
 fn execute_2over(ctx: ScriptContext) -> Result(ScriptContext, ConsensusError) {
   case ctx.stack {
-    [_, _, c, d, .._rest] -> Ok(ScriptContext(..ctx, stack: [c, d, ..ctx.stack]))
+    [_, _, c, d, ..] -> Ok(ScriptContext(..ctx, stack: [c, d, ..ctx.stack]))
     _ -> Error(ScriptStackUnderflow)
   }
 }
 
 fn execute_2rot(ctx: ScriptContext) -> Result(ScriptContext, ConsensusError) {
   case ctx.stack {
-    [a, b, c, d, e, f, ..rest] -> Ok(ScriptContext(..ctx, stack: [e, f, a, b, c, d, ..rest]))
+    [a, b, c, d, e, f, ..rest] ->
+      Ok(ScriptContext(..ctx, stack: [e, f, a, b, c, d, ..rest]))
     _ -> Error(ScriptStackUnderflow)
   }
 }
 
 fn execute_2swap(ctx: ScriptContext) -> Result(ScriptContext, ConsensusError) {
   case ctx.stack {
-    [a, b, c, d, ..rest] -> Ok(ScriptContext(..ctx, stack: [c, d, a, b, ..rest]))
+    [a, b, c, d, ..rest] ->
+      Ok(ScriptContext(..ctx, stack: [c, d, a, b, ..rest]))
     _ -> Error(ScriptStackUnderflow)
   }
 }
@@ -1482,7 +1622,9 @@ fn execute_equal(ctx: ScriptContext) -> Result(ScriptContext, ConsensusError) {
   }
 }
 
-fn execute_equalverify(ctx: ScriptContext) -> Result(ScriptContext, ConsensusError) {
+fn execute_equalverify(
+  ctx: ScriptContext,
+) -> Result(ScriptContext, ConsensusError) {
   case execute_equal(ctx) {
     Error(e) -> Error(e)
     Ok(new_ctx) -> execute_verify(new_ctx)
@@ -1523,7 +1665,9 @@ const sequence_locktime_mask: Int = 0x0000FFFF
 /// Execute OP_CHECKLOCKTIMEVERIFY (BIP65)
 /// Verifies that the transaction's nLockTime is >= the top stack value.
 /// The value remains on the stack.
-fn execute_checklocktimeverify(ctx: ScriptContext) -> Result(ScriptContext, ConsensusError) {
+fn execute_checklocktimeverify(
+  ctx: ScriptContext,
+) -> Result(ScriptContext, ConsensusError) {
   case ctx.stack {
     [] -> Error(ScriptStackUnderflow)
     [locktime_bytes, ..] -> {
@@ -1564,7 +1708,8 @@ fn execute_checklocktimeverify(ctx: ScriptContext) -> Result(ScriptContext, Cons
                             True -> {
                               // tx locktime must be >= stack locktime
                               case tx_locktime >= locktime {
-                                True -> Ok(ctx)  // Success - leave stack unchanged
+                                True -> Ok(ctx)
+                                // Success - leave stack unchanged
                                 False -> Error(ScriptCheckLockTimeVerifyFailed)
                               }
                             }
@@ -1586,7 +1731,9 @@ fn execute_checklocktimeverify(ctx: ScriptContext) -> Result(ScriptContext, Cons
 /// Execute OP_CHECKSEQUENCEVERIFY (BIP112)
 /// Verifies relative locktime against the input's sequence number.
 /// The value remains on the stack.
-fn execute_checksequenceverify(ctx: ScriptContext) -> Result(ScriptContext, ConsensusError) {
+fn execute_checksequenceverify(
+  ctx: ScriptContext,
+) -> Result(ScriptContext, ConsensusError) {
   case ctx.stack {
     [] -> Error(ScriptStackUnderflow)
     [sequence_bytes, ..] -> {
@@ -1599,8 +1746,11 @@ fn execute_checksequenceverify(ctx: ScriptContext) -> Result(ScriptContext, Cons
             True -> Error(ScriptCheckSequenceVerifyFailed)
             False -> {
               // If the disable flag is set, CSV is a NOP
-              case int.bitwise_and(sequence, sequence_locktime_disable_flag) != 0 {
-                True -> Ok(ctx)  // CSV disabled, succeed
+              case
+                int.bitwise_and(sequence, sequence_locktime_disable_flag) != 0
+              {
+                True -> Ok(ctx)
+                // CSV disabled, succeed
                 False -> {
                   // Need transaction context
                   case ctx.sig_ctx {
@@ -1611,27 +1761,56 @@ fn execute_checksequenceverify(ctx: ScriptContext) -> Result(ScriptContext, Cons
                         True -> Error(ScriptCheckSequenceVerifyFailed)
                         False -> {
                           // Get the input's sequence
-                          case list_nth(sig_ctx.tx.inputs, sig_ctx.input_index) {
+                          case
+                            list_nth(sig_ctx.tx.inputs, sig_ctx.input_index)
+                          {
                             Error(_) -> Error(ScriptCheckSequenceVerifyFailed)
                             Ok(input) -> {
                               // If input sequence has disable flag set, CSV fails
-                              case int.bitwise_and(input.sequence, sequence_locktime_disable_flag) != 0 {
+                              case
+                                int.bitwise_and(
+                                  input.sequence,
+                                  sequence_locktime_disable_flag,
+                                )
+                                != 0
+                              {
                                 True -> Error(ScriptCheckSequenceVerifyFailed)
                                 False -> {
                                   // Both must be same type (blocks or time)
-                                  let stack_is_time = int.bitwise_and(sequence, sequence_locktime_type_flag) != 0
-                                  let input_is_time = int.bitwise_and(input.sequence, sequence_locktime_type_flag) != 0
+                                  let stack_is_time =
+                                    int.bitwise_and(
+                                      sequence,
+                                      sequence_locktime_type_flag,
+                                    )
+                                    != 0
+                                  let input_is_time =
+                                    int.bitwise_and(
+                                      input.sequence,
+                                      sequence_locktime_type_flag,
+                                    )
+                                    != 0
 
                                   case stack_is_time == input_is_time {
-                                    False -> Error(ScriptCheckSequenceVerifyFailed)
+                                    False ->
+                                      Error(ScriptCheckSequenceVerifyFailed)
                                     True -> {
                                       // Compare the masked values
-                                      let stack_value = int.bitwise_and(sequence, sequence_locktime_mask)
-                                      let input_value = int.bitwise_and(input.sequence, sequence_locktime_mask)
+                                      let stack_value =
+                                        int.bitwise_and(
+                                          sequence,
+                                          sequence_locktime_mask,
+                                        )
+                                      let input_value =
+                                        int.bitwise_and(
+                                          input.sequence,
+                                          sequence_locktime_mask,
+                                        )
 
                                       case input_value >= stack_value {
-                                        True -> Ok(ctx)  // Success
-                                        False -> Error(ScriptCheckSequenceVerifyFailed)
+                                        True -> Ok(ctx)
+                                        // Success
+                                        False ->
+                                          Error(ScriptCheckSequenceVerifyFailed)
                                       }
                                     }
                                   }
@@ -1695,7 +1874,9 @@ fn execute_not(ctx: ScriptContext) -> Result(ScriptContext, ConsensusError) {
   })
 }
 
-fn execute_0notequal(ctx: ScriptContext) -> Result(ScriptContext, ConsensusError) {
+fn execute_0notequal(
+  ctx: ScriptContext,
+) -> Result(ScriptContext, ConsensusError) {
   unary_num_op(ctx, fn(a) {
     case a == 0 {
       True -> 0
@@ -1731,14 +1912,18 @@ fn execute_numequal(ctx: ScriptContext) -> Result(ScriptContext, ConsensusError)
   })
 }
 
-fn execute_numequalverify(ctx: ScriptContext) -> Result(ScriptContext, ConsensusError) {
+fn execute_numequalverify(
+  ctx: ScriptContext,
+) -> Result(ScriptContext, ConsensusError) {
   case execute_numequal(ctx) {
     Error(e) -> Error(e)
     Ok(new_ctx) -> execute_verify(new_ctx)
   }
 }
 
-fn execute_numnotequal(ctx: ScriptContext) -> Result(ScriptContext, ConsensusError) {
+fn execute_numnotequal(
+  ctx: ScriptContext,
+) -> Result(ScriptContext, ConsensusError) {
   binary_num_op(ctx, fn(a, b) {
     case a != b {
       True -> 1
@@ -1756,7 +1941,9 @@ fn execute_lessthan(ctx: ScriptContext) -> Result(ScriptContext, ConsensusError)
   })
 }
 
-fn execute_greaterthan(ctx: ScriptContext) -> Result(ScriptContext, ConsensusError) {
+fn execute_greaterthan(
+  ctx: ScriptContext,
+) -> Result(ScriptContext, ConsensusError) {
   binary_num_op(ctx, fn(a, b) {
     case a > b {
       True -> 1
@@ -1765,7 +1952,9 @@ fn execute_greaterthan(ctx: ScriptContext) -> Result(ScriptContext, ConsensusErr
   })
 }
 
-fn execute_lessthanorequal(ctx: ScriptContext) -> Result(ScriptContext, ConsensusError) {
+fn execute_lessthanorequal(
+  ctx: ScriptContext,
+) -> Result(ScriptContext, ConsensusError) {
   binary_num_op(ctx, fn(a, b) {
     case a <= b {
       True -> 1
@@ -1774,7 +1963,9 @@ fn execute_lessthanorequal(ctx: ScriptContext) -> Result(ScriptContext, Consensu
   })
 }
 
-fn execute_greaterthanorequal(ctx: ScriptContext) -> Result(ScriptContext, ConsensusError) {
+fn execute_greaterthanorequal(
+  ctx: ScriptContext,
+) -> Result(ScriptContext, ConsensusError) {
   binary_num_op(ctx, fn(a, b) {
     case a >= b {
       True -> 1
@@ -1804,7 +1995,11 @@ fn execute_max(ctx: ScriptContext) -> Result(ScriptContext, ConsensusError) {
 fn execute_within(ctx: ScriptContext) -> Result(ScriptContext, ConsensusError) {
   case ctx.stack {
     [max_bytes, min_bytes, x_bytes, ..rest] -> {
-      case decode_script_num(x_bytes), decode_script_num(min_bytes), decode_script_num(max_bytes) {
+      case
+        decode_script_num(x_bytes),
+        decode_script_num(min_bytes),
+        decode_script_num(max_bytes)
+      {
         Ok(x), Ok(min), Ok(max) -> {
           let result = case x >= min && x < max {
             True -> 1
@@ -1871,7 +2066,9 @@ fn execute_sha1(ctx: ScriptContext) -> Result(ScriptContext, ConsensusError) {
   }
 }
 
-fn execute_ripemd160(ctx: ScriptContext) -> Result(ScriptContext, ConsensusError) {
+fn execute_ripemd160(
+  ctx: ScriptContext,
+) -> Result(ScriptContext, ConsensusError) {
   case ctx.stack {
     [] -> Error(ScriptStackUnderflow)
     [data, ..rest] -> {
@@ -1932,7 +2129,9 @@ fn execute_checksig(ctx: ScriptContext) -> Result(ScriptContext, ConsensusError)
 }
 
 /// Execute OP_CHECKSIGVERIFY - verify ECDSA signature and require success
-fn execute_checksigverify(ctx: ScriptContext) -> Result(ScriptContext, ConsensusError) {
+fn execute_checksigverify(
+  ctx: ScriptContext,
+) -> Result(ScriptContext, ConsensusError) {
   case execute_checksig(ctx) {
     Error(e) -> Error(e)
     Ok(new_ctx) -> {
@@ -1950,7 +2149,9 @@ fn execute_checksigverify(ctx: ScriptContext) -> Result(ScriptContext, Consensus
 }
 
 /// Execute OP_CHECKMULTISIG - verify multiple ECDSA signatures
-fn execute_checkmultisig(ctx: ScriptContext) -> Result(ScriptContext, ConsensusError) {
+fn execute_checkmultisig(
+  ctx: ScriptContext,
+) -> Result(ScriptContext, ConsensusError) {
   // Pop number of pubkeys
   case ctx.stack {
     [] -> Error(ScriptStackUnderflow)
@@ -1984,12 +2185,18 @@ fn execute_checkmultisig(ctx: ScriptContext) -> Result(ScriptContext, ConsensusE
                                     [] -> Error(ScriptStackUnderflow)
                                     [_dummy, ..rest5] -> {
                                       // Verify signatures
-                                      let result = verify_multisig(ctx, sigs, pubkeys)
+                                      let result =
+                                        verify_multisig(ctx, sigs, pubkeys)
                                       let result_byte = case result {
                                         True -> <<1:8>>
                                         False -> <<>>
                                       }
-                                      Ok(ScriptContext(..ctx, stack: [result_byte, ..rest5]))
+                                      Ok(
+                                        ScriptContext(..ctx, stack: [
+                                          result_byte,
+                                          ..rest5
+                                        ]),
+                                      )
                                     }
                                   }
                                 }
@@ -2011,7 +2218,9 @@ fn execute_checkmultisig(ctx: ScriptContext) -> Result(ScriptContext, ConsensusE
 }
 
 /// Execute OP_CHECKMULTISIGVERIFY - verify multiple signatures and require success
-fn execute_checkmultisigverify(ctx: ScriptContext) -> Result(ScriptContext, ConsensusError) {
+fn execute_checkmultisigverify(
+  ctx: ScriptContext,
+) -> Result(ScriptContext, ConsensusError) {
   case execute_checkmultisig(ctx) {
     Error(e) -> Error(e)
     Ok(new_ctx) -> {
@@ -2029,7 +2238,9 @@ fn execute_checkmultisigverify(ctx: ScriptContext) -> Result(ScriptContext, Cons
 }
 
 /// Execute OP_CHECKSIGADD (BIP342 Taproot) - add signature verification result
-fn execute_checksigadd(ctx: ScriptContext) -> Result(ScriptContext, ConsensusError) {
+fn execute_checksigadd(
+  ctx: ScriptContext,
+) -> Result(ScriptContext, ConsensusError) {
   case ctx.stack {
     [pubkey, n_bytes, sig, ..rest] -> {
       case decode_script_num(n_bytes) {
@@ -2048,7 +2259,9 @@ fn execute_checksigadd(ctx: ScriptContext) -> Result(ScriptContext, ConsensusErr
                 True -> n + 1
                 False -> n
               }
-              Ok(ScriptContext(..ctx, stack: [encode_script_num(new_n), ..rest]))
+              Ok(
+                ScriptContext(..ctx, stack: [encode_script_num(new_n), ..rest]),
+              )
             }
           }
         }
@@ -2081,7 +2294,8 @@ fn verify_signature(ctx: ScriptContext, sig: BitArray, pubkey: BitArray) -> Bool
                 Error(_) -> False
                 Ok(sig_bytes) -> {
                   // Compute sighash
-                  let sighash = compute_sighash_for_verify(sig_context, sighash_type)
+                  let sighash =
+                    compute_sighash_for_verify(sig_context, sighash_type)
                   // Verify using secp256k1 via Erlang crypto
                   verify_ecdsa(sighash.bytes, sig_bytes, pubkey)
                 }
@@ -2100,17 +2314,32 @@ fn compute_sighash_for_verify(sig_ctx: SigContext, sighash_type: Int) -> Hash256
   case sig_ctx.is_taproot {
     True -> {
       // BIP341 Taproot sighash (simplified - no annex support here)
-      compute_taproot_sighash_simple(sig_ctx.tx, sig_ctx.input_index, sighash_type)
+      compute_taproot_sighash_simple(
+        sig_ctx.tx,
+        sig_ctx.input_index,
+        sighash_type,
+      )
     }
     False -> {
       case sig_ctx.is_segwit {
         True -> {
           // BIP143 SegWit v0 sighash
-          compute_segwit_sighash(sig_ctx.tx, sig_ctx.input_index, sig_ctx.script_code, sig_ctx.spent_value, sighash_type)
+          compute_segwit_sighash(
+            sig_ctx.tx,
+            sig_ctx.input_index,
+            sig_ctx.script_code,
+            sig_ctx.spent_value,
+            sighash_type,
+          )
         }
         False -> {
           // Legacy sighash
-          compute_legacy_sighash(sig_ctx.tx, sig_ctx.input_index, sig_ctx.script_code, sighash_type)
+          compute_legacy_sighash(
+            sig_ctx.tx,
+            sig_ctx.input_index,
+            sig_ctx.script_code,
+            sighash_type,
+          )
         }
       }
     }
@@ -2139,7 +2368,17 @@ fn compute_legacy_sighash(
       list.index_map(tx.inputs, fn(input, idx) {
         case idx == input_index {
           True -> oni_bitcoin.TxIn(..input, script_sig: script_code)
-          False -> oni_bitcoin.TxIn(..input, script_sig: oni_bitcoin.script_empty(), sequence: clear_sequence_for_sighash(input.sequence, base_type, idx, input_index))
+          False ->
+            oni_bitcoin.TxIn(
+              ..input,
+              script_sig: oni_bitcoin.script_empty(),
+              sequence: clear_sequence_for_sighash(
+                input.sequence,
+                base_type,
+                idx,
+                input_index,
+              ),
+            )
         }
       })
     }
@@ -2147,33 +2386,38 @@ fn compute_legacy_sighash(
 
   // Modify outputs based on sighash type
   let outputs = case base_type {
-    0x02 -> []  // SIGHASH_NONE: no outputs
-    0x03 -> {   // SIGHASH_SINGLE: only matching output
+    0x02 -> []
+    // SIGHASH_NONE: no outputs
+    0x03 -> {
+      // SIGHASH_SINGLE: only matching output
       case input_index >= list.length(tx.outputs) {
         True -> []
         False -> {
           list.index_map(tx.outputs, fn(out, idx) {
             case idx == input_index {
               True -> out
-              False -> oni_bitcoin.TxOut(
-                value: oni_bitcoin.sats(-1),
-                script_pubkey: oni_bitcoin.script_empty(),
-              )
+              False ->
+                oni_bitcoin.TxOut(
+                  value: oni_bitcoin.sats(-1),
+                  script_pubkey: oni_bitcoin.script_empty(),
+                )
             }
           })
           |> list.take(input_index + 1)
         }
       }
     }
-    _ -> tx.outputs  // SIGHASH_ALL: all outputs
+    _ -> tx.outputs
+    // SIGHASH_ALL: all outputs
   }
 
-  let modified_tx = oni_bitcoin.Transaction(
-    version: tx.version,
-    inputs: inputs,
-    outputs: outputs,
-    lock_time: tx.lock_time,
-  )
+  let modified_tx =
+    oni_bitcoin.Transaction(
+      version: tx.version,
+      inputs: inputs,
+      outputs: outputs,
+      lock_time: tx.lock_time,
+    )
 
   // Serialize and hash
   let serialized = serialize_tx_for_sighash(modified_tx)
@@ -2181,12 +2425,18 @@ fn compute_legacy_sighash(
   oni_bitcoin.hash256_digest(with_type)
 }
 
-fn clear_sequence_for_sighash(seq: Int, base_type: Int, idx: Int, input_index: Int) -> Int {
+fn clear_sequence_for_sighash(
+  seq: Int,
+  base_type: Int,
+  idx: Int,
+  input_index: Int,
+) -> Int {
   case base_type == 0x02 || base_type == 0x03 {
-    True -> case idx != input_index {
-      True -> 0
-      False -> seq
-    }
+    True ->
+      case idx != input_index {
+        True -> 0
+        False -> seq
+      }
     False -> seq
   }
 }
@@ -2206,37 +2456,45 @@ fn compute_segwit_sighash(
   let hash_prevouts = case anyonecanpay {
     True -> oni_bitcoin.Hash256(<<0:256>>)
     False -> {
-      let data = list.fold(tx.inputs, <<>>, fn(acc, input) {
-        bit_array.append(acc, serialize_outpoint(input.prevout))
-      })
+      let data =
+        list.fold(tx.inputs, <<>>, fn(acc, input) {
+          bit_array.append(acc, serialize_outpoint(input.prevout))
+        })
       oni_bitcoin.hash256_digest(data)
     }
   }
 
   // Compute sequence hash
-  let hash_sequence = case anyonecanpay || base_type == 0x02 || base_type == 0x03 {
+  let hash_sequence = case
+    anyonecanpay || base_type == 0x02 || base_type == 0x03
+  {
     True -> oni_bitcoin.Hash256(<<0:256>>)
     False -> {
-      let data = list.fold(tx.inputs, <<>>, fn(acc, input) {
-        bit_array.append(acc, <<input.sequence:32-little>>)
-      })
+      let data =
+        list.fold(tx.inputs, <<>>, fn(acc, input) {
+          bit_array.append(acc, <<input.sequence:32-little>>)
+        })
       oni_bitcoin.hash256_digest(data)
     }
   }
 
   // Compute outputs hash
   let hash_outputs = case base_type {
-    0x02 -> oni_bitcoin.Hash256(<<0:256>>)  // NONE
-    0x03 -> {  // SINGLE
+    0x02 -> oni_bitcoin.Hash256(<<0:256>>)
+    // NONE
+    0x03 -> {
+      // SINGLE
       case list_nth(tx.outputs, input_index) {
         Ok(out) -> oni_bitcoin.hash256_digest(serialize_output(out))
         Error(_) -> oni_bitcoin.Hash256(<<0:256>>)
       }
     }
-    _ -> {  // ALL
-      let data = list.fold(tx.outputs, <<>>, fn(acc, out) {
-        bit_array.append(acc, serialize_output(out))
-      })
+    _ -> {
+      // ALL
+      let data =
+        list.fold(tx.outputs, <<>>, fn(acc, out) {
+          bit_array.append(acc, serialize_output(out))
+        })
       oni_bitcoin.hash256_digest(data)
     }
   }
@@ -2247,22 +2505,24 @@ fn compute_segwit_sighash(
     Ok(input) -> {
       // Build preimage
       let script_bytes = oni_bitcoin.script_to_bytes(script_code)
-      let script_len = oni_bitcoin.compact_size_encode(bit_array.byte_size(script_bytes))
+      let script_len =
+        oni_bitcoin.compact_size_encode(bit_array.byte_size(script_bytes))
       let value_sats = oni_bitcoin.amount_to_sats(value)
 
-      let preimage = bit_array.concat([
-        <<tx.version:32-little>>,
-        hash_prevouts.bytes,
-        hash_sequence.bytes,
-        serialize_outpoint(input.prevout),
-        script_len,
-        script_bytes,
-        <<value_sats:64-little>>,
-        <<input.sequence:32-little>>,
-        hash_outputs.bytes,
-        <<tx.lock_time:32-little>>,
-        <<sighash_type:32-little>>,
-      ])
+      let preimage =
+        bit_array.concat([
+          <<tx.version:32-little>>,
+          hash_prevouts.bytes,
+          hash_sequence.bytes,
+          serialize_outpoint(input.prevout),
+          script_len,
+          script_bytes,
+          <<value_sats:64-little>>,
+          <<input.sequence:32-little>>,
+          hash_outputs.bytes,
+          <<tx.lock_time:32-little>>,
+          <<sighash_type:32-little>>,
+        ])
 
       oni_bitcoin.hash256_digest(preimage)
     }
@@ -2278,7 +2538,8 @@ fn compute_taproot_sighash_simple(
 ) -> Hash256 {
   // Normalize sighash type (0x00 is default = SIGHASH_ALL)
   let effective_type = case sighash_type {
-    0x00 -> 0x00  // Default
+    0x00 -> 0x00
+    // Default
     _ -> sighash_type
   }
 
@@ -2300,37 +2561,45 @@ fn compute_taproot_sighash_simple(
   let prevouts_data = case anyonecanpay {
     True -> <<>>
     False -> {
-      let all_prevouts = list.fold(tx.inputs, <<>>, fn(acc, input) {
-        bit_array.append(acc, serialize_outpoint(input.prevout))
-      })
+      let all_prevouts =
+        list.fold(tx.inputs, <<>>, fn(acc, input) {
+          bit_array.append(acc, serialize_outpoint(input.prevout))
+        })
       oni_bitcoin.sha256(all_prevouts)
     }
   }
 
   // Sequences hash (if not ANYONECANPAY and not NONE/SINGLE)
-  let sequences_data = case anyonecanpay || base_type == 0x02 || base_type == 0x03 {
+  let sequences_data = case
+    anyonecanpay || base_type == 0x02 || base_type == 0x03
+  {
     True -> <<>>
     False -> {
-      let all_sequences = list.fold(tx.inputs, <<>>, fn(acc, input) {
-        bit_array.append(acc, <<input.sequence:32-little>>)
-      })
+      let all_sequences =
+        list.fold(tx.inputs, <<>>, fn(acc, input) {
+          bit_array.append(acc, <<input.sequence:32-little>>)
+        })
       oni_bitcoin.sha256(all_sequences)
     }
   }
 
   // Outputs hash based on sighash type
   let outputs_data = case base_type {
-    0x02 -> <<>>  // SIGHASH_NONE
-    0x03 -> {     // SIGHASH_SINGLE
+    0x02 -> <<>>
+    // SIGHASH_NONE
+    0x03 -> {
+      // SIGHASH_SINGLE
       case list_nth(tx.outputs, input_index) {
         Error(_) -> <<>>
         Ok(output) -> oni_bitcoin.sha256(serialize_output(output))
       }
     }
-    _ -> {        // SIGHASH_ALL (default)
-      let all_outputs = list.fold(tx.outputs, <<>>, fn(acc, output) {
-        bit_array.append(acc, serialize_output(output))
-      })
+    _ -> {
+      // SIGHASH_ALL (default)
+      let all_outputs =
+        list.fold(tx.outputs, <<>>, fn(acc, output) {
+          bit_array.append(acc, serialize_output(output))
+        })
       oni_bitcoin.sha256(all_outputs)
     }
   }
@@ -2346,8 +2615,10 @@ fn compute_taproot_sighash_simple(
         Ok(input) -> {
           bit_array.concat([
             serialize_outpoint(input.prevout),
-            <<0:64-little>>,  // amount (would need prevout value)
-            <<0:8>>,          // scriptPubKey length
+            <<0:64-little>>,
+            // amount (would need prevout value)
+            <<0:8>>,
+            // scriptPubKey length
             <<input.sequence:32-little>>,
           ])
         }
@@ -2357,17 +2628,18 @@ fn compute_taproot_sighash_simple(
   }
 
   // Build the full message
-  let message = bit_array.concat([
-    epoch,
-    hash_type_byte,
-    version_bytes,
-    locktime_bytes,
-    prevouts_data,
-    sequences_data,
-    outputs_data,
-    spend_type,
-    input_data,
-  ])
+  let message =
+    bit_array.concat([
+      epoch,
+      hash_type_byte,
+      version_bytes,
+      locktime_bytes,
+      prevouts_data,
+      sequences_data,
+      outputs_data,
+      spend_type,
+      input_data,
+    ])
 
   // Use tagged hash with "TapSighash" tag
   oni_bitcoin.Hash256(oni_bitcoin.tagged_hash("TapSighash", message))
@@ -2392,7 +2664,9 @@ pub type TaprootControlBlock {
 }
 
 /// Parse a Taproot control block from witness data
-pub fn parse_control_block(bytes: BitArray) -> Result(TaprootControlBlock, ConsensusError) {
+pub fn parse_control_block(
+  bytes: BitArray,
+) -> Result(TaprootControlBlock, ConsensusError) {
   case bit_array.byte_size(bytes) {
     size if size < 33 -> Error(ScriptInvalid)
     size if { size - 33 } % 32 != 0 -> Error(ScriptInvalid)
@@ -2442,11 +2716,12 @@ fn parse_merkle_path(
 
 /// Compute the tapleaf hash for a script
 pub fn compute_tapleaf_hash(leaf_version: Int, script: BitArray) -> BitArray {
-  let leaf_data = bit_array.concat([
-    <<leaf_version:8>>,
-    oni_bitcoin.compact_size_encode(bit_array.byte_size(script)),
-    script,
-  ])
+  let leaf_data =
+    bit_array.concat([
+      <<leaf_version:8>>,
+      oni_bitcoin.compact_size_encode(bit_array.byte_size(script)),
+      script,
+    ])
   oni_bitcoin.tagged_hash("TapLeaf", leaf_data)
 }
 
@@ -2477,8 +2752,14 @@ fn bit_array_compare(a: BitArray, b: BitArray) -> order.Order {
 }
 
 /// Compute the taptweak hash
-pub fn compute_taptweak_hash(internal_key: BitArray, merkle_root: BitArray) -> BitArray {
-  oni_bitcoin.tagged_hash("TapTweak", bit_array.append(internal_key, merkle_root))
+pub fn compute_taptweak_hash(
+  internal_key: BitArray,
+  merkle_root: BitArray,
+) -> BitArray {
+  oni_bitcoin.tagged_hash(
+    "TapTweak",
+    bit_array.append(internal_key, merkle_root),
+  )
 }
 
 /// Verify a Taproot script-path spend
@@ -2491,23 +2772,28 @@ pub fn verify_taproot_script_path(
   let leaf_hash = compute_tapleaf_hash(control_block.leaf_version, script)
 
   // Walk up the merkle tree
-  let merkle_root = list.fold(control_block.merkle_path, leaf_hash, fn(current, sibling) {
-    compute_tapbranch_hash(current, sibling)
-  })
+  let merkle_root =
+    list.fold(control_block.merkle_path, leaf_hash, fn(current, sibling) {
+      compute_tapbranch_hash(current, sibling)
+    })
 
   // Compute the expected output key
-  let tweak_hash = compute_taptweak_hash(control_block.internal_key, merkle_root)
+  let tweak_hash =
+    compute_taptweak_hash(control_block.internal_key, merkle_root)
 
   // Use the NIF to tweak the internal key and verify it matches the output key
-  case oni_bitcoin.tweak_pubkey_for_taproot(
-    oni_bitcoin.XOnlyPubKey(control_block.internal_key),
-    tweak_hash,
-  ) {
+  case
+    oni_bitcoin.tweak_pubkey_for_taproot(
+      oni_bitcoin.XOnlyPubKey(control_block.internal_key),
+      tweak_hash,
+    )
+  {
     Error(_) -> False
     Ok(#(tweaked_key, parity)) -> {
       // Verify the tweaked key matches the output key
       // and the parity matches
-      tweaked_key.bytes == output_key && parity == control_block.output_key_parity
+      tweaked_key.bytes == output_key
+      && parity == control_block.output_key_parity
     }
   }
 }
@@ -2536,7 +2822,11 @@ pub fn verify_taproot_key_path(
 }
 
 /// Verify a Schnorr signature (BIP-340)
-fn verify_schnorr(sighash: BitArray, signature: BitArray, pubkey: BitArray) -> Bool {
+fn verify_schnorr(
+  sighash: BitArray,
+  signature: BitArray,
+  pubkey: BitArray,
+) -> Bool {
   case oni_bitcoin.schnorr_sig_from_bytes(signature) {
     Error(_) -> False
     Ok(sig) -> {
@@ -2562,7 +2852,9 @@ pub fn is_taproot_output(script: BitArray) -> Bool {
 }
 
 /// Extract the output public key from a Taproot script
-pub fn extract_taproot_pubkey(script: BitArray) -> Result(BitArray, ConsensusError) {
+pub fn extract_taproot_pubkey(
+  script: BitArray,
+) -> Result(BitArray, ConsensusError) {
   case script {
     <<0x51:8, 0x20:8, pubkey:256-bits>> -> Ok(<<pubkey:256-bits>>)
     _ -> Error(ScriptInvalid)
@@ -2570,7 +2862,10 @@ pub fn extract_taproot_pubkey(script: BitArray) -> Result(BitArray, ConsensusErr
 }
 
 /// Validate Tapscript-specific rules (BIP-342)
-pub fn validate_tapscript(script: BitArray, flags: ScriptFlags) -> Result(Nil, ConsensusError) {
+pub fn validate_tapscript(
+  script: BitArray,
+  flags: ScriptFlags,
+) -> Result(Nil, ConsensusError) {
   // Check script size
   case bit_array.byte_size(script) > max_script_size {
     True -> Error(ScriptSizeTooLarge)
@@ -2581,7 +2876,11 @@ pub fn validate_tapscript(script: BitArray, flags: ScriptFlags) -> Result(Nil, C
   }
 }
 
-fn validate_tapscript_opcodes(script: BitArray, pos: Int, flags: ScriptFlags) -> Result(Nil, ConsensusError) {
+fn validate_tapscript_opcodes(
+  script: BitArray,
+  pos: Int,
+  flags: ScriptFlags,
+) -> Result(Nil, ConsensusError) {
   let size = bit_array.byte_size(script)
   case pos >= size {
     True -> Ok(Nil)
@@ -2598,21 +2897,27 @@ fn validate_tapscript_opcodes(script: BitArray, pos: Int, flags: ScriptFlags) ->
             _ if opcode >= 0x01 && opcode <= 0x4B -> {
               validate_tapscript_opcodes(script, pos + 1 + opcode, flags)
             }
-            0x4C -> {  // OP_PUSHDATA1
+            0x4C -> {
+              // OP_PUSHDATA1
               case bit_array.slice(script, pos + 1, 1) {
-                Ok(<<len:8>>) -> validate_tapscript_opcodes(script, pos + 2 + len, flags)
+                Ok(<<len:8>>) ->
+                  validate_tapscript_opcodes(script, pos + 2 + len, flags)
                 _ -> Error(ScriptInvalid)
               }
             }
-            0x4D -> {  // OP_PUSHDATA2
+            0x4D -> {
+              // OP_PUSHDATA2
               case bit_array.slice(script, pos + 1, 2) {
-                Ok(<<len:16-little>>) -> validate_tapscript_opcodes(script, pos + 3 + len, flags)
+                Ok(<<len:16-little>>) ->
+                  validate_tapscript_opcodes(script, pos + 3 + len, flags)
                 _ -> Error(ScriptInvalid)
               }
             }
-            0x4E -> {  // OP_PUSHDATA4
+            0x4E -> {
+              // OP_PUSHDATA4
               case bit_array.slice(script, pos + 1, 4) {
-                Ok(<<len:32-little>>) -> validate_tapscript_opcodes(script, pos + 5 + len, flags)
+                Ok(<<len:32-little>>) ->
+                  validate_tapscript_opcodes(script, pos + 5 + len, flags)
                 _ -> Error(ScriptInvalid)
               }
             }
@@ -2645,28 +2950,32 @@ fn serialize_output(output: TxOut) -> BitArray {
 
 /// Serialize transaction for legacy sighash
 fn serialize_tx_for_sighash(tx: Transaction) -> BitArray {
-  let inputs_data = list.fold(tx.inputs, <<>>, fn(acc, input) {
-    let script = oni_bitcoin.script_to_bytes(input.script_sig)
-    let input_data = bit_array.concat([
-      input.prevout.txid.hash.bytes,
-      <<input.prevout.vout:32-little>>,
-      oni_bitcoin.compact_size_encode(bit_array.byte_size(script)),
-      script,
-      <<input.sequence:32-little>>,
-    ])
-    bit_array.append(acc, input_data)
-  })
+  let inputs_data =
+    list.fold(tx.inputs, <<>>, fn(acc, input) {
+      let script = oni_bitcoin.script_to_bytes(input.script_sig)
+      let input_data =
+        bit_array.concat([
+          input.prevout.txid.hash.bytes,
+          <<input.prevout.vout:32-little>>,
+          oni_bitcoin.compact_size_encode(bit_array.byte_size(script)),
+          script,
+          <<input.sequence:32-little>>,
+        ])
+      bit_array.append(acc, input_data)
+    })
 
-  let outputs_data = list.fold(tx.outputs, <<>>, fn(acc, output) {
-    let script = oni_bitcoin.script_to_bytes(output.script_pubkey)
-    let value = oni_bitcoin.amount_to_sats(output.value)
-    let output_data = bit_array.concat([
-      <<value:64-little>>,
-      oni_bitcoin.compact_size_encode(bit_array.byte_size(script)),
-      script,
-    ])
-    bit_array.append(acc, output_data)
-  })
+  let outputs_data =
+    list.fold(tx.outputs, <<>>, fn(acc, output) {
+      let script = oni_bitcoin.script_to_bytes(output.script_pubkey)
+      let value = oni_bitcoin.amount_to_sats(output.value)
+      let output_data =
+        bit_array.concat([
+          <<value:64-little>>,
+          oni_bitcoin.compact_size_encode(bit_array.byte_size(script)),
+          script,
+        ])
+      bit_array.append(acc, output_data)
+    })
 
   bit_array.concat([
     <<tx.version:32-little>>,
@@ -2679,7 +2988,11 @@ fn serialize_tx_for_sighash(tx: Transaction) -> BitArray {
 }
 
 /// ECDSA signature verification using secp256k1
-fn verify_ecdsa(sighash: BitArray, signature: BitArray, pubkey: BitArray) -> Bool {
+fn verify_ecdsa(
+  sighash: BitArray,
+  signature: BitArray,
+  pubkey: BitArray,
+) -> Bool {
   // Parse the public key
   case oni_bitcoin.pubkey_from_bytes(pubkey) {
     Error(_) -> False
@@ -2700,17 +3013,27 @@ fn verify_ecdsa(sighash: BitArray, signature: BitArray, pubkey: BitArray) -> Boo
 }
 
 /// Verify multiple signatures against pubkeys (CHECKMULTISIG)
-fn verify_multisig(ctx: ScriptContext, sigs: List(BitArray), pubkeys: List(BitArray)) -> Bool {
+fn verify_multisig(
+  ctx: ScriptContext,
+  sigs: List(BitArray),
+  pubkeys: List(BitArray),
+) -> Bool {
   verify_multisig_loop(ctx, sigs, pubkeys)
 }
 
-fn verify_multisig_loop(ctx: ScriptContext, sigs: List(BitArray), pubkeys: List(BitArray)) -> Bool {
+fn verify_multisig_loop(
+  ctx: ScriptContext,
+  sigs: List(BitArray),
+  pubkeys: List(BitArray),
+) -> Bool {
   case sigs {
-    [] -> True  // All signatures verified
+    [] -> True
+    // All signatures verified
     [sig, ..rest_sigs] -> {
       // Find a matching pubkey
       case find_matching_pubkey(ctx, sig, pubkeys) {
-        Error(_) -> False  // No matching pubkey found
+        Error(_) -> False
+        // No matching pubkey found
         Ok(remaining_pubkeys) -> {
           // Continue with remaining signatures and pubkeys
           verify_multisig_loop(ctx, rest_sigs, remaining_pubkeys)
@@ -2720,13 +3043,20 @@ fn verify_multisig_loop(ctx: ScriptContext, sigs: List(BitArray), pubkeys: List(
   }
 }
 
-fn find_matching_pubkey(ctx: ScriptContext, sig: BitArray, pubkeys: List(BitArray)) -> Result(List(BitArray), Nil) {
+fn find_matching_pubkey(
+  ctx: ScriptContext,
+  sig: BitArray,
+  pubkeys: List(BitArray),
+) -> Result(List(BitArray), Nil) {
   case pubkeys {
-    [] -> Error(Nil)  // No more pubkeys to try
+    [] -> Error(Nil)
+    // No more pubkeys to try
     [pubkey, ..rest] -> {
       case verify_signature(ctx, sig, pubkey) {
-        True -> Ok(rest)  // Found match, return remaining pubkeys
-        False -> find_matching_pubkey(ctx, sig, rest)  // Try next pubkey
+        True -> Ok(rest)
+        // Found match, return remaining pubkeys
+        False -> find_matching_pubkey(ctx, sig, rest)
+        // Try next pubkey
       }
     }
   }
@@ -2819,7 +3149,8 @@ fn add_sign_bit(bytes: BitArray, negative: Bool) -> BitArray {
 pub fn decode_script_num(bytes: BitArray) -> Result(Int, Nil) {
   case bit_array.byte_size(bytes) {
     0 -> Ok(0)
-    size if size > 4 -> Error(Nil)  // Script numbers limited to 4 bytes
+    size if size > 4 -> Error(Nil)
+    // Script numbers limited to 4 bytes
     size -> {
       // Get the last byte to check sign
       case bit_array.slice(bytes, size - 1, 1) {
@@ -2845,10 +3176,16 @@ fn decode_unsigned(bytes: BitArray, index: Int, acc: Int, negative: Bool) -> Int
       case bit_array.slice(bytes, index, 1) {
         Ok(<<byte:8>>) -> {
           let value = case index == size - 1 && negative {
-            True -> byte - 0x80  // Clear sign bit
+            True -> byte - 0x80
+            // Clear sign bit
             False -> byte
           }
-          decode_unsigned(bytes, index + 1, acc + value * pow256(index), negative)
+          decode_unsigned(
+            bytes,
+            index + 1,
+            acc + value * pow256(index),
+            negative,
+          )
         }
         _ -> acc
       }
@@ -2879,7 +3216,11 @@ fn list_remove_nth(lst: List(a), n: Int) -> Result(#(a, List(a)), Nil) {
   list_remove_nth_loop(lst, n, [])
 }
 
-fn list_remove_nth_loop(lst: List(a), n: Int, acc: List(a)) -> Result(#(a, List(a)), Nil) {
+fn list_remove_nth_loop(
+  lst: List(a),
+  n: Int,
+  acc: List(a),
+) -> Result(#(a, List(a)), Nil) {
   case lst, n {
     [], _ -> Error(Nil)
     [head, ..tail], 0 -> Ok(#(head, list.append(list.reverse(acc), tail)))

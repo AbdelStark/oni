@@ -20,9 +20,9 @@ import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
 import oni_rpc
 import rpc_http.{
-  type ConnectionState, type RpcHandlerConfig,
-  connection_new, connection_receive, connection_sent, connection_try_parse,
-  handle_rpc_request, serialize_response,
+  type ConnectionState, type RpcHandlerConfig, connection_new,
+  connection_receive, connection_sent, connection_try_parse, handle_rpc_request,
+  serialize_response,
 }
 
 // ============================================================================
@@ -135,23 +135,24 @@ pub fn start(
   config: HttpServerConfig,
   rpc_server: oni_rpc.RpcServer,
 ) -> Result(Subject(ServerMsg), actor.StartError) {
-  let initial_state = ServerState(
-    config: config,
-    rpc_server: rpc_server,
-    listen_socket: None,
-    connections: dict.new(),
-    next_conn_id: 1,
-    stats: ServerStats(
-      total_connections: 0,
-      active_connections: 0,
-      total_requests: 0,
-      total_errors: 0,
-      bytes_received: 0,
-      bytes_sent: 0,
-    ),
-    is_running: False,
-    self_subject: None,
-  )
+  let initial_state =
+    ServerState(
+      config: config,
+      rpc_server: rpc_server,
+      listen_socket: None,
+      connections: dict.new(),
+      next_conn_id: 1,
+      stats: ServerStats(
+        total_connections: 0,
+        active_connections: 0,
+        total_requests: 0,
+        total_errors: 0,
+        bytes_received: 0,
+        bytes_sent: 0,
+      ),
+      is_running: False,
+      self_subject: None,
+    )
 
   case actor.start(initial_state, handle_message) {
     Ok(subject) -> {
@@ -186,18 +187,23 @@ fn handle_message(
               actor.continue(state)
             }
             Ok(listen_socket) -> {
-              io.println("[HTTP] Server listening on " <>
-                state.config.bind_address <> ":" <>
-                int.to_string(state.config.port))
+              io.println(
+                "[HTTP] Server listening on "
+                <> state.config.bind_address
+                <> ":"
+                <> int.to_string(state.config.port),
+              )
 
               // Start accept loop in background
               spawn_acceptor(listen_socket, self)
 
-              actor.continue(ServerState(
-                ..state,
-                listen_socket: Some(listen_socket),
-                is_running: True,
-              ))
+              actor.continue(
+                ServerState(
+                  ..state,
+                  listen_socket: Some(listen_socket),
+                  is_running: True,
+                ),
+              )
             }
           }
         }
@@ -230,12 +236,13 @@ fn handle_message(
             }
             False -> {
               let conn_id = state.next_conn_id
-              let conn_info = ConnectionInfo(
-                id: conn_id,
-                socket: socket,
-                state: connection_new(),
-                created_at: erlang_now_ms(),
-              )
+              let conn_info =
+                ConnectionInfo(
+                  id: conn_id,
+                  socket: socket,
+                  state: connection_new(),
+                  created_at: erlang_now_ms(),
+                )
 
               // Start receiving data from this connection
               spawn_receiver(conn_id, socket, self)
@@ -246,18 +253,25 @@ fn handle_message(
                 None -> Nil
               }
 
-              let new_stats = ServerStats(
-                ..state.stats,
-                total_connections: state.stats.total_connections + 1,
-                active_connections: state.stats.active_connections + 1,
-              )
+              let new_stats =
+                ServerStats(
+                  ..state.stats,
+                  total_connections: state.stats.total_connections + 1,
+                  active_connections: state.stats.active_connections + 1,
+                )
 
-              actor.continue(ServerState(
-                ..state,
-                connections: dict.insert(state.connections, conn_id, conn_info),
-                next_conn_id: conn_id + 1,
-                stats: new_stats,
-              ))
+              actor.continue(
+                ServerState(
+                  ..state,
+                  connections: dict.insert(
+                    state.connections,
+                    conn_id,
+                    conn_info,
+                  ),
+                  next_conn_id: conn_id + 1,
+                  stats: new_stats,
+                ),
+              )
             }
           }
         }
@@ -281,12 +295,19 @@ fn handle_message(
               let #(new_rpc_server, response_opt) = case maybe_request {
                 None -> #(state.rpc_server, None)
                 Some(Error(_err)) -> {
-                  let resp = rpc_http.error_response(rpc_http.HttpBadRequest("Parse error"))
+                  let resp =
+                    rpc_http.error_response(rpc_http.HttpBadRequest(
+                      "Parse error",
+                    ))
                   #(state.rpc_server, Some(resp))
                 }
                 Some(Ok(request)) -> {
                   let #(new_server, resp) =
-                    handle_rpc_request(request, state.config.rpc_config, state.rpc_server)
+                    handle_rpc_request(
+                      request,
+                      state.config.rpc_config,
+                      state.rpc_server,
+                    )
                   #(new_server, Some(resp))
                 }
               }
@@ -302,31 +323,41 @@ fn handle_message(
               }
 
               // Update connection state
-              let updated_conn = ConnectionInfo(
-                ..conn,
-                state: connection_sent(final_conn_state, bytes_sent),
-              )
+              let updated_conn =
+                ConnectionInfo(
+                  ..conn,
+                  state: connection_sent(final_conn_state, bytes_sent),
+                )
 
               // Update stats
-              let new_stats = ServerStats(
-                ..state.stats,
-                total_requests: state.stats.total_requests + case response_opt {
-                  Some(_) -> 1
-                  None -> 0
-                },
-                bytes_received: state.stats.bytes_received + bit_array.byte_size(data),
-                bytes_sent: state.stats.bytes_sent + bytes_sent,
-              )
+              let new_stats =
+                ServerStats(
+                  ..state.stats,
+                  total_requests: state.stats.total_requests
+                    + case response_opt {
+                      Some(_) -> 1
+                      None -> 0
+                    },
+                  bytes_received: state.stats.bytes_received
+                    + bit_array.byte_size(data),
+                  bytes_sent: state.stats.bytes_sent + bytes_sent,
+                )
 
               // Continue receiving on this connection
               spawn_receiver(conn_id, conn.socket, self)
 
-              actor.continue(ServerState(
-                ..state,
-                rpc_server: new_rpc_server,
-                connections: dict.insert(state.connections, conn_id, updated_conn),
-                stats: new_stats,
-              ))
+              actor.continue(
+                ServerState(
+                  ..state,
+                  rpc_server: new_rpc_server,
+                  connections: dict.insert(
+                    state.connections,
+                    conn_id,
+                    updated_conn,
+                  ),
+                  stats: new_stats,
+                ),
+              )
             }
           }
         }
@@ -338,15 +369,18 @@ fn handle_message(
         Error(_) -> actor.continue(state)
         Ok(conn) -> {
           close_socket(conn.socket)
-          let new_stats = ServerStats(
-            ..state.stats,
-            active_connections: int.max(0, state.stats.active_connections - 1),
+          let new_stats =
+            ServerStats(
+              ..state.stats,
+              active_connections: int.max(0, state.stats.active_connections - 1),
+            )
+          actor.continue(
+            ServerState(
+              ..state,
+              connections: dict.delete(state.connections, conn_id),
+              stats: new_stats,
+            ),
           )
-          actor.continue(ServerState(
-            ..state,
-            connections: dict.delete(state.connections, conn_id),
-            stats: new_stats,
-          ))
         }
       }
     }
@@ -356,16 +390,19 @@ fn handle_message(
         Error(_) -> actor.continue(state)
         Ok(conn) -> {
           close_socket(conn.socket)
-          let new_stats = ServerStats(
-            ..state.stats,
-            active_connections: int.max(0, state.stats.active_connections - 1),
-            total_errors: state.stats.total_errors + 1,
+          let new_stats =
+            ServerStats(
+              ..state.stats,
+              active_connections: int.max(0, state.stats.active_connections - 1),
+              total_errors: state.stats.total_errors + 1,
+            )
+          actor.continue(
+            ServerState(
+              ..state,
+              connections: dict.delete(state.connections, conn_id),
+              stats: new_stats,
+            ),
           )
-          actor.continue(ServerState(
-            ..state,
-            connections: dict.delete(state.connections, conn_id),
-            stats: new_stats,
-          ))
         }
       }
     }
@@ -379,9 +416,7 @@ fn handle_message(
 
 /// Close all connections
 fn close_all_connections(connections: Dict(Int, ConnectionInfo)) -> Nil {
-  dict.fold(connections, Nil, fn(_acc, _id, conn) {
-    close_socket(conn.socket)
-  })
+  dict.fold(connections, Nil, fn(_acc, _id, conn) { close_socket(conn.socket) })
 }
 
 // ============================================================================
@@ -419,34 +454,49 @@ fn start_listening(config: HttpServerConfig) -> Result(ListenSocket, String) {
 }
 
 /// Spawn a process to accept connections
-fn spawn_acceptor(listen_socket: ListenSocket, parent: Subject(ServerMsg)) -> Nil {
+fn spawn_acceptor(
+  listen_socket: ListenSocket,
+  parent: Subject(ServerMsg),
+) -> Nil {
   // Spawn a linked process to accept
-  let _ = process.start(fn() {
-    case gen_tcp_accept(listen_socket) {
-      Ok(socket) -> {
-        process.send(parent, ConnectionAccepted(socket))
-      }
-      Error(_) -> Nil
-    }
-  }, True)
+  let _ =
+    process.start(
+      fn() {
+        case gen_tcp_accept(listen_socket) {
+          Ok(socket) -> {
+            process.send(parent, ConnectionAccepted(socket))
+          }
+          Error(_) -> Nil
+        }
+      },
+      True,
+    )
   Nil
 }
 
 /// Spawn a process to receive data from a connection
-fn spawn_receiver(conn_id: Int, socket: Socket, parent: Subject(ServerMsg)) -> Nil {
-  let _ = process.start(fn() {
-    case gen_tcp_recv(socket, 0) {
-      Ok(data) -> {
-        process.send(parent, DataReceived(conn_id, data))
-      }
-      Error(closed) if closed == "closed" -> {
-        process.send(parent, ConnectionClosed(conn_id))
-      }
-      Error(reason) -> {
-        process.send(parent, ConnectionError(conn_id, reason))
-      }
-    }
-  }, True)
+fn spawn_receiver(
+  conn_id: Int,
+  socket: Socket,
+  parent: Subject(ServerMsg),
+) -> Nil {
+  let _ =
+    process.start(
+      fn() {
+        case gen_tcp_recv(socket, 0) {
+          Ok(data) -> {
+            process.send(parent, DataReceived(conn_id, data))
+          }
+          Error(closed) if closed == "closed" -> {
+            process.send(parent, ConnectionClosed(conn_id))
+          }
+          Error(reason) -> {
+            process.send(parent, ConnectionError(conn_id, reason))
+          }
+        }
+      },
+      True,
+    )
   Nil
 }
 
@@ -479,7 +529,10 @@ type Dynamic
 @external(erlang, "gen_tcp", "listen")
 fn gen_tcp_listen_raw(port: Int, options: List(Dynamic)) -> Dynamic
 
-fn gen_tcp_listen(port: Int, options: List(Dynamic)) -> Result(ListenSocket, Dynamic) {
+fn gen_tcp_listen(
+  port: Int,
+  options: List(Dynamic),
+) -> Result(ListenSocket, Dynamic) {
   let result = gen_tcp_listen_raw(port, options)
   decode_listen_result(result)
 }

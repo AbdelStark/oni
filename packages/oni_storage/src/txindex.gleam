@@ -18,10 +18,10 @@
 //   3. Use txindex_get to lookup transactions
 //   4. Use txindex_remove_batch during block disconnection
 
+import db_backend.{type DbHandle, BatchDelete, BatchPut, default_options}
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
-import db_backend.{type DbHandle, BatchDelete, BatchPut, default_options}
 import oni_bitcoin.{type BlockHash, type Txid}
 import oni_storage.{type StorageError}
 
@@ -68,15 +68,13 @@ pub type TxIndexConfig {
 // ============================================================================
 
 /// Open the transaction index
-pub fn txindex_open(config: TxIndexConfig) -> Result(TxIndexHandle, StorageError) {
+pub fn txindex_open(
+  config: TxIndexConfig,
+) -> Result(TxIndexHandle, StorageError) {
   case config.enabled {
     False -> {
       // Return a disabled handle
-      Ok(TxIndexHandle(
-        db: None,
-        enabled: False,
-        path: "",
-      ))
+      Ok(TxIndexHandle(db: None, enabled: False, path: ""))
     }
     True -> {
       let db_path = config.data_dir <> "/txindex.db"
@@ -84,11 +82,7 @@ pub fn txindex_open(config: TxIndexConfig) -> Result(TxIndexHandle, StorageError
 
       case db_backend.db_open(db_path, options) {
         Ok(db) -> {
-          Ok(TxIndexHandle(
-            db: Some(db),
-            enabled: True,
-            path: db_path,
-          ))
+          Ok(TxIndexHandle(db: Some(db), enabled: True, path: db_path))
         }
         Error(err) -> Error(db_error_to_storage_error(err))
       }
@@ -147,7 +141,8 @@ pub fn txindex_put(
   location: TxLocation,
 ) -> Result(Nil, StorageError) {
   case handle.db {
-    None -> Ok(Nil)  // No-op when disabled
+    None -> Ok(Nil)
+    // No-op when disabled
     Some(db) -> {
       let key = serialize_txid(txid)
       let value = serialize_tx_location(location)
@@ -180,10 +175,11 @@ pub fn txindex_put_batch(
   case handle.db {
     None -> Ok(Nil)
     Some(db) -> {
-      let ops = list.map(entries, fn(entry) {
-        let #(txid, location) = entry
-        BatchPut(serialize_txid(txid), serialize_tx_location(location))
-      })
+      let ops =
+        list.map(entries, fn(entry) {
+          let #(txid, location) = entry
+          BatchPut(serialize_txid(txid), serialize_tx_location(location))
+        })
       db_backend.db_batch(db, ops)
       |> result.map_error(db_error_to_storage_error)
     }
@@ -198,9 +194,7 @@ pub fn txindex_remove_batch(
   case handle.db {
     None -> Ok(Nil)
     Some(db) -> {
-      let ops = list.map(txids, fn(txid) {
-        BatchDelete(serialize_txid(txid))
-      })
+      let ops = list.map(txids, fn(txid) { BatchDelete(serialize_txid(txid)) })
       db_backend.db_batch(db, ops)
       |> result.map_error(db_error_to_storage_error)
     }
@@ -253,18 +247,16 @@ fn index_txids_with_position(
   case txids {
     [] -> acc
     [txid, ..rest] -> {
-      let location = TxLocation(
-        block_hash: block_hash,
-        tx_index: index,
-        block_height: block_height,
-      )
-      index_txids_with_position(
-        rest,
-        block_hash,
-        block_height,
-        index + 1,
-        [#(txid, location), ..acc],
-      )
+      let location =
+        TxLocation(
+          block_hash: block_hash,
+          tx_index: index,
+          block_height: block_height,
+        )
+      index_txids_with_position(rest, block_hash, block_height, index + 1, [
+        #(txid, location),
+        ..acc
+      ])
     }
   }
 }
@@ -297,9 +289,9 @@ fn deserialize_tx_location(data: BitArray) -> Result(TxLocation, StorageError) {
       block_height:32-little,
     >> -> {
       Ok(TxLocation(
-        block_hash: oni_bitcoin.BlockHash(
-          hash: oni_bitcoin.Hash256(bytes: block_hash_bytes),
-        ),
+        block_hash: oni_bitcoin.BlockHash(hash: oni_bitcoin.Hash256(
+          bytes: block_hash_bytes,
+        )),
         tx_index: tx_index,
         block_height: block_height,
       ))

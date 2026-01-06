@@ -49,11 +49,7 @@ pub type SigCache {
 
 /// Cache statistics
 pub type CacheStats {
-  CacheStats(
-    hits: Int,
-    misses: Int,
-    evictions: Int,
-  )
+  CacheStats(hits: Int, misses: Int, evictions: Int)
 }
 
 /// Create a new signature cache with given maximum size
@@ -75,7 +71,11 @@ pub fn sig_cache_default() -> SigCache {
 }
 
 /// Build a cache key from sighash, pubkey, and signature
-pub fn cache_key(sighash: BitArray, pubkey: BitArray, signature: BitArray) -> BitArray {
+pub fn cache_key(
+  sighash: BitArray,
+  pubkey: BitArray,
+  signature: BitArray,
+) -> BitArray {
   // Concatenate all components for unique key
   <<sighash:bits, pubkey:bits, signature:bits>>
 }
@@ -92,18 +92,12 @@ pub fn sig_cache_contains(
   case dict.get(cache.entries, key) {
     Ok(_) -> {
       // Cache hit - update stats
-      let new_stats = CacheStats(
-        ..cache.stats,
-        hits: cache.stats.hits + 1,
-      )
+      let new_stats = CacheStats(..cache.stats, hits: cache.stats.hits + 1)
       #(SigCache(..cache, stats: new_stats), True)
     }
     Error(_) -> {
       // Cache miss
-      let new_stats = CacheStats(
-        ..cache.stats,
-        misses: cache.stats.misses + 1,
-      )
+      let new_stats = CacheStats(..cache.stats, misses: cache.stats.misses + 1)
       #(SigCache(..cache, stats: new_stats), False)
     }
   }
@@ -123,24 +117,27 @@ pub fn sig_cache_add(
   case dict.has_key(cache.entries, key) {
     True -> cache
     False -> {
-      let entry = SigCacheEntry(
-        sighash: sighash,
-        pubkey: pubkey,
-        signature: signature,
-        added_at: timestamp,
-      )
+      let entry =
+        SigCacheEntry(
+          sighash: sighash,
+          pubkey: pubkey,
+          signature: signature,
+          added_at: timestamp,
+        )
 
       // Evict if at capacity
       let #(cache_evicted, evictions) = case cache.size >= cache.max_size {
-        True -> evict_oldest(cache, cache.max_size / 10)  // Evict 10%
+        True -> evict_oldest(cache, cache.max_size / 10)
+        // Evict 10%
         False -> #(cache, 0)
       }
 
       let new_entries = dict.insert(cache_evicted.entries, key, entry)
-      let new_stats = CacheStats(
-        ..cache_evicted.stats,
-        evictions: cache_evicted.stats.evictions + evictions,
-      )
+      let new_stats =
+        CacheStats(
+          ..cache_evicted.stats,
+          evictions: cache_evicted.stats.evictions + evictions,
+        )
 
       SigCache(
         entries: new_entries,
@@ -158,17 +155,19 @@ fn evict_oldest(cache: SigCache, count: Int) -> #(SigCache, Int) {
   let entries_list = dict.to_list(cache.entries)
 
   // Sort by added_at timestamp (oldest first)
-  let sorted = list.sort(entries_list, fn(a, b) {
-    let #(_, entry_a) = a
-    let #(_, entry_b) = b
-    case entry_a.added_at < entry_b.added_at {
-      True -> order.Lt
-      False -> case entry_a.added_at > entry_b.added_at {
-        True -> order.Gt
-        False -> order.Eq
+  let sorted =
+    list.sort(entries_list, fn(a, b) {
+      let #(_, entry_a) = a
+      let #(_, entry_b) = b
+      case entry_a.added_at < entry_b.added_at {
+        True -> order.Lt
+        False ->
+          case entry_a.added_at > entry_b.added_at {
+            True -> order.Gt
+            False -> order.Eq
+          }
       }
-    }
-  })
+    })
 
   // Remove oldest entries
   let to_keep = list.drop(sorted, count)
@@ -176,11 +175,7 @@ fn evict_oldest(cache: SigCache, count: Int) -> #(SigCache, Int) {
   let evicted = cache.size - list.length(to_keep)
 
   #(
-    SigCache(
-      ..cache,
-      entries: new_entries,
-      size: list.length(to_keep),
-    ),
+    SigCache(..cache, entries: new_entries, size: list.length(to_keep)),
     evicted,
   )
 }
@@ -205,7 +200,8 @@ pub fn sig_cache_clear(cache: SigCache) -> SigCache {
     entries: dict.new(),
     max_size: cache.max_size,
     size: 0,
-    stats: cache.stats,  // Keep stats
+    stats: cache.stats,
+    // Keep stats
   )
 }
 
@@ -225,11 +221,7 @@ pub type SigBatch {
 
 /// Entry in a signature batch
 pub type SigBatchEntry {
-  SigBatchEntry(
-    sighash: BitArray,
-    pubkey: BitArray,
-    signature: BitArray,
-  )
+  SigBatchEntry(sighash: BitArray, pubkey: BitArray, signature: BitArray)
 }
 
 /// Result of batch verification
@@ -262,11 +254,8 @@ pub fn sig_batch_add(
   pubkey: BitArray,
   signature: BitArray,
 ) -> SigBatch {
-  let entry = SigBatchEntry(
-    sighash: sighash,
-    pubkey: pubkey,
-    signature: signature,
-  )
+  let entry =
+    SigBatchEntry(sighash: sighash, pubkey: pubkey, signature: signature)
   SigBatch(..batch, pending: [entry, ..batch.pending])
 }
 
@@ -293,12 +282,13 @@ pub fn sig_batch_check_cache(
   // Check each entry against cache, collect those not found
   list.fold(batch.pending, #(cache, []), fn(acc, entry) {
     let #(current_cache, uncached) = acc
-    let #(new_cache, found) = sig_cache_contains(
-      current_cache,
-      entry.sighash,
-      entry.pubkey,
-      entry.signature,
-    )
+    let #(new_cache, found) =
+      sig_cache_contains(
+        current_cache,
+        entry.sighash,
+        entry.pubkey,
+        entry.signature,
+      )
     case found {
       True -> #(new_cache, uncached)
       False -> #(new_cache, [entry, ..uncached])
@@ -364,7 +354,11 @@ pub fn script_cache_new(max_size: Int) -> ScriptCache {
 }
 
 /// Build script cache key
-fn script_cache_key(txid: oni_bitcoin.Txid, input_index: Int, flags: Int) -> BitArray {
+fn script_cache_key(
+  txid: oni_bitcoin.Txid,
+  input_index: Int,
+  flags: Int,
+) -> BitArray {
   let oni_bitcoin.Txid(hash) = txid
   <<hash.bytes:bits, input_index:32, flags:32>>
 }
@@ -404,25 +398,28 @@ pub fn script_cache_add(
   case dict.has_key(cache.entries, key) {
     True -> cache
     False -> {
-      let entry = ScriptCacheEntry(
-        txid: txid,
-        input_index: input_index,
-        flags: flags,
-        valid: valid,
-        added_at: timestamp,
-      )
+      let entry =
+        ScriptCacheEntry(
+          txid: txid,
+          input_index: input_index,
+          flags: flags,
+          valid: valid,
+          added_at: timestamp,
+        )
 
       // Evict if at capacity using LRU strategy
       let #(cache_evicted, evictions) = case cache.size >= cache.max_size {
-        True -> script_cache_evict_oldest(cache, cache.max_size / 10)  // Evict 10%
+        True -> script_cache_evict_oldest(cache, cache.max_size / 10)
+        // Evict 10%
         False -> #(cache, 0)
       }
 
       let new_entries = dict.insert(cache_evicted.entries, key, entry)
-      let new_stats = CacheStats(
-        ..cache_evicted.stats,
-        evictions: cache_evicted.stats.evictions + evictions,
-      )
+      let new_stats =
+        CacheStats(
+          ..cache_evicted.stats,
+          evictions: cache_evicted.stats.evictions + evictions,
+        )
 
       ScriptCache(
         entries: new_entries,
@@ -435,22 +432,27 @@ pub fn script_cache_add(
 }
 
 /// Evict oldest entries from the script cache (LRU eviction)
-fn script_cache_evict_oldest(cache: ScriptCache, count: Int) -> #(ScriptCache, Int) {
+fn script_cache_evict_oldest(
+  cache: ScriptCache,
+  count: Int,
+) -> #(ScriptCache, Int) {
   // Get all entries sorted by timestamp
   let entries_list = dict.to_list(cache.entries)
 
   // Sort by added_at timestamp (oldest first)
-  let sorted = list.sort(entries_list, fn(a, b) {
-    let #(_, entry_a) = a
-    let #(_, entry_b) = b
-    case entry_a.added_at < entry_b.added_at {
-      True -> order.Lt
-      False -> case entry_a.added_at > entry_b.added_at {
-        True -> order.Gt
-        False -> order.Eq
+  let sorted =
+    list.sort(entries_list, fn(a, b) {
+      let #(_, entry_a) = a
+      let #(_, entry_b) = b
+      case entry_a.added_at < entry_b.added_at {
+        True -> order.Lt
+        False ->
+          case entry_a.added_at > entry_b.added_at {
+            True -> order.Gt
+            False -> order.Eq
+          }
       }
-    }
-  })
+    })
 
   // Remove oldest entries
   let to_keep = list.drop(sorted, count)
@@ -458,11 +460,7 @@ fn script_cache_evict_oldest(cache: ScriptCache, count: Int) -> #(ScriptCache, I
   let evicted = cache.size - list.length(to_keep)
 
   #(
-    ScriptCache(
-      ..cache,
-      entries: new_entries,
-      size: list.length(to_keep),
-    ),
+    ScriptCache(..cache, entries: new_entries, size: list.length(to_keep)),
     evicted,
   )
 }
@@ -473,7 +471,8 @@ pub fn script_cache_clear(cache: ScriptCache) -> ScriptCache {
     entries: dict.new(),
     max_size: cache.max_size,
     size: 0,
-    stats: cache.stats,  // Keep stats
+    stats: cache.stats,
+    // Keep stats
   )
 }
 
@@ -554,7 +553,8 @@ pub fn block_index_add(
   let key = block_hash_to_bytes(entry.hash)
 
   case cache.size >= cache.max_size {
-    True -> cache  // Don't add if full
+    True -> cache
+    // Don't add if full
     False -> {
       let new_by_hash = dict.insert(cache.by_hash, key, entry)
       let new_by_height = case is_main_chain {

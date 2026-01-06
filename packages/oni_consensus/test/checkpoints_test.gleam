@@ -1,10 +1,7 @@
 // checkpoints_test.gleam - Tests for checkpoint validation
 
+import checkpoints.{Mainnet, NoCheckpointAtHeight, Regtest, Testnet}
 import gleam/option.{None, Some}
-import checkpoints.{
-  Mainnet, NoCheckpointAtHeight,
-  Regtest, Testnet,
-}
 
 // ============================================================================
 // Checkpoint Set Tests
@@ -42,11 +39,14 @@ pub fn verify_checkpoint_at_height_test() {
   let checkpoints = checkpoints.mainnet_checkpoints()
 
   // Height with no checkpoint should return NoCheckpointAtHeight
-  let result = checkpoints.verify_checkpoint(
-    checkpoints,
-    12345,
-    create_dummy_hash("000000000000000000000000000000000000000000000000000000000000abcd"),
-  )
+  let result =
+    checkpoints.verify_checkpoint(
+      checkpoints,
+      12_345,
+      create_dummy_hash(
+        "000000000000000000000000000000000000000000000000000000000000abcd",
+      ),
+    )
 
   let assert True = result == NoCheckpointAtHeight
 }
@@ -55,7 +55,7 @@ pub fn get_checkpoint_at_known_height_test() {
   let checkpoints = checkpoints.mainnet_checkpoints()
 
   // Height 11111 is a known checkpoint
-  let result = checkpoints.get_checkpoint_at_height(checkpoints, 11111)
+  let result = checkpoints.get_checkpoint_at_height(checkpoints, 11_111)
 
   case result {
     Some(_hash) -> Nil
@@ -71,7 +71,8 @@ pub fn is_before_last_checkpoint_test() {
   let checkpoints = checkpoints.mainnet_checkpoints()
 
   // Height 0 should be before last checkpoint
-  let assert True = checkpoints.is_before_last_checkpoint(checkpoints, 0) == True
+  let assert True =
+    checkpoints.is_before_last_checkpoint(checkpoints, 0) == True
 
   // Height 1000000 might be after depending on checkpoint set
   // Just verify the function works
@@ -147,11 +148,8 @@ pub fn reorg_conflicts_with_checkpoint_test() {
 
   // A reorg at height 0 affecting height 100000 should conflict
   // if there's a checkpoint between
-  let conflicts = checkpoints.reorg_conflicts_with_checkpoint(
-    checkpoints,
-    0,
-    100_000,
-  )
+  let conflicts =
+    checkpoints.reorg_conflicts_with_checkpoint(checkpoints, 0, 100_000)
 
   // There should be checkpoints in this range
   let assert True = conflicts == True
