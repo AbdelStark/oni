@@ -54,7 +54,7 @@ jobs:
           path: |
             packages/*/build
             ~/.cache/gleam
-          key: gleam-${{ runner.os }}-${{ env.GLEAM_VERSION }}-${{ env.OTP_VERSION }}-${{ hashFiles('packages/*/gleam.toml') }}
+          key: gleam-${{ runner.os }}-${{ env.GLEAM_VERSION }}-${{ env.OTP_VERSION }}-${{ hashFiles('packages/*/gleam.toml', 'packages/*/src/**/*.erl') }}
           restore-keys: |
             gleam-${{ runner.os }}-${{ env.GLEAM_VERSION }}-${{ env.OTP_VERSION }}-
 
@@ -119,9 +119,9 @@ jobs:
       matrix:
         include:
           - otp: "26.2"
-            gleam: "1.6.3"
+            gleam: "1.6.2"
           - otp: "27.2"
-            gleam: "1.6.3"
+            gleam: "1.6.2"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -138,7 +138,7 @@ jobs:
           path: |
             packages/*/build
             ~/.cache/gleam
-          key: gleam-${{ runner.os }}-${{ matrix.gleam }}-${{ matrix.otp }}-${{ hashFiles('packages/*/gleam.toml') }}
+          key: gleam-${{ runner.os }}-${{ matrix.gleam }}-${{ matrix.otp }}-${{ hashFiles('packages/*/gleam.toml', 'packages/*/src/**/*.erl') }}
           restore-keys: |
             gleam-${{ runner.os }}-${{ matrix.gleam }}-${{ matrix.otp }}-
 
@@ -193,7 +193,7 @@ jobs:
           path: |
             packages/*/build
             ~/.cache/gleam
-          key: gleam-${{ runner.os }}-${{ env.GLEAM_VERSION }}-${{ env.OTP_VERSION }}-${{ hashFiles('packages/*/gleam.toml') }}
+          key: gleam-${{ runner.os }}-${{ env.GLEAM_VERSION }}-${{ env.OTP_VERSION }}-${{ hashFiles('packages/*/gleam.toml', 'packages/*/src/**/*.erl') }}
           restore-keys: |
             gleam-${{ runner.os }}-${{ env.GLEAM_VERSION }}-${{ env.OTP_VERSION }}-
 
@@ -234,7 +234,7 @@ jobs:
           path: |
             packages/*/build
             ~/.cache/gleam
-          key: gleam-${{ runner.os }}-${{ env.GLEAM_VERSION }}-${{ env.OTP_VERSION }}-${{ hashFiles('packages/*/gleam.toml') }}
+          key: gleam-${{ runner.os }}-${{ env.GLEAM_VERSION }}-${{ env.OTP_VERSION }}-${{ hashFiles('packages/*/gleam.toml', 'packages/*/src/**/*.erl') }}
           restore-keys: |
             gleam-${{ runner.os }}-${{ env.GLEAM_VERSION }}-${{ env.OTP_VERSION }}-
 
@@ -307,7 +307,7 @@ jobs:
           path: |
             packages/*/build
             ~/.cache/gleam
-          key: gleam-${{ runner.os }}-${{ env.GLEAM_VERSION }}-${{ env.OTP_VERSION }}-${{ hashFiles('packages/*/gleam.toml') }}
+          key: gleam-${{ runner.os }}-${{ env.GLEAM_VERSION }}-${{ env.OTP_VERSION }}-${{ hashFiles('packages/*/gleam.toml', 'packages/*/src/**/*.erl') }}
           restore-keys: |
             gleam-${{ runner.os }}-${{ env.GLEAM_VERSION }}-${{ env.OTP_VERSION }}-
 
