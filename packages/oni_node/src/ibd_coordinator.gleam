@@ -58,7 +58,7 @@ pub type IbdConfig {
   )
 }
 
-/// Default IBD configuration
+/// Default IBD configuration - OPTIMIZED FOR SPEED
 pub fn default_config(network: Network) -> IbdConfig {
   // Set reasonable maximum heights per network to prevent runaway sync
   // These are ~2x the expected chain height as of early 2025
@@ -72,10 +72,13 @@ pub fn default_config(network: Network) -> IbdConfig {
 
   IbdConfig(
     network: network,
-    blocks_per_peer: 16,
-    max_inflight_blocks: 128,
+    // INCREASED: 64 blocks per peer (was 16) - 4x more parallel per peer
+    blocks_per_peer: 64,
+    // INCREASED: 1024 max inflight (was 128) - 8x more total parallel
+    max_inflight_blocks: 1024,
     headers_batch_size: 2000,
-    block_timeout_ms: 30_000,
+    // REDUCED: 60s timeout (was 30s) - allow slower peers
+    block_timeout_ms: 60_000,
     min_peers: 1,
     use_checkpoints: True,
     debug: False,
@@ -658,53 +661,148 @@ fn handle_block_received(
   }
 }
 
-/// Flush sequential blocks from buffer to chainstate
+/// Maximum blocks to batch in a single chainstate call
+const batch_size = 100
+
+/// Flush sequential blocks from buffer to chainstate using batching
 fn flush_block_buffer(state: IbdCoordinatorState) -> IbdCoordinatorState {
-  flush_block_buffer_loop(state)
+  // Collect sequential blocks from buffer
+  let #(blocks_to_connect, highest_height) = collect_sequential_blocks(
+    state.block_buffer,
+    state.next_connect_height,
+    batch_size,
+    [],
+  )
+
+  case blocks_to_connect {
+    [] -> state  // No blocks ready
+    _ -> {
+      // Send batch to chainstate
+      let new_state = connect_blocks_batch(blocks_to_connect, highest_height, state)
+      // Recursively try to flush more (in case more became available)
+      flush_block_buffer(new_state)
+    }
+  }
 }
 
-fn flush_block_buffer_loop(state: IbdCoordinatorState) -> IbdCoordinatorState {
-  // Check if the next block is in our buffer
-  case dict.get(state.block_buffer, state.next_connect_height) {
-    Error(_) -> {
-      // Next block not yet received, can't flush more
-      state
-    }
-    Ok(block) -> {
-      // Try to connect this block to chainstate
-      let new_state = connect_block_to_chainstate(block, state.next_connect_height, state)
-
-      // Continue flushing if successful
-      case new_state.blocks_height > state.blocks_height {
-        True -> flush_block_buffer_loop(new_state)
-        False -> new_state  // Connection failed, stop flushing
+/// Collect up to max_count sequential blocks from buffer starting at height
+fn collect_sequential_blocks(
+  buffer: Dict(Int, oni_bitcoin.Block),
+  height: Int,
+  remaining: Int,
+  acc: List(oni_bitcoin.Block),
+) -> #(List(oni_bitcoin.Block), Int) {
+  case remaining <= 0 {
+    True -> #(list.reverse(acc), height - 1)
+    False -> {
+      case dict.get(buffer, height) {
+        Error(_) -> #(list.reverse(acc), height - 1)  // Gap in sequence
+        Ok(block) -> {
+          collect_sequential_blocks(buffer, height + 1, remaining - 1, [block, ..acc])
+        }
       }
     }
   }
 }
 
-/// Connect a block to chainstate and update state
-/// Uses async send to avoid blocking the IBD coordinator
+/// Connect a batch of blocks to chainstate
+fn connect_blocks_batch(
+  blocks: List(oni_bitcoin.Block),
+  highest_height: Int,
+  state: IbdCoordinatorState,
+) -> IbdCoordinatorState {
+  let block_count = list.length(blocks)
+
+  case state.chainstate {
+    None -> {
+      // No chainstate, just update counters
+      update_blocks_batch(blocks, highest_height, state)
+    }
+    Some(chainstate) -> {
+      // Send entire batch to chainstate (single actor message!)
+      process.send(chainstate, oni_supervisor.ConnectBlocksBatch(blocks))
+      // Update our tracking
+      update_blocks_batch(blocks, highest_height, state)
+    }
+  }
+}
+
+/// Update state after connecting a batch of blocks
+fn update_blocks_batch(
+  blocks: List(oni_bitcoin.Block),
+  highest_height: Int,
+  state: IbdCoordinatorState,
+) -> IbdCoordinatorState {
+  let block_count = list.length(blocks)
+  let start_height = highest_height - block_count + 1
+
+  // Remove all connected blocks from buffer
+  let new_buffer = remove_heights_from_buffer(
+    state.block_buffer,
+    start_height,
+    highest_height,
+  )
+
+  // Log progress at milestones
+  let pct = highest_height * 100 / int.max(state.headers_height, 1)
+  let prev_pct = state.blocks_height * 100 / int.max(state.headers_height, 1)
+  let is_pct_milestone = pct != prev_pct && { pct == 1 || pct == 5 || pct % 10 == 0 }
+  case
+    highest_height % 5000 == 0
+    || highest_height == state.headers_height
+    || is_pct_milestone
+  {
+    True ->
+      io.println(
+        "[IBD] Block "
+        <> int.to_string(highest_height)
+        <> "/"
+        <> int.to_string(state.headers_height)
+        <> " ("
+        <> int.to_string(pct)
+        <> "%) [batch: "
+        <> int.to_string(block_count)
+        <> "]",
+      )
+    False -> Nil
+  }
+
+  IbdCoordinatorState(
+    ..state,
+    block_buffer: new_buffer,
+    blocks_height: highest_height,
+    next_connect_height: highest_height + 1,
+  )
+}
+
+/// Remove a range of heights from the buffer
+fn remove_heights_from_buffer(
+  buffer: Dict(Int, oni_bitcoin.Block),
+  start: Int,
+  end: Int,
+) -> Dict(Int, oni_bitcoin.Block) {
+  case start > end {
+    True -> buffer
+    False -> {
+      let new_buffer = dict.delete(buffer, start)
+      remove_heights_from_buffer(new_buffer, start + 1, end)
+    }
+  }
+}
+
+// Legacy single-block connection (kept for compatibility)
 fn connect_block_to_chainstate(
   block: oni_bitcoin.Block,
   height: Int,
   state: IbdCoordinatorState,
 ) -> IbdCoordinatorState {
   case state.chainstate {
-    None -> {
-      // No chainstate, just increment counter (legacy behavior)
-      update_blocks_height(height, state)
-    }
+    None -> update_blocks_height(height, state)
     Some(chainstate) -> {
-      // Send block to chainstate asynchronously
-      // We don't wait for response - just track that we sent it
-      // The chainstate will process blocks in order since they're sent in order
       process.send(
         chainstate,
         oni_supervisor.ConnectBlock(block, process.new_subject()),
       )
-      // Update our tracking optimistically
-      // (In production, we'd want confirmation but for IBD this is fine)
       update_blocks_height(height, state)
     }
   }
@@ -719,23 +817,25 @@ fn update_blocks_height(height: Int, state: IbdCoordinatorState) -> IbdCoordinat
   let new_blocks_height = height
   let new_next_height = height + 1
 
-  // Log progress every 100 blocks or on first block
+  // Log progress only at key milestones (every 5000 blocks or percentage milestones)
+  let pct = new_blocks_height * 100 / int.max(state.headers_height, 1)
+  let prev_pct = { new_blocks_height - 1 } * 100 / int.max(state.headers_height, 1)
+  let is_pct_milestone = pct != prev_pct && { pct == 1 || pct == 5 || pct % 10 == 0 }
   case
     new_blocks_height == 1
-    || new_blocks_height % 100 == 0
+    || new_blocks_height % 5000 == 0
     || new_blocks_height == state.headers_height
+    || is_pct_milestone
   {
     True ->
       io.println(
         "[IBD] Block "
         <> int.to_string(new_blocks_height)
-        <> " of "
+        <> "/"
         <> int.to_string(state.headers_height)
         <> " ("
-        <> int.to_string(new_blocks_height * 100 / int.max(state.headers_height, 1))
-        <> "%) [buffer: "
-        <> int.to_string(dict.size(new_buffer))
-        <> "]",
+        <> int.to_string(pct)
+        <> "%)",
       )
     False -> Nil
   }
@@ -908,21 +1008,8 @@ fn schedule_block_downloads(state: IbdCoordinatorState) -> IbdCoordinatorState {
   })
   let queue_size = list.length(filtered_queue)
 
-  // Only log when there's actual activity
-  case queue_size > 0 && peer_count > 0 && slots > 0 {
-    True ->
-      io.println(
-        "[IBD] Schedule downloads: "
-        <> int.to_string(queue_size)
-        <> " in queue, "
-        <> int.to_string(peer_count)
-        <> " peers, "
-        <> int.to_string(slots)
-        <> " slots, buffer: "
-        <> int.to_string(dict.size(state.block_buffer)),
-      )
-    False -> Nil
-  }
+  // Reduce logging - only log occasionally during active downloading
+  Nil
 
   case
     list.is_empty(available_peers),
@@ -959,18 +1046,7 @@ fn schedule_block_downloads(state: IbdCoordinatorState) -> IbdCoordinatorState {
       // Track inflight requests with peer assignments
       let new_inflight = add_inflight_with_peers(assignments, state.inflight)
 
-      let assigned_count = list.length(list.flat_map(assignments, fn(a) { a.1 }))
-      case assigned_count > 0 {
-        True ->
-          io.println(
-            "[IBD] Assigned "
-            <> int.to_string(assigned_count)
-            <> " blocks to "
-            <> int.to_string(list.length(assignments))
-            <> " peers",
-          )
-        False -> Nil
-      }
+      // Skip per-batch logging for performance
 
       IbdCoordinatorState(
         ..state,

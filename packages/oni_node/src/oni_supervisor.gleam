@@ -47,6 +47,8 @@ pub type ChainstateMsg {
   GetNetwork(reply: Subject(oni_bitcoin.Network))
   /// Connect a block to the chain
   ConnectBlock(block: oni_bitcoin.Block, reply: Subject(Result(Nil, String)))
+  /// Connect multiple blocks in a batch (IBD fast path)
+  ConnectBlocksBatch(blocks: List(oni_bitcoin.Block))
   /// Disconnect the tip block
   DisconnectBlock(reply: Subject(Result(Nil, String)))
   /// Get a UTXO
@@ -155,6 +157,12 @@ fn handle_chainstate_msg(
       }
     }
 
+    // IBD fast path: connect many blocks in a tight loop without actor overhead
+    ConnectBlocksBatch(blocks) -> {
+      let new_state = connect_blocks_batch_loop(blocks, state)
+      actor.continue(new_state)
+    }
+
     DisconnectBlock(reply) -> {
       case state.tip_height > 0, state.tip_hash {
         True, Some(tip_hash) -> {
@@ -210,6 +218,46 @@ fn handle_chainstate_msg(
 
     ChainstateShutdown -> {
       actor.Stop(process.Normal)
+    }
+  }
+}
+
+/// Connect multiple blocks in a tight loop (IBD fast path)
+/// This avoids actor message overhead for each block
+fn connect_blocks_batch_loop(
+  blocks: List(oni_bitcoin.Block),
+  state: ChainstateState,
+) -> ChainstateState {
+  case blocks {
+    [] -> state
+    [block, ..rest] -> {
+      let block_hash = oni_bitcoin.block_hash_from_header(block.header)
+      let new_height = state.tip_height + 1
+
+      case
+        oni_storage.storage_connect_block(
+          state.storage,
+          block,
+          block_hash,
+          new_height,
+        )
+      {
+        Ok(#(new_storage, _undo)) -> {
+          let new_state =
+            ChainstateState(
+              ..state,
+              tip_hash: Some(block_hash),
+              tip_height: new_height,
+              storage: new_storage,
+            )
+          // Continue with next block immediately (no actor overhead)
+          connect_blocks_batch_loop(rest, new_state)
+        }
+        Error(_) -> {
+          // On error, stop processing and return current state
+          state
+        }
+      }
     }
   }
 }
