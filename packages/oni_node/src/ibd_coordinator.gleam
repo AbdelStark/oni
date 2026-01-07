@@ -431,13 +431,30 @@ fn handle_headers_received(
   headers: List(BlockHeaderNet),
   state: IbdCoordinatorState,
 ) -> IbdCoordinatorState {
+  // Only accept headers from our designated sync peer
+  case state.sync_peer {
+    Some(sync_peer) if sync_peer == peer_id -> {
+      handle_headers_from_sync_peer(peer_id, headers, state)
+    }
+    _ -> {
+      // Ignore headers from non-sync peers during IBD
+      state
+    }
+  }
+}
+
+/// Process headers from the sync peer
+fn handle_headers_from_sync_peer(
+  peer_id: String,
+  headers: List(BlockHeaderNet),
+  state: IbdCoordinatorState,
+) -> IbdCoordinatorState {
   let header_count = list.length(headers)
 
-  // Always log headers received during sync
   io.println(
     "[IBD] Received "
     <> int.to_string(header_count)
-    <> " headers from peer "
+    <> " headers from sync peer "
     <> peer_id
     <> " (current height: "
     <> int.to_string(state.headers_height)
