@@ -685,14 +685,16 @@ fn start_headers_sync(state: IbdCoordinatorState) -> IbdCoordinatorState {
       io.println("[IBD] Selected sync peer: " <> peer_id)
 
       // Send getheaders request
+      // Use null hash (all zeros) as stop_hash to get all headers up to peer's tip
+      // Using genesis as stop_hash would incorrectly tell peer to "stop at genesis"
       let locators = build_locators(state)
+      let null_hash = oni_bitcoin.BlockHash(hash: oni_bitcoin.Hash256(bytes: <<0:256>>))
       io.println(
         "[IBD] Sending getheaders with "
         <> int.to_string(list.length(locators))
-        <> " locators, stop_hash: "
-        <> oni_bitcoin.block_hash_to_hex(state.genesis_hash),
+        <> " locators, stop_hash: null (get all headers)",
       )
-      let msg = MsgGetHeaders(locators, state.genesis_hash)
+      let msg = MsgGetHeaders(locators, null_hash)
       process.send(state.p2p, BroadcastMessage(msg))
       io.println("[IBD] getheaders message sent to P2P layer")
 
@@ -709,7 +711,9 @@ fn start_headers_sync(state: IbdCoordinatorState) -> IbdCoordinatorState {
 /// Request more headers from sync peer
 fn request_more_headers(state: IbdCoordinatorState) -> IbdCoordinatorState {
   let locators = build_locators(state)
-  let msg = MsgGetHeaders(locators, state.genesis_hash)
+  // Use null hash as stop_hash to get all headers up to peer's tip
+  let null_hash = oni_bitcoin.BlockHash(hash: oni_bitcoin.Hash256(bytes: <<0:256>>))
+  let msg = MsgGetHeaders(locators, null_hash)
   process.send(state.p2p, BroadcastMessage(msg))
 
   IbdCoordinatorState(..state, last_activity: now_ms())
