@@ -961,6 +961,7 @@ pub fn event_router_block_routing_test() {
           mempool: mempool,
           sync: sync,
           p2p: mock_p2p,
+          ibd: option.None,
         )
 
       // Start event router
@@ -1028,6 +1029,7 @@ pub fn event_router_peer_connection_test() {
           mempool: mempool,
           sync: sync,
           p2p: mock_p2p,
+          ibd: option.None,
         )
 
       let router_config =
@@ -1105,6 +1107,7 @@ pub fn event_router_chain_sync_test() {
           mempool: mempool,
           sync: sync,
           p2p: mock_p2p,
+          ibd: option.None,
         )
 
       let router_config =
@@ -1217,6 +1220,7 @@ pub fn event_router_headers_test() {
           mempool: mempool,
           sync: sync,
           p2p: mock_p2p,
+          ibd: option.None,
         )
 
       let router_config =
@@ -1283,6 +1287,7 @@ pub fn event_router_peer_disconnect_test() {
           mempool: mempool,
           sync: sync,
           p2p: mock_p2p,
+          ibd: option.None,
         )
 
       let router_config =

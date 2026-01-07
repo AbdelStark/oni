@@ -805,6 +805,7 @@ fn get_network_params(network: Network) -> oni_bitcoin.NetworkParams {
   case network {
     oni_bitcoin.Mainnet -> oni_bitcoin.mainnet_params()
     oni_bitcoin.Testnet -> oni_bitcoin.testnet_params()
+    oni_bitcoin.Testnet4 -> oni_bitcoin.testnet4_params()
     oni_bitcoin.Regtest -> oni_bitcoin.regtest_params()
     oni_bitcoin.Signet -> oni_bitcoin.testnet_params()
   }

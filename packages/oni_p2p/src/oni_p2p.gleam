@@ -520,11 +520,14 @@ pub type MessageHeader {
   MessageHeader(magic: Int, command: String, length: Int, checksum: BitArray)
 }
 
-/// Network magic bytes
+/// Network magic bytes (stored as little-endian integers)
+/// These values, when encoded as <<X:32-little>>, produce the correct wire format.
+/// Testnet4 wire bytes: 1C 16 3F 28 -> stored as 0x283F161C
 pub fn network_magic(network: oni_bitcoin.Network) -> Int {
   case network {
     oni_bitcoin.Mainnet -> 0xD9B4BEF9
     oni_bitcoin.Testnet -> 0x0709110B
+    oni_bitcoin.Testnet4 -> 0x283F161C
     oni_bitcoin.Regtest -> 0xDAB5BFFA
     oni_bitcoin.Signet -> 0x40CF030A
   }
@@ -1614,10 +1617,16 @@ pub const testnet_dns_seeds = [
 /// DNS seeds for signet peer discovery
 pub const signet_dns_seeds = ["seed.signet.bitcoin.sprovoost.nl"]
 
+/// DNS seeds for testnet4 peer discovery (BIP-94)
+pub const testnet4_dns_seeds = [
+  "seed.testnet4.bitcoin.sprovoost.nl", "seed.testnet4.wiz.biz",
+]
+
 /// Network type for DNS seed selection
 pub type Network {
   Mainnet
   Testnet
+  Testnet4
   Signet
   Regtest
 }
@@ -1627,6 +1636,7 @@ pub fn get_dns_seeds(network: Network) -> List(String) {
   case network {
     Mainnet -> mainnet_dns_seeds
     Testnet -> testnet_dns_seeds
+    Testnet4 -> testnet4_dns_seeds
     Signet -> signet_dns_seeds
     Regtest -> []
     // No DNS seeds for regtest
@@ -1638,6 +1648,7 @@ pub fn get_default_port(network: Network) -> Int {
   case network {
     Mainnet -> 8333
     Testnet -> 18_333
+    Testnet4 -> 48_333
     Signet -> 38_333
     Regtest -> 18_444
   }
@@ -1689,6 +1700,7 @@ pub fn get_network_magic(network: Network) -> BitArray {
   case network {
     Mainnet -> <<0xF9, 0xBE, 0xB4, 0xD9>>
     Testnet -> <<0x0B, 0x11, 0x09, 0x07>>
+    Testnet4 -> <<0x1C, 0x16, 0x3F, 0x28>>
     Signet -> <<0x0A, 0x03, 0xCF, 0x40>>
     Regtest -> <<0xFA, 0xBF, 0xB5, 0xDA>>
   }
@@ -1699,6 +1711,7 @@ pub fn network_to_string(network: Network) -> String {
   case network {
     Mainnet -> "mainnet"
     Testnet -> "testnet"
+    Testnet4 -> "testnet4"
     Signet -> "signet"
     Regtest -> "regtest"
   }
@@ -1709,6 +1722,7 @@ pub fn network_from_string(s: String) -> Result(Network, String) {
   case s {
     "mainnet" | "main" -> Ok(Mainnet)
     "testnet" | "test" | "testnet3" -> Ok(Testnet)
+    "testnet4" -> Ok(Testnet4)
     "signet" -> Ok(Signet)
     "regtest" -> Ok(Regtest)
     _ -> Error("Unknown network: " <> s)

@@ -37,6 +37,7 @@ pub type CheckpointSet {
 pub type Network {
   Mainnet
   Testnet
+  Testnet4
   Signet
   Regtest
 }
@@ -352,6 +353,30 @@ pub fn regtest_checkpoints() -> CheckpointSet {
   )
 }
 
+/// Get testnet4 checkpoints (BIP-94)
+pub fn testnet4_checkpoints() -> CheckpointSet {
+  let checkpoints = [
+    // Genesis block
+    #(0, "00000000da84f2bafbbc53dee25a72ae507ff4914b867c565be350b0da8bf043"),
+  ]
+
+  let checkpoint_dict =
+    list.fold(checkpoints, dict.new(), fn(acc, cp) {
+      let #(height, hash_hex) = cp
+      case oni_bitcoin.block_hash_from_hex(hash_hex) {
+        Ok(hash) -> dict.insert(acc, height, hash)
+        Error(_) -> acc
+      }
+    })
+
+  CheckpointSet(
+    network: Testnet4,
+    checkpoints: checkpoint_dict,
+    last_checkpoint_height: 0,
+    assumed_valid_block: None,
+  )
+}
+
 // ============================================================================
 // Checkpoint Validation Functions
 // ============================================================================
@@ -361,6 +386,7 @@ pub fn get_checkpoints(network: Network) -> CheckpointSet {
   case network {
     Mainnet -> mainnet_checkpoints()
     Testnet -> testnet_checkpoints()
+    Testnet4 -> testnet4_checkpoints()
     Signet -> signet_checkpoints()
     Regtest -> regtest_checkpoints()
   }

@@ -490,6 +490,7 @@ fn create_getblockchaininfo_handler(
     let chain_name = case network {
       oni_bitcoin.Mainnet -> "main"
       oni_bitcoin.Testnet -> "test"
+      oni_bitcoin.Testnet4 -> "testnet4"
       oni_bitcoin.Regtest -> "regtest"
       oni_bitcoin.Signet -> "signet"
     }
@@ -1361,6 +1362,7 @@ fn create_getnetworkinfo_handler(
     let network_name = case network {
       oni_bitcoin.Mainnet -> "main"
       oni_bitcoin.Testnet -> "test"
+      oni_bitcoin.Testnet4 -> "testnet4"
       oni_bitcoin.Regtest -> "regtest"
       oni_bitcoin.Signet -> "signet"
     }
@@ -1442,6 +1444,7 @@ fn create_getmininginfo_handler(
     let chain = case network {
       oni_bitcoin.Mainnet -> "main"
       oni_bitcoin.Testnet -> "test"
+      oni_bitcoin.Testnet4 -> "testnet4"
       oni_bitcoin.Regtest -> "regtest"
       oni_bitcoin.Signet -> "signet"
     }
@@ -1736,6 +1739,7 @@ fn create_getblock_handler(
             let net_params = case network {
               oni_bitcoin.Mainnet -> oni_bitcoin.mainnet_params()
               oni_bitcoin.Testnet -> oni_bitcoin.testnet_params()
+              oni_bitcoin.Testnet4 -> oni_bitcoin.testnet4_params()
               oni_bitcoin.Regtest -> oni_bitcoin.regtest_params()
               oni_bitcoin.Signet -> oni_bitcoin.testnet_params()
             }
@@ -1958,6 +1962,7 @@ fn create_getblockhash_handler(
                 let net_params = case network {
                   oni_bitcoin.Mainnet -> oni_bitcoin.mainnet_params()
                   oni_bitcoin.Testnet -> oni_bitcoin.testnet_params()
+                  oni_bitcoin.Testnet4 -> oni_bitcoin.testnet4_params()
                   oni_bitcoin.Regtest -> oni_bitcoin.regtest_params()
                   oni_bitcoin.Signet -> oni_bitcoin.testnet_params()
                 }

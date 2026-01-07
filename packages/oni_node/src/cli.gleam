@@ -143,6 +143,7 @@ fn parse_single_arg(
     "--mainnet" -> Ok(#(CliArgs(..acc, network: oni_bitcoin.Mainnet), rest))
     "--testnet" | "--testnet3" ->
       Ok(#(CliArgs(..acc, network: oni_bitcoin.Testnet), rest))
+    "--testnet4" -> Ok(#(CliArgs(..acc, network: oni_bitcoin.Testnet4), rest))
     "--signet" -> Ok(#(CliArgs(..acc, network: oni_bitcoin.Signet), rest))
     "--regtest" -> Ok(#(CliArgs(..acc, network: oni_bitcoin.Regtest), rest))
 
@@ -272,6 +273,7 @@ pub fn build_config(args: CliArgs) -> oni_node.NodeConfig {
   let base = case args.network {
     oni_bitcoin.Mainnet -> oni_node.default_config()
     oni_bitcoin.Testnet -> oni_node.testnet_config()
+    oni_bitcoin.Testnet4 -> oni_node.testnet4_config()
     oni_bitcoin.Signet -> oni_node.testnet_config()
     // Use testnet config for signet
     oni_bitcoin.Regtest -> oni_node.regtest_config()
@@ -452,6 +454,7 @@ fn print_help() -> Nil {
   io.println("Network Selection:")
   io.println("  --mainnet           Use the main Bitcoin network (default)")
   io.println("  --testnet           Use the test network (testnet3)")
+  io.println("  --testnet4          Use the test network 4 (BIP-94)")
   io.println("  --signet            Use the signet network")
   io.println("  --regtest           Use regression test mode")
   io.println("")
@@ -551,6 +554,7 @@ fn print_network_info(config: oni_node.NodeConfig) -> Nil {
   let network_name = case config.network {
     oni_bitcoin.Mainnet -> "mainnet"
     oni_bitcoin.Testnet -> "testnet3"
+    oni_bitcoin.Testnet4 -> "testnet4"
     oni_bitcoin.Signet -> "signet"
     oni_bitcoin.Regtest -> "regtest"
   }
@@ -558,6 +562,7 @@ fn print_network_info(config: oni_node.NodeConfig) -> Nil {
   let params = case config.network {
     oni_bitcoin.Mainnet -> oni_bitcoin.mainnet_params()
     oni_bitcoin.Testnet -> oni_bitcoin.testnet_params()
+    oni_bitcoin.Testnet4 -> oni_bitcoin.testnet4_params()
     // Signet uses testnet params as a base (signet-specific params not yet implemented)
     oni_bitcoin.Signet -> oni_bitcoin.testnet_params()
     oni_bitcoin.Regtest -> oni_bitcoin.regtest_params()

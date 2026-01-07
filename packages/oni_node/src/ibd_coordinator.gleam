@@ -302,16 +302,18 @@ fn handle_peer_connected(
   height: Int,
   state: IbdCoordinatorState,
 ) -> IbdCoordinatorState {
-  case state.config.debug {
-    True ->
-      io.println(
-        "[IBD] Peer "
-        <> peer_id
-        <> " connected at height "
-        <> int.to_string(height),
-      )
-    False -> Nil
-  }
+  // Always log peer connections during sync
+  io.println(
+    "[IBD] Peer "
+    <> peer_id
+    <> " connected at height "
+    <> int.to_string(height)
+    <> " (total peers: "
+    <> int.to_string(dict.size(state.peers) + 1)
+    <> ", need: "
+    <> int.to_string(state.config.min_peers)
+    <> ")",
+  )
 
   let peer_state =
     PeerSyncState(
@@ -336,12 +338,45 @@ fn handle_peer_connected(
   // Check if we should start IBD
   case state.state {
     IbdWaitingForPeers -> {
+      io.println(
+        "[IBD] State: WaitingForPeers, checking if we can start sync...",
+      )
       case dict.size(new_peers) >= state.config.min_peers {
-        True -> start_headers_sync(new_state)
-        False -> new_state
+        True -> {
+          io.println("[IBD] Minimum peers reached, starting header sync!")
+          start_headers_sync(new_state)
+        }
+        False -> {
+          io.println(
+            "[IBD] Waiting for more peers ("
+            <> int.to_string(dict.size(new_peers))
+            <> "/"
+            <> int.to_string(state.config.min_peers)
+            <> ")",
+          )
+          new_state
+        }
       }
     }
-    _ -> new_state
+    _ -> {
+      io.println(
+        "[IBD] Already syncing (state: "
+        <> ibd_state_to_string(state.state)
+        <> "), ignoring peer connect",
+      )
+      new_state
+    }
+  }
+}
+
+/// Convert IBD state to string for logging
+fn ibd_state_to_string(state: IbdState) -> String {
+  case state {
+    IbdWaitingForPeers -> "WaitingForPeers"
+    IbdSyncingHeaders -> "SyncingHeaders"
+    IbdDownloadingBlocks -> "DownloadingBlocks"
+    IbdSynced -> "Synced"
+    IbdError(err) -> "Error(" <> err <> ")"
   }
 }
 
@@ -398,16 +433,16 @@ fn handle_headers_received(
 ) -> IbdCoordinatorState {
   let header_count = list.length(headers)
 
-  case state.config.debug {
-    True ->
-      io.println(
-        "[IBD] Received "
-        <> int.to_string(header_count)
-        <> " headers from "
-        <> peer_id,
-      )
-    False -> Nil
-  }
+  // Always log headers received during sync
+  io.println(
+    "[IBD] Received "
+    <> int.to_string(header_count)
+    <> " headers from peer "
+    <> peer_id
+    <> " (current height: "
+    <> int.to_string(state.headers_height)
+    <> ")",
+  )
 
   case header_count {
     0 -> {
@@ -420,12 +455,18 @@ fn handle_headers_received(
     }
     _ -> {
       // Validate and add headers
+      io.println(
+        "[IBD] Validating " <> int.to_string(header_count) <> " headers...",
+      )
       case validate_headers(headers, state) {
         Error(err) -> {
           io.println("[IBD] Header validation failed: " <> err)
           IbdCoordinatorState(..state, state: IbdError(err))
         }
         Ok(new_height) -> {
+          io.println(
+            "[IBD] Headers validated, new height: " <> int.to_string(new_height),
+          )
           let new_headers = list.append(state.headers, headers)
           let new_state =
             IbdCoordinatorState(
@@ -437,8 +478,20 @@ fn handle_headers_received(
 
           // Request more headers if we got a full batch
           case header_count >= state.config.headers_batch_size {
-            True -> request_more_headers(new_state)
-            False -> start_block_download(new_state)
+            True -> {
+              io.println("[IBD] Requesting more headers (got full batch)...")
+              request_more_headers(new_state)
+            }
+            False -> {
+              io.println(
+                "[IBD] Got partial batch ("
+                <> int.to_string(header_count)
+                <> " < "
+                <> int.to_string(state.config.headers_batch_size)
+                <> "), starting block download...",
+              )
+              start_block_download(new_state)
+            }
           }
         }
       }
@@ -559,6 +612,12 @@ fn handle_resync(height: Int, state: IbdCoordinatorState) -> IbdCoordinatorState
 /// Start headers synchronization
 fn start_headers_sync(state: IbdCoordinatorState) -> IbdCoordinatorState {
   io.println("[IBD] Starting headers sync...")
+  io.println(
+    "[IBD] Target height: "
+    <> int.to_string(state.target_height)
+    <> ", current headers: "
+    <> int.to_string(state.headers_height),
+  )
 
   case find_best_peer(state.peers) {
     None -> {
@@ -566,12 +625,19 @@ fn start_headers_sync(state: IbdCoordinatorState) -> IbdCoordinatorState {
       state
     }
     Some(peer_id) -> {
-      io.println("[IBD] Syncing from peer " <> peer_id)
+      io.println("[IBD] Selected sync peer: " <> peer_id)
 
       // Send getheaders request
       let locators = build_locators(state)
+      io.println(
+        "[IBD] Sending getheaders with "
+        <> int.to_string(list.length(locators))
+        <> " locators, stop_hash: "
+        <> oni_bitcoin.block_hash_to_hex(state.genesis_hash),
+      )
       let msg = MsgGetHeaders(locators, state.genesis_hash)
       process.send(state.p2p, BroadcastMessage(msg))
+      io.println("[IBD] getheaders message sent to P2P layer")
 
       IbdCoordinatorState(
         ..state,
@@ -722,7 +788,7 @@ fn get_last_header_bits(state: IbdCoordinatorState) -> Int {
 fn get_genesis_bits(network: Network) -> Int {
   case network {
     oni_bitcoin.Mainnet -> 0x1d00ffff
-    oni_bitcoin.Testnet -> 0x1d00ffff
+    oni_bitcoin.Testnet | oni_bitcoin.Testnet4 -> 0x1d00ffff
     oni_bitcoin.Signet -> 0x1d00ffff
     oni_bitcoin.Regtest -> 0x207fffff
   }
@@ -894,7 +960,7 @@ fn verify_difficulty_transition(
   // Get PoW limit for network
   let pow_limit = case network {
     oni_bitcoin.Mainnet -> 0x1d00ffff
-    oni_bitcoin.Testnet -> 0x1d00ffff
+    oni_bitcoin.Testnet | oni_bitcoin.Testnet4 -> 0x1d00ffff
     oni_bitcoin.Signet -> 0x1d00ffff
     oni_bitcoin.Regtest -> 0x207fffff
   }
@@ -1067,6 +1133,7 @@ fn get_network_params(network: Network) -> oni_bitcoin.NetworkParams {
   case network {
     oni_bitcoin.Mainnet -> oni_bitcoin.mainnet_params()
     oni_bitcoin.Testnet -> oni_bitcoin.testnet_params()
+    oni_bitcoin.Testnet4 -> oni_bitcoin.testnet4_params()
     oni_bitcoin.Regtest -> oni_bitcoin.regtest_params()
     oni_bitcoin.Signet -> oni_bitcoin.testnet_params()
   }

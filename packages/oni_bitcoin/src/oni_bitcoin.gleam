@@ -318,6 +318,7 @@ pub fn block_new(header: BlockHeader, transactions: List(Transaction)) -> Block 
 pub type Network {
   Mainnet
   Testnet
+  Testnet4
   Regtest
   Signet
 }
@@ -372,6 +373,27 @@ pub fn testnet_params() -> NetworkParams {
     p2sh_prefix: 0xC4,
     bech32_hrp: "tb",
     default_port: 18_333,
+    genesis_hash: genesis,
+  )
+}
+
+/// Testnet4 parameters (BIP-94)
+pub fn testnet4_params() -> NetworkParams {
+  // Testnet4 genesis hash in internal byte order (little-endian)
+  // Display: 00000000da84f2bafbbc53dee25a72ae507ff4914b867c565be350b0da8bf043
+  let genesis_bytes = <<
+    0x43, 0xf0, 0x8b, 0xda, 0xb0, 0x50, 0xe3, 0x5b, 0x56, 0x7c, 0x86, 0x4b, 0x91,
+    0xf4, 0x7f, 0x50, 0xae, 0x72, 0x5a, 0xe2, 0xde, 0x53, 0xbc, 0xfb, 0xba, 0xf2,
+    0x84, 0xda, 0x00, 0x00, 0x00, 0x00,
+  >>
+  let assert Ok(genesis) = block_hash_from_bytes(genesis_bytes)
+
+  NetworkParams(
+    network: Testnet4,
+    p2pkh_prefix: 0x6F,
+    p2sh_prefix: 0xC4,
+    bech32_hrp: "tb",
+    default_port: 48_333,
     genesis_hash: genesis,
   )
 }
@@ -1816,21 +1838,21 @@ pub fn address_to_string(addr: Address) -> String {
     P2PKH(hash, network) -> {
       let prefix = case network {
         Mainnet -> <<0x00>>
-        Testnet | Regtest | Signet -> <<0x6F>>
+        Testnet | Testnet4 | Regtest | Signet -> <<0x6F>>
       }
       base58check_encode(bit_array.append(prefix, hash))
     }
     P2SH(hash, network) -> {
       let prefix = case network {
         Mainnet -> <<0x05>>
-        Testnet | Regtest | Signet -> <<0xC4>>
+        Testnet | Testnet4 | Regtest | Signet -> <<0xC4>>
       }
       base58check_encode(bit_array.append(prefix, hash))
     }
     P2WPKH(hash, network) | P2WSH(hash, network) -> {
       let hrp = case network {
         Mainnet -> "bc"
-        Testnet | Signet -> "tb"
+        Testnet | Testnet4 | Signet -> "tb"
         Regtest -> "bcrt"
       }
       let data = convert_bits(hash, 8, 5, True)
@@ -1839,7 +1861,7 @@ pub fn address_to_string(addr: Address) -> String {
     P2TR(pubkey, network) -> {
       let hrp = case network {
         Mainnet -> "bc"
-        Testnet | Signet -> "tb"
+        Testnet | Testnet4 | Signet -> "tb"
         Regtest -> "bcrt"
       }
       let data = convert_bits(pubkey, 8, 5, True)
@@ -1859,7 +1881,7 @@ pub fn address_from_string(
       // Check HRP
       let expected_hrp = case network {
         Mainnet -> "bc"
-        Testnet | Signet -> "tb"
+        Testnet | Testnet4 | Signet -> "tb"
         Regtest -> "bcrt"
       }
       case hrp == expected_hrp {
@@ -2143,11 +2165,17 @@ pub fn signet_magic() -> NetworkMagic {
   NetworkMagic(<<0x0A, 0x03, 0xCF, 0x40>>)
 }
 
+/// Get network magic for testnet4 (BIP-94)
+pub fn testnet4_magic() -> NetworkMagic {
+  NetworkMagic(<<0x1C, 0x16, 0x3F, 0x28>>)
+}
+
 /// Get network magic for a network type
 pub fn network_magic(network: Network) -> NetworkMagic {
   case network {
     Mainnet -> mainnet_magic()
     Testnet -> testnet_magic()
+    Testnet4 -> testnet4_magic()
     Regtest -> regtest_magic()
     Signet -> signet_magic()
   }
@@ -2177,7 +2205,7 @@ pub fn private_key_from_bytes(
 pub fn private_key_to_wif(key: PrivateKey, network: Network) -> String {
   let prefix = case network {
     Mainnet -> <<0x80>>
-    Testnet | Regtest | Signet -> <<0xEF>>
+    Testnet | Testnet4 | Regtest | Signet -> <<0xEF>>
   }
 
   let payload = case key.compressed {

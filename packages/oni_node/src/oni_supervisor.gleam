@@ -83,6 +83,7 @@ pub fn start_chainstate(
   let params = case network {
     oni_bitcoin.Mainnet -> oni_bitcoin.mainnet_params()
     oni_bitcoin.Testnet -> oni_bitcoin.testnet_params()
+    oni_bitcoin.Testnet4 -> oni_bitcoin.testnet4_params()
     oni_bitcoin.Regtest -> oni_bitcoin.regtest_params()
     oni_bitcoin.Signet -> oni_bitcoin.testnet_params()
   }

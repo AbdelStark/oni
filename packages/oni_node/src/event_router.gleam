@@ -15,6 +15,7 @@ import gleam/io
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
+import ibd_coordinator.{type IbdMsg}
 import oni_bitcoin
 import oni_p2p.{
   type BlockHeaderNet, type InvItem, type Message, type VersionPayload, InvBlock,
@@ -67,6 +68,8 @@ pub type RouterMsg {
   BroadcastBlock(block: oni_bitcoin.Block)
   /// Get router statistics
   GetStats(reply: Subject(RouterStats))
+  /// Set IBD coordinator handle (for late binding)
+  SetIBD(ibd: Subject(IbdMsg))
   /// Shutdown the router
   Shutdown
 }
@@ -100,6 +103,8 @@ type RouterState {
     sync: Subject(SyncMsg),
     /// Reference to P2P listener (for sending messages)
     p2p: Subject(ListenerMsg),
+    /// Reference to IBD coordinator (optional)
+    ibd: Option(Subject(IbdMsg)),
     /// Statistics
     stats: RouterStats,
     /// Pending block downloads (hash -> peer_id)
@@ -122,6 +127,7 @@ pub type RouterHandles {
     mempool: Subject(MempoolMsg),
     sync: Subject(SyncMsg),
     p2p: Subject(ListenerMsg),
+    ibd: Option(Subject(IbdMsg)),
   )
 }
 
@@ -137,6 +143,7 @@ pub fn start(
       mempool: handles.mempool,
       sync: handles.sync,
       p2p: handles.p2p,
+      ibd: handles.ibd,
       stats: RouterStats(
         blocks_received: 0,
         txs_received: 0,
@@ -201,6 +208,11 @@ fn handle_message(
     GetStats(reply) -> {
       process.send(reply, state.stats)
       actor.continue(state)
+    }
+
+    SetIBD(ibd) -> {
+      io.println("[Sync] IBD coordinator connected to event router")
+      actor.continue(RouterState(..state, ibd: Some(ibd)))
     }
 
     Shutdown -> {
@@ -328,22 +340,30 @@ fn handle_headers(
 ) -> RouterState {
   let header_count = list.length(headers)
 
-  case state.config.debug {
-    True ->
-      io.println(
-        "[EventRouter] Received "
-        <> int.to_string(header_count)
-        <> " headers from peer "
-        <> int.to_string(peer_id),
-      )
-    False -> Nil
-  }
+  // Always log headers received during sync
+  io.println(
+    "[Sync] Received "
+    <> int.to_string(header_count)
+    <> " headers from peer "
+    <> int.to_string(peer_id),
+  )
 
   // Notify sync coordinator
   process.send(
     state.sync,
     oni_supervisor.OnHeaders(int.to_string(peer_id), header_count),
   )
+
+  // Forward headers to IBD coordinator for validation
+  case state.ibd {
+    Some(ibd) -> {
+      process.send(
+        ibd,
+        ibd_coordinator.HeadersReceived(int.to_string(peer_id), headers),
+      )
+    }
+    None -> Nil
+  }
 
   // Update stats
   let new_stats =
@@ -569,9 +589,9 @@ fn handle_peer_connected(
   state: RouterState,
 ) -> RouterState {
   io.println(
-    "[EventRouter] Peer "
+    "[Sync] Peer "
     <> int.to_string(peer_id)
-    <> " connected (height: "
+    <> " handshake complete (height: "
     <> int.to_string(version.start_height)
     <> ", user_agent: "
     <> version.user_agent
@@ -580,6 +600,26 @@ fn handle_peer_connected(
 
   // Notify sync coordinator to potentially start syncing from this peer
   process.send(state.sync, oni_supervisor.StartSync(int.to_string(peer_id)))
+
+  // Notify IBD coordinator about the new peer
+  case state.ibd {
+    Some(ibd) -> {
+      io.println(
+        "[Sync] Notifying IBD coordinator of peer "
+        <> int.to_string(peer_id)
+        <> " at height "
+        <> int.to_string(version.start_height),
+      )
+      process.send(
+        ibd,
+        ibd_coordinator.PeerConnected(
+          int.to_string(peer_id),
+          version.start_height,
+        ),
+      )
+    }
+    None -> Nil
+  }
 
   // Update peer heights
   let new_peer_heights = [
@@ -601,11 +641,19 @@ fn handle_peer_disconnected(
   state: RouterState,
 ) -> RouterState {
   io.println(
-    "[EventRouter] Peer "
-    <> int.to_string(peer_id)
-    <> " disconnected: "
-    <> reason,
+    "[Sync] Peer " <> int.to_string(peer_id) <> " disconnected: " <> reason,
   )
+
+  // Notify IBD coordinator
+  case state.ibd {
+    Some(ibd) -> {
+      process.send(
+        ibd,
+        ibd_coordinator.PeerDisconnected(int.to_string(peer_id)),
+      )
+    }
+    None -> Nil
+  }
 
   // Remove from peer heights
   let new_peer_heights =

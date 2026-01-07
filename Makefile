@@ -1,7 +1,7 @@
 PACKAGES := $(shell ls -1 packages)
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 
-.PHONY: help fmt fmt-check check test ci clean build docs bench version info nif run run-testnet run-regtest test-vectors test-differential test-all
+.PHONY: help fmt fmt-check check test ci clean build docs bench version info nif run run-testnet run-testnet4 run-regtest test-vectors test-differential test-all
 
 help:
 	@echo "oni development commands"
@@ -18,9 +18,10 @@ help:
 	@echo "  make clean      - remove build artifacts"
 	@echo ""
 	@echo "Running:"
-	@echo "  make run        - run node in mainnet mode (port 8333/8332)"
-	@echo "  make run-testnet - run node in testnet mode (port 18333/18332)"
-	@echo "  make run-regtest - run node in regtest mode (port 18444/18443)"
+	@echo "  make run          - run node in mainnet mode (port 8333/8332)"
+	@echo "  make run-testnet  - run node in testnet3 mode (port 18333/18332)"
+	@echo "  make run-testnet4 - run node in testnet4 mode (port 48333/48332)"
+	@echo "  make run-regtest  - run node in regtest mode (port 18444/18443)"
 	@echo ""
 	@echo "Testing:"
 	@echo "  make test-vectors     - run test vector suite"
@@ -149,7 +150,7 @@ run: build
 
 # Run node in testnet mode
 run-testnet: build
-	@echo "==> Starting oni node (testnet)..."
+	@echo "==> Starting oni node (testnet3)..."
 	@cd packages/oni_node && erl \
 	  -noshell \
 	  -pa build/dev/erlang/*/ebin \
@@ -159,6 +160,19 @@ run-testnet: build
 	  -pa ../oni_p2p/build/dev/erlang/*/ebin \
 	  -pa ../oni_rpc/build/dev/erlang/*/ebin \
 	  -eval 'cli:run([<<"--testnet">>])'
+
+# Run node in testnet4 mode (BIP-94)
+run-testnet4: build
+	@echo "==> Starting oni node (testnet4)..."
+	@cd packages/oni_node && erl \
+	  -noshell \
+	  -pa build/dev/erlang/*/ebin \
+	  -pa ../oni_bitcoin/build/dev/erlang/*/ebin \
+	  -pa ../oni_consensus/build/dev/erlang/*/ebin \
+	  -pa ../oni_storage/build/dev/erlang/*/ebin \
+	  -pa ../oni_p2p/build/dev/erlang/*/ebin \
+	  -pa ../oni_rpc/build/dev/erlang/*/ebin \
+	  -eval 'cli:run([<<"--testnet4">>])'
 
 # Run node in regtest mode
 run-regtest: build

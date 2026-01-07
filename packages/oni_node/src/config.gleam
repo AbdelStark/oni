@@ -628,6 +628,7 @@ pub fn config_summary(config: NodeConfig) -> String {
   let network_name = case config.network {
     oni_bitcoin.Mainnet -> "mainnet"
     oni_bitcoin.Testnet -> "testnet"
+    oni_bitcoin.Testnet4 -> "testnet4"
     oni_bitcoin.Signet -> "signet"
     oni_bitcoin.Regtest -> "regtest"
   }

@@ -112,6 +112,25 @@ pub fn testnet_config() -> NodeConfig {
   )
 }
 
+/// Configuration for testnet4 mode (BIP-94)
+pub fn testnet4_config() -> NodeConfig {
+  NodeConfig(
+    network: oni_bitcoin.Testnet4,
+    data_dir: "~/.oni/testnet4",
+    rpc_port: 48_332,
+    rpc_bind: "127.0.0.1",
+    p2p_port: 48_333,
+    p2p_bind: "0.0.0.0",
+    max_inbound: 117,
+    max_outbound: 11,
+    mempool_max_size: 300_000_000,
+    rpc_user: None,
+    rpc_password: None,
+    enable_rpc: True,
+    enable_p2p: True,
+  )
+}
+
 // ============================================================================
 // Node State
 // ============================================================================
@@ -235,13 +254,16 @@ pub fn start_with_config(config: NodeConfig) -> Result(NodeState, String) {
     False -> #(None, None)
   }
 
-  // Start IBD coordinator if P2P is enabled
-  let ibd_handle = case p2p_listener {
-    Some(listener) -> {
+  // Start IBD coordinator if P2P is enabled and wire it to event router
+  let ibd_handle = case #(p2p_listener, event_router_handle) {
+    #(Some(listener), Some(router)) -> {
       let ibd_config = ibd_coordinator.default_config(config.network)
       case ibd_coordinator.start(ibd_config, listener) {
         Ok(ibd) -> {
           io.println("  ✓ IBD coordinator started")
+          // Connect IBD coordinator to event router for peer events
+          process.send(router, event_router.SetIBD(ibd))
+          io.println("  ✓ IBD coordinator connected to event router")
           Some(ibd)
         }
         Error(_) -> {
@@ -250,7 +272,11 @@ pub fn start_with_config(config: NodeConfig) -> Result(NodeState, String) {
         }
       }
     }
-    None -> None
+    #(Some(_listener), None) -> {
+      io.println("  ✗ IBD coordinator skipped (no event router)")
+      None
+    }
+    #(None, _) -> None
   }
 
   // Discover and connect to peers via DNS seeds
@@ -386,13 +412,14 @@ fn start_p2p_with_router(
   case start_temp_listener(p2p_config) {
     Error(err) -> Error(err)
     Ok(#(listener, event_handler_subject)) -> {
-      // Create router handles
+      // Create router handles (IBD will be bound later via SetIBD message)
       let router_handles =
         event_router.RouterHandles(
           chainstate: chainstate,
           mempool: mempool,
           sync: sync,
           p2p: listener,
+          ibd: None,
         )
 
       // Start the event router
@@ -837,6 +864,7 @@ fn network_to_p2p_network(network: oni_bitcoin.Network) -> oni_p2p.Network {
   case network {
     oni_bitcoin.Mainnet -> oni_p2p.Mainnet
     oni_bitcoin.Testnet -> oni_p2p.Testnet
+    oni_bitcoin.Testnet4 -> oni_p2p.Testnet4
     oni_bitcoin.Signet -> oni_p2p.Signet
     oni_bitcoin.Regtest -> oni_p2p.Regtest
   }

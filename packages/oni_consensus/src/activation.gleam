@@ -16,7 +16,7 @@
 // - BIP 341: Taproot
 
 import gleam/option.{type Option, None, Some}
-import oni_bitcoin.{type Network, Mainnet, Regtest, Signet, Testnet}
+import oni_bitcoin.{type Network, Mainnet, Regtest, Signet, Testnet, Testnet4}
 
 // ============================================================================
 // Activation Heights by Network
@@ -51,6 +51,7 @@ pub fn get_activations(network: Network) -> ActivationHeights {
   case network {
     Mainnet -> mainnet_activations()
     Testnet -> testnet_activations()
+    Testnet4 -> testnet4_activations()
     Regtest -> regtest_activations()
     Signet -> signet_activations()
   }
@@ -138,6 +139,24 @@ pub fn signet_activations() -> ActivationHeights {
     // Taproot active from block 1
     difficulty_adjustment_start: 1,
     allow_min_difficulty_blocks: False,
+    bip30_exception_height: 1,
+  )
+}
+
+/// Testnet4 activation heights (BIP-94: all soft forks active from genesis)
+pub fn testnet4_activations() -> ActivationHeights {
+  ActivationHeights(
+    bip34_height: 1,
+    bip65_height: 1,
+    bip66_height: 1,
+    csv_height: 1,
+    segwit_height: 1,
+    // SegWit always active on testnet4
+    taproot_height: 1,
+    // Taproot active from block 1
+    difficulty_adjustment_start: 1,
+    // Testnet4 allows min difficulty blocks after 20 minutes (like testnet3)
+    allow_min_difficulty_blocks: True,
     bip30_exception_height: 1,
   )
 }
@@ -348,7 +367,7 @@ pub const max_target_testnet: Int = 0x00000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
 pub fn get_max_target(network: Network) -> Int {
   case network {
     Mainnet -> max_target_mainnet
-    Testnet -> max_target_testnet
+    Testnet | Testnet4 -> max_target_testnet
     Regtest -> max_target_testnet
     Signet -> max_target_mainnet
   }
@@ -372,6 +391,8 @@ pub fn get_checkpoints(network: Network) -> List(Checkpoint) {
   case network {
     Mainnet -> mainnet_checkpoints()
     Testnet -> testnet_checkpoints()
+    Testnet4 -> []
+    // Testnet4 is new, checkpoints TBD
     Regtest -> []
     // No checkpoints for regtest
     Signet -> []

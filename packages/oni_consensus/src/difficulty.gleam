@@ -516,7 +516,7 @@ pub fn hash_meets_compact(hash: BlockHash, compact: Int) -> Bool {
 pub fn pow_limit_for_network(network: oni_bitcoin.Network) -> Int {
   case network {
     oni_bitcoin.Mainnet -> pow_limit_mainnet_bits
-    oni_bitcoin.Testnet -> pow_limit_testnet_bits
+    oni_bitcoin.Testnet | oni_bitcoin.Testnet4 -> pow_limit_testnet_bits
     oni_bitcoin.Signet -> pow_limit_testnet_bits
     oni_bitcoin.Regtest -> pow_limit_regtest_bits
   }
