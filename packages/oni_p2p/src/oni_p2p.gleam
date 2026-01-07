@@ -578,6 +578,38 @@ fn message_checksum(payload: BitArray) -> BitArray {
   }
 }
 
+/// Get the command name for a message (for debugging)
+pub fn message_command(msg: Message) -> String {
+  case msg {
+    MsgVersion(_) -> "version"
+    MsgVerack -> "verack"
+    MsgPing(_) -> "ping"
+    MsgPong(_) -> "pong"
+    MsgAddr(_) -> "addr"
+    MsgAddrV2(_) -> "addrv2"
+    MsgInv(_) -> "inv"
+    MsgGetData(_) -> "getdata"
+    MsgNotFound(_) -> "notfound"
+    MsgGetBlocks(_, _) -> "getblocks"
+    MsgGetHeaders(_, _) -> "getheaders"
+    MsgHeaders(_) -> "headers"
+    MsgBlock(_) -> "block"
+    MsgTx(_) -> "tx"
+    MsgReject(_, _, _, _) -> "reject"
+    MsgMempool -> "mempool"
+    MsgGetAddr -> "getaddr"
+    MsgSendHeaders -> "sendheaders"
+    MsgSendCmpct(_, _) -> "sendcmpct"
+    MsgCmpctBlock(_, _, _, _) -> "cmpctblock"
+    MsgGetBlockTxn(_, _) -> "getblocktxn"
+    MsgBlockTxn(_, _) -> "blocktxn"
+    MsgFeeFilter(_) -> "feefilter"
+    MsgWtxidRelay -> "wtxidrelay"
+    MsgSendAddrV2 -> "sendaddrv2"
+    MsgUnknown(cmd, _) -> "unknown:" <> cmd
+  }
+}
+
 /// Encode a complete message with header
 pub fn encode_message(msg: Message, network: oni_bitcoin.Network) -> BitArray {
   let #(command, payload) = encode_message_payload(msg)

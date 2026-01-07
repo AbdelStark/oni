@@ -647,6 +647,12 @@ fn handle_peer_message(
       // Try to parse messages from buffer
       case try_parse_messages(new_buffer, state.config.network) {
         Error(reason) -> {
+          io.println(
+            "[P2P] Peer "
+            <> int.to_string(state.info.id)
+            <> " parse error: "
+            <> reason,
+          )
           process.send(
             state.parent,
             PeerError(state.info.id, oni_p2p.InvalidMessage(reason)),
@@ -844,7 +850,10 @@ fn try_parse_messages_acc(
       case oni_p2p.decode_message(buffer, network) {
         Error(e) -> {
           case e {
-            oni_p2p.InvalidMessage("Incomplete message") ->
+            // Both "Incomplete message" and "Insufficient payload" mean
+            // we need more data - buffer and wait
+            oni_p2p.InvalidMessage("Incomplete message")
+            | oni_p2p.InvalidMessage("Insufficient payload") ->
               Ok(#(list_reverse(acc), buffer))
             _ -> Error(format_p2p_error(e))
           }
