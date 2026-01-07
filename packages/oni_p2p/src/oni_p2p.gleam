@@ -870,6 +870,8 @@ fn decode_message_payload(
     "headers" -> decode_headers_msg(payload)
     "mempool" -> Ok(MsgMempool)
     "reject" -> decode_reject(payload)
+    "block" -> decode_block_msg(payload)
+    "tx" -> decode_tx_msg(payload)
     _ -> Ok(MsgUnknown(command, payload))
   }
 }
@@ -1220,6 +1222,22 @@ fn decode_reject(payload: BitArray) -> Result(Message, P2PError) {
         _ -> Error(InvalidMessage("Invalid reject payload"))
       }
     }
+  }
+}
+
+/// Decode a block message
+fn decode_block_msg(payload: BitArray) -> Result(Message, P2PError) {
+  case oni_bitcoin.decode_block(payload) {
+    Error(e) -> Error(InvalidMessage("Failed to decode block: " <> e))
+    Ok(#(block, _remaining)) -> Ok(MsgBlock(block))
+  }
+}
+
+/// Decode a transaction message
+fn decode_tx_msg(payload: BitArray) -> Result(Message, P2PError) {
+  case oni_bitcoin.decode_tx(payload) {
+    Error(e) -> Error(InvalidMessage("Failed to decode tx: " <> e))
+    Ok(#(tx, _remaining)) -> Ok(MsgTx(tx))
   }
 }
 
@@ -1611,9 +1629,12 @@ pub fn create_tx_inv(txids: List(Txid)) -> Message {
   MsgInv(items)
 }
 
-/// Create getdata for blocks
+/// Create getdata for blocks (requests witness blocks for segwit compatibility)
+/// Since SegWit activation (2017), almost all blocks contain witness data.
+/// Peers will not respond to MSG_BLOCK (type 2) requests for witness blocks;
+/// we must use MSG_WITNESS_BLOCK (type 0x40000002) to receive full block data.
 pub fn create_getdata_blocks(hashes: List(BlockHash)) -> Message {
-  let items = list.map(hashes, fn(hash) { InvItem(InvBlock, hash.hash) })
+  let items = list.map(hashes, fn(hash) { InvItem(InvWitnessBlock, hash.hash) })
   MsgGetData(items)
 }
 
