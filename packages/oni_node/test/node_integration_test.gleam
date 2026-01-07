@@ -437,6 +437,15 @@ pub fn ibd_config_test() {
   should.equal(config.headers_batch_size, 2000)
   should.equal(config.min_peers, 1)
   should.equal(config.use_checkpoints, True)
+  should.equal(config.max_expected_height, 1_000_000)
+
+  // Verify testnet3 config has appropriate max height
+  let testnet_config = ibd_coordinator.default_config(oni_bitcoin.Testnet)
+  should.equal(testnet_config.max_expected_height, 6_000_000)
+
+  // Verify testnet4 config has appropriate max height
+  let testnet4_config = ibd_coordinator.default_config(oni_bitcoin.Testnet4)
+  should.equal(testnet4_config.max_expected_height, 500_000)
 }
 
 pub fn ibd_status_initial_test() {

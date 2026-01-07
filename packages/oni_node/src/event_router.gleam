@@ -382,17 +382,14 @@ fn handle_block(
   state: RouterState,
 ) -> RouterState {
   let block_hash = oni_bitcoin.block_hash_from_header(block.header)
+  let hash_hex = oni_bitcoin.block_hash_to_hex(block_hash)
 
-  case state.config.debug {
-    True ->
-      io.println(
-        "[EventRouter] Received block "
-        <> oni_bitcoin.block_hash_to_hex(block_hash)
-        <> " from peer "
-        <> int.to_string(peer_id),
-      )
-    False -> Nil
-  }
+  io.println(
+    "[Block] Received block "
+    <> hash_hex
+    <> " from peer "
+    <> int.to_string(peer_id),
+  )
 
   // Send to chainstate for validation and connection
   // In a full implementation, this would go through a validation pipeline
@@ -404,8 +401,19 @@ fn handle_block(
   // Notify sync coordinator
   process.send(state.sync, oni_supervisor.OnBlock(block_hash))
 
+  // Notify IBD coordinator about received block
+  case state.ibd {
+    Some(ibd) -> {
+      // Send block received notification - IBD will track height internally
+      process.send(
+        ibd,
+        ibd_coordinator.BlockReceived(block_hash, 0),
+      )
+    }
+    None -> Nil
+  }
+
   // Remove from pending
-  let hash_hex = oni_bitcoin.block_hash_to_hex(block_hash)
   let new_pending =
     list.filter(state.pending_blocks, fn(entry) {
       let #(h, _) = entry

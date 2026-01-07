@@ -49,11 +49,24 @@ pub type IbdConfig {
     use_checkpoints: Bool,
     /// Debug logging
     debug: Bool,
+    /// Maximum expected block height (sanity check)
+    /// If headers exceed this, reject as invalid
+    max_expected_height: Int,
   )
 }
 
 /// Default IBD configuration
 pub fn default_config(network: Network) -> IbdConfig {
+  // Set reasonable maximum heights per network to prevent runaway sync
+  // These are ~2x the expected chain height as of early 2025
+  let max_height = case network {
+    oni_bitcoin.Mainnet -> 1_000_000     // Mainnet ~880k blocks
+    oni_bitcoin.Testnet -> 6_000_000     // Testnet3 ~4.8M blocks (faster blocks)
+    oni_bitcoin.Testnet4 -> 500_000      // Testnet4 ~117k blocks (new)
+    oni_bitcoin.Signet -> 500_000        // Signet ~200k blocks
+    oni_bitcoin.Regtest -> 100_000_000   // Regtest - no limit
+  }
+
   IbdConfig(
     network: network,
     blocks_per_peer: 16,
@@ -63,6 +76,7 @@ pub fn default_config(network: Network) -> IbdConfig {
     min_peers: 1,
     use_checkpoints: True,
     debug: False,
+    max_expected_height: max_height,
   )
 }
 
@@ -471,43 +485,59 @@ fn handle_headers_from_sync_peer(
       start_block_download(state)
     }
     _ -> {
-      // Validate and add headers
-      io.println(
-        "[IBD] Validating " <> int.to_string(header_count) <> " headers...",
-      )
-      case validate_headers(headers, state) {
-        Error(err) -> {
-          io.println("[IBD] Header validation failed: " <> err)
-          IbdCoordinatorState(..state, state: IbdError(err))
+      // Sanity check: would new headers exceed maximum expected height?
+      let new_potential_height = state.headers_height + header_count
+      case new_potential_height > state.config.max_expected_height {
+        True -> {
+          let err_msg = "Headers would exceed maximum expected height ("
+            <> int.to_string(new_potential_height)
+            <> " > "
+            <> int.to_string(state.config.max_expected_height)
+            <> "). Possible invalid chain or wrong network."
+          io.println("[IBD] CRITICAL: " <> err_msg)
+          IbdCoordinatorState(..state, state: IbdError(err_msg))
         }
-        Ok(new_height) -> {
+        False -> {
+          // Validate and add headers
           io.println(
-            "[IBD] Headers validated, new height: " <> int.to_string(new_height),
+            "[IBD] Validating " <> int.to_string(header_count) <> " headers...",
           )
-          let new_headers = list.append(state.headers, headers)
-          let new_state =
-            IbdCoordinatorState(
-              ..state,
-              headers: new_headers,
-              headers_height: new_height,
-              last_activity: now_ms(),
-            )
-
-          // Request more headers if we got a full batch
-          case header_count >= state.config.headers_batch_size {
-            True -> {
-              io.println("[IBD] Requesting more headers (got full batch)...")
-              request_more_headers(new_state)
+          case validate_headers(headers, state) {
+            Error(err) -> {
+              io.println("[IBD] Header validation failed: " <> err)
+              IbdCoordinatorState(..state, state: IbdError(err))
             }
-            False -> {
+            Ok(new_height) -> {
               io.println(
-                "[IBD] Got partial batch ("
-                <> int.to_string(header_count)
-                <> " < "
-                <> int.to_string(state.config.headers_batch_size)
-                <> "), starting block download...",
+                "[IBD] Headers validated, new height: " <> int.to_string(new_height)
+                <> " (max allowed: " <> int.to_string(state.config.max_expected_height) <> ")",
               )
-              start_block_download(new_state)
+              let new_headers = list.append(state.headers, headers)
+              let new_state =
+                IbdCoordinatorState(
+                  ..state,
+                  headers: new_headers,
+                  headers_height: new_height,
+                  last_activity: now_ms(),
+                )
+
+              // Request more headers if we got a full batch
+              case header_count >= state.config.headers_batch_size {
+                True -> {
+                  io.println("[IBD] Requesting more headers (got full batch)...")
+                  request_more_headers(new_state)
+                }
+                False -> {
+                  io.println(
+                    "[IBD] Got partial batch ("
+                    <> int.to_string(header_count)
+                    <> " < "
+                    <> int.to_string(state.config.headers_batch_size)
+                    <> "), starting block download...",
+                  )
+                  start_block_download(new_state)
+                }
+              }
             }
           }
         }
@@ -519,27 +549,37 @@ fn handle_headers_from_sync_peer(
 /// Handle block received
 fn handle_block_received(
   hash: BlockHash,
-  height: Int,
+  _height: Int,
   state: IbdCoordinatorState,
 ) -> IbdCoordinatorState {
   let hash_hex = oni_bitcoin.block_hash_to_hex(hash)
 
   // Remove from inflight
   let new_inflight = dict.delete(state.inflight, hash_hex)
+  let was_inflight = dict.size(new_inflight) < dict.size(state.inflight)
 
-  // Update blocks height if this is the next block
-  let new_blocks_height = case height == state.blocks_height + 1 {
-    True -> height
+  // Increment blocks height for each received block
+  // (In a full implementation, we'd track order and validate chain)
+  let new_blocks_height = case was_inflight {
+    True -> state.blocks_height + 1
     False -> state.blocks_height
   }
 
-  case state.config.debug && new_blocks_height != state.blocks_height {
+  // Log progress every 100 blocks or on first block
+  case
+    new_blocks_height == 1
+    || new_blocks_height % 100 == 0
+    || new_blocks_height == state.headers_height
+  {
     True ->
       io.println(
         "[IBD] Block "
         <> int.to_string(new_blocks_height)
         <> " of "
-        <> int.to_string(state.target_height),
+        <> int.to_string(state.headers_height)
+        <> " ("
+        <> int.to_string(new_blocks_height * 100 / int.max(state.headers_height, 1))
+        <> "%)",
       )
     False -> Nil
   }
@@ -553,7 +593,7 @@ fn handle_block_received(
     )
 
   // Check if we're done
-  case new_blocks_height >= state.target_height {
+  case new_blocks_height >= state.headers_height {
     True -> {
       io.println(
         "[IBD] Sync complete at height " <> int.to_string(new_blocks_height),
@@ -686,6 +726,13 @@ fn start_block_download(state: IbdCoordinatorState) -> IbdCoordinatorState {
 
   // Build download queue from headers
   let queue = build_download_queue(state.headers, state.blocks_height)
+  let queue_size = list.length(queue)
+
+  io.println(
+    "[IBD] Built download queue with "
+    <> int.to_string(queue_size)
+    <> " blocks to download",
+  )
 
   let new_state =
     IbdCoordinatorState(
@@ -703,19 +750,47 @@ fn schedule_block_downloads(state: IbdCoordinatorState) -> IbdCoordinatorState {
   let available_peers =
     get_available_peers(state.peers, state.config.blocks_per_peer)
   let slots = state.config.max_inflight_blocks - dict.size(state.inflight)
+  let queue_size = list.length(state.download_queue)
+  let peer_count = list.length(available_peers)
+
+  io.println(
+    "[IBD] Schedule downloads: "
+    <> int.to_string(queue_size)
+    <> " in queue, "
+    <> int.to_string(peer_count)
+    <> " available peers, "
+    <> int.to_string(slots)
+    <> " slots free",
+  )
 
   case
     list.is_empty(available_peers),
     list.is_empty(state.download_queue),
     slots > 0
   {
-    True, _, _ -> state
-    _, True, _ -> state
-    _, _, False -> state
+    True, _, _ -> {
+      io.println("[IBD] No available peers for block download")
+      state
+    }
+    _, True, _ -> {
+      io.println("[IBD] Download queue is empty")
+      state
+    }
+    _, _, False -> {
+      io.println("[IBD] No slots available (max inflight reached)")
+      state
+    }
     False, False, True -> {
       // Take blocks from queue
       let to_request = list.take(state.download_queue, slots)
       let remaining = list.drop(state.download_queue, slots)
+      let request_count = list.length(to_request)
+
+      io.println(
+        "[IBD] Requesting "
+        <> int.to_string(request_count)
+        <> " blocks from peers",
+      )
 
       // Create getdata messages
       let _ = request_blocks_from_peers(to_request, available_peers, state.p2p)
@@ -773,11 +848,63 @@ fn get_available_peers(
   })
 }
 
-/// Build block locators for getheaders
+/// Build block locators for getheaders with exponential backoff
+/// Locators help the peer identify where to start sending headers from
 fn build_locators(state: IbdCoordinatorState) -> List(BlockHash) {
-  // In a full implementation, build exponential backoff locators
-  // For now, just use genesis
-  [state.genesis_hash]
+  // If we have no headers, start from genesis
+  case list.length(state.headers) {
+    0 -> {
+      io.println("[IBD] No headers yet, using genesis as locator")
+      [state.genesis_hash]
+    }
+    len -> {
+      // Build exponential backoff locators
+      // Start from tip, then -1, -2, -4, -8, -16, ... back to genesis
+      let indices = build_locator_indices(len - 1, 1, [len - 1])
+
+      // Get headers at those indices and hash them
+      let locators = list.filter_map(indices, fn(idx) {
+        case list.at(state.headers, idx) {
+          Ok(header) -> {
+            let header_bytes = encode_header(header)
+            let hash_bytes = oni_bitcoin.sha256d(header_bytes)
+            Ok(oni_bitcoin.BlockHash(hash: oni_bitcoin.Hash256(bytes: hash_bytes)))
+          }
+          Error(_) -> Error(Nil)
+        }
+      })
+
+      // Always include genesis at the end
+      let final_locators = list.append(locators, [state.genesis_hash])
+
+      io.println(
+        "[IBD] Built " <> int.to_string(list.length(final_locators))
+        <> " locators (tip at height " <> int.to_string(state.headers_height) <> ")"
+      )
+
+      final_locators
+    }
+  }
+}
+
+/// Build exponential backoff indices for locators
+fn build_locator_indices(current: Int, step: Int, acc: List(Int)) -> List(Int) {
+  case current - step {
+    next if next >= 0 -> {
+      let new_step = case step >= 10 {
+        True -> step * 2
+        False -> step + 1
+      }
+      build_locator_indices(next, new_step, [next, ..acc])
+    }
+    _ -> {
+      // Include 0 (first header after genesis) if not already included
+      case list.contains(acc, 0) {
+        True -> list.reverse(acc)
+        False -> list.reverse([0, ..acc])
+      }
+    }
+  }
 }
 
 /// Validate received headers
@@ -785,12 +912,52 @@ fn validate_headers(
   headers: List(BlockHeaderNet),
   state: IbdCoordinatorState,
 ) -> Result(Int, String) {
-  validate_headers_loop(
-    headers,
-    state.headers_height,
-    get_last_header_bits(state),
-    state.config.network,
-  )
+  // First, verify chain continuity: first header must connect to our chain
+  case headers {
+    [] -> Ok(state.headers_height)
+    [first_header, ..] -> {
+      // Get the expected prev_block hash (either last header's hash or genesis)
+      let expected_prev = get_expected_prev_hash(state)
+      case first_header.prev_block.hash.bytes == expected_prev.hash.bytes {
+        False -> {
+          let received = oni_bitcoin.block_hash_to_hex(first_header.prev_block)
+          let expected = oni_bitcoin.block_hash_to_hex(expected_prev)
+          io.println(
+            "[IBD] Chain break detected! First header prev_block doesn't match.\n"
+            <> "  Expected: " <> expected <> "\n"
+            <> "  Received: " <> received,
+          )
+          Error("Headers don't connect to our chain")
+        }
+        True -> {
+          // Now validate headers with chain continuity
+          validate_headers_loop(
+            headers,
+            state.headers_height,
+            get_last_header_bits(state),
+            state.config.network,
+            expected_prev,
+          )
+        }
+      }
+    }
+  }
+}
+
+/// Get the expected prev_block hash for the next header
+fn get_expected_prev_hash(state: IbdCoordinatorState) -> BlockHash {
+  case list.last(state.headers) {
+    Ok(last_header) -> {
+      // Hash the last header to get its block hash
+      let header_bytes = encode_header(last_header)
+      let hash = oni_bitcoin.sha256d(header_bytes)
+      oni_bitcoin.BlockHash(hash: oni_bitcoin.Hash256(bytes: hash))
+    }
+    Error(_) -> {
+      // No headers yet, expect genesis
+      state.genesis_hash
+    }
+  }
 }
 
 /// Get the nBits of the last validated header (or genesis)
@@ -811,52 +978,76 @@ fn get_genesis_bits(network: Network) -> Int {
   }
 }
 
-/// Validate headers one by one
+/// Validate headers one by one with chain continuity
 fn validate_headers_loop(
   headers: List(BlockHeaderNet),
   current_height: Int,
   last_bits: Int,
   network: Network,
+  expected_prev_hash: BlockHash,
 ) -> Result(Int, String) {
   case headers {
     [] -> Ok(current_height)
     [header, ..rest] -> {
       let new_height = current_height + 1
 
-      // 1. Verify PoW - hash must meet target
-      case verify_header_pow(header, network) {
-        False ->
-          Error(
-            "Header PoW verification failed at height "
-            <> int.to_string(new_height),
+      // 0. Verify chain continuity - prev_block must match expected hash
+      case header.prev_block.hash.bytes == expected_prev_hash.hash.bytes {
+        False -> {
+          let received = oni_bitcoin.block_hash_to_hex(header.prev_block)
+          let expected = oni_bitcoin.block_hash_to_hex(expected_prev_hash)
+          io.println(
+            "[IBD] Chain continuity error at height " <> int.to_string(new_height)
+            <> ":\n  Expected prev: " <> expected
+            <> "\n  Got prev: " <> received,
           )
+          Error(
+            "Chain continuity broken at height " <> int.to_string(new_height),
+          )
+        }
         True -> {
-          // 2. Check timestamp is not too far in future (2 hours)
-          let max_future_time = now_secs() + 7200
-          case header.timestamp > max_future_time {
-            True ->
+          // 1. Verify PoW - hash must meet target
+          case verify_header_pow(header, network) {
+            False ->
               Error(
-                "Header timestamp too far in future at height "
+                "Header PoW verification failed at height "
                 <> int.to_string(new_height),
               )
-            False -> {
-              // 3. Verify difficulty transition rules
-              case
-                verify_difficulty_transition(
-                  header.bits,
-                  last_bits,
-                  new_height,
-                  network,
-                )
-              {
-                False ->
+            True -> {
+              // 2. Check timestamp is not too far in future (2 hours)
+              let max_future_time = now_secs() + 7200
+              case header.timestamp > max_future_time {
+                True ->
                   Error(
-                    "Invalid difficulty transition at height "
+                    "Header timestamp too far in future at height "
                     <> int.to_string(new_height),
                   )
-                True -> {
-                  // Continue with next header
-                  validate_headers_loop(rest, new_height, header.bits, network)
+                False -> {
+                  // 3. Verify difficulty transition rules
+                  case
+                    verify_difficulty_transition(
+                      header.bits,
+                      last_bits,
+                      new_height,
+                      network,
+                    )
+                  {
+                    False ->
+                      Error(
+                        "Invalid difficulty transition at height "
+                        <> int.to_string(new_height),
+                      )
+                    True -> {
+                      // Compute this header's hash for next iteration
+                      let header_bytes = encode_header(header)
+                      let this_hash_bytes = oni_bitcoin.sha256d(header_bytes)
+                      let this_hash = oni_bitcoin.BlockHash(
+                        hash: oni_bitcoin.Hash256(bytes: this_hash_bytes),
+                      )
+                      // Continue with next header
+                      validate_headers_loop(rest, new_height, header.bits, network, this_hash)
+                    }
+                  }
                 }
               }
             }
