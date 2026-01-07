@@ -390,27 +390,27 @@ fn handle_block(
     <> int.to_string(peer_id),
   )
 
-  // Send to chainstate for validation and connection
-  // In a full implementation, this would go through a validation pipeline
-  process.send(
-    state.chainstate,
-    oni_supervisor.ConnectBlock(block, process.new_subject()),
-  )
-
-  // Notify sync coordinator
-  process.send(state.sync, oni_supervisor.OnBlock(block_hash))
-
-  // Notify IBD coordinator about received block
+  // IBD coordinator handles block connection in order
+  // Don't send to chainstate directly - IBD will do it when ready
   case state.ibd {
     Some(ibd) -> {
-      // Send block received notification - IBD will track height internally
+      // Send full block to IBD coordinator for buffering and ordered connection
       process.send(
         ibd,
-        ibd_coordinator.BlockReceived(block_hash, 0),
+        ibd_coordinator.BlockReceived(block_hash, block),
       )
     }
-    None -> Nil
+    None -> {
+      // Fallback: send directly to chainstate (for non-IBD operation)
+      process.send(
+        state.chainstate,
+        oni_supervisor.ConnectBlock(block, process.new_subject()),
+      )
+    }
   }
+
+  // Notify sync coordinator (for status tracking)
+  process.send(state.sync, oni_supervisor.OnBlock(block_hash))
 
   // Remove from pending
   let new_pending =

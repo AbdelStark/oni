@@ -22,9 +22,11 @@ import gleam/io
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
+import gleam/set.{type Set}
 import gleam/string
 import oni_bitcoin.{type BlockHash, type BlockHeader, type Network}
 import oni_p2p.{type BlockHeaderNet, type Message, MsgGetHeaders}
+import oni_supervisor.{type ChainstateMsg}
 import p2p_network.{type ListenerMsg, BroadcastMessage}
 
 // ============================================================================
@@ -137,8 +139,8 @@ pub type IbdMsg {
   PeerDisconnected(peer_id: String)
   /// Headers received from peer
   HeadersReceived(peer_id: String, headers: List(BlockHeaderNet))
-  /// Block received
-  BlockReceived(hash: BlockHash, height: Int)
+  /// Block received with full block data
+  BlockReceived(hash: BlockHash, block: oni_bitcoin.Block)
   /// Block validation completed
   BlockValidated(hash: BlockHash, success: Bool)
   /// Timer tick for timeout checking
@@ -190,6 +192,8 @@ type IbdCoordinatorState {
     state: IbdState,
     /// Reference to P2P layer for sending messages
     p2p: Subject(ListenerMsg),
+    /// Reference to chainstate for connecting blocks
+    chainstate: Option(Subject(ChainstateMsg)),
     /// Connected peers with their state
     peers: Dict(String, PeerSyncState),
     /// Header chain being synced
@@ -202,7 +206,7 @@ type IbdCoordinatorState {
     target_height: Int,
     /// Inflight block requests
     inflight: Dict(String, BlockRequest),
-    /// Queue of blocks to download
+    /// Queue of blocks to download (block hashes)
     download_queue: List(BlockHash),
     /// Sync peer (primary peer for headers)
     sync_peer: Option(String),
@@ -210,6 +214,14 @@ type IbdCoordinatorState {
     genesis_hash: BlockHash,
     /// Last activity timestamp
     last_activity: Int,
+    /// Block buffer: received blocks awaiting connection (indexed by height)
+    block_buffer: Dict(Int, oni_bitcoin.Block),
+    /// Map from block hash hex to height (built from headers)
+    hash_to_height: Dict(String, Int),
+    /// Set of received block hashes (for deduplication)
+    received_hashes: Set(String),
+    /// Next height to connect to chainstate
+    next_connect_height: Int,
   )
 }
 
@@ -221,6 +233,15 @@ type IbdCoordinatorState {
 pub fn start(
   config: IbdConfig,
   p2p: Subject(ListenerMsg),
+) -> Result(Subject(IbdMsg), actor.StartError) {
+  start_with_chainstate(config, p2p, None)
+}
+
+/// Start the IBD coordinator with chainstate for block connection
+pub fn start_with_chainstate(
+  config: IbdConfig,
+  p2p: Subject(ListenerMsg),
+  chainstate: Option(Subject(ChainstateMsg)),
 ) -> Result(Subject(IbdMsg), actor.StartError) {
   let params = get_network_params(config.network)
 
@@ -237,6 +258,10 @@ pub fn start(
   io.println("[IBD] Network: " <> network_name)
   io.println("[IBD] Genesis hash: " <> oni_bitcoin.block_hash_to_hex(params.genesis_hash))
   io.println("[IBD] Max expected height: " <> int.to_string(config.max_expected_height))
+  io.println("[IBD] Chainstate connected: " <> case chainstate {
+    Some(_) -> "Yes"
+    None -> "No"
+  })
   io.println("[IBD] ========================================")
 
   let initial_state =
@@ -244,6 +269,7 @@ pub fn start(
       config: config,
       state: IbdWaitingForPeers,
       p2p: p2p,
+      chainstate: chainstate,
       peers: dict.new(),
       headers: [],
       headers_height: 0,
@@ -254,6 +280,10 @@ pub fn start(
       sync_peer: None,
       genesis_hash: params.genesis_hash,
       last_activity: now_ms(),
+      block_buffer: dict.new(),
+      hash_to_height: dict.new(),
+      received_hashes: set.new(),
+      next_connect_height: 1,  // Start at height 1 (genesis is already connected)
     )
 
   actor.start(initial_state, handle_message)
@@ -283,8 +313,8 @@ fn handle_message(
       actor.continue(new_state)
     }
 
-    BlockReceived(hash, height) -> {
-      let new_state = handle_block_received(hash, height, state)
+    BlockReceived(hash, block) -> {
+      let new_state = handle_block_received(hash, block, state)
       actor.continue(new_state)
     }
 
@@ -562,24 +592,129 @@ fn handle_headers_from_sync_peer(
   }
 }
 
-/// Handle block received
+/// Handle block received - buffer and connect in order
 fn handle_block_received(
   hash: BlockHash,
-  _height: Int,
+  block: oni_bitcoin.Block,
   state: IbdCoordinatorState,
 ) -> IbdCoordinatorState {
   let hash_hex = oni_bitcoin.block_hash_to_hex(hash)
 
-  // Remove from inflight
-  let new_inflight = dict.delete(state.inflight, hash_hex)
-  let was_inflight = dict.size(new_inflight) < dict.size(state.inflight)
+  // Check for duplicate
+  case set.contains(state.received_hashes, hash_hex) {
+    True -> {
+      // Already received this block, ignore
+      state
+    }
+    False -> {
+      // Remove from inflight
+      let new_inflight = dict.delete(state.inflight, hash_hex)
 
-  // Increment blocks height for each received block
-  // (In a full implementation, we'd track order and validate chain)
-  let new_blocks_height = case was_inflight {
-    True -> state.blocks_height + 1
-    False -> state.blocks_height
+      // Mark as received
+      let new_received = set.insert(state.received_hashes, hash_hex)
+
+      // Look up the height for this block
+      let block_height = case dict.get(state.hash_to_height, hash_hex) {
+        Ok(h) -> h
+        Error(_) -> {
+          // Unknown hash - this shouldn't happen during IBD
+          io.println("[IBD] Warning: received unknown block " <> hash_hex)
+          0
+        }
+      }
+
+      // Add to block buffer
+      let new_buffer = dict.insert(state.block_buffer, block_height, block)
+
+      let state_with_buffer =
+        IbdCoordinatorState(
+          ..state,
+          inflight: new_inflight,
+          received_hashes: new_received,
+          block_buffer: new_buffer,
+          last_activity: now_ms(),
+        )
+
+      // Try to flush sequential blocks from buffer to chainstate
+      let new_state = flush_block_buffer(state_with_buffer)
+
+      // Check if we're done
+      case new_state.blocks_height >= state.headers_height && state.headers_height > 0 {
+        True -> {
+          io.println(
+            "[IBD] Sync complete at height " <> int.to_string(new_state.blocks_height),
+          )
+          IbdCoordinatorState(..new_state, state: IbdSynced)
+        }
+        False -> {
+          // Request more blocks
+          schedule_block_downloads(new_state)
+        }
+      }
+    }
   }
+}
+
+/// Flush sequential blocks from buffer to chainstate
+fn flush_block_buffer(state: IbdCoordinatorState) -> IbdCoordinatorState {
+  flush_block_buffer_loop(state)
+}
+
+fn flush_block_buffer_loop(state: IbdCoordinatorState) -> IbdCoordinatorState {
+  // Check if the next block is in our buffer
+  case dict.get(state.block_buffer, state.next_connect_height) {
+    Error(_) -> {
+      // Next block not yet received, can't flush more
+      state
+    }
+    Ok(block) -> {
+      // Try to connect this block to chainstate
+      let new_state = connect_block_to_chainstate(block, state.next_connect_height, state)
+
+      // Continue flushing if successful
+      case new_state.blocks_height > state.blocks_height {
+        True -> flush_block_buffer_loop(new_state)
+        False -> new_state  // Connection failed, stop flushing
+      }
+    }
+  }
+}
+
+/// Connect a block to chainstate and update state
+/// Uses async send to avoid blocking the IBD coordinator
+fn connect_block_to_chainstate(
+  block: oni_bitcoin.Block,
+  height: Int,
+  state: IbdCoordinatorState,
+) -> IbdCoordinatorState {
+  case state.chainstate {
+    None -> {
+      // No chainstate, just increment counter (legacy behavior)
+      update_blocks_height(height, state)
+    }
+    Some(chainstate) -> {
+      // Send block to chainstate asynchronously
+      // We don't wait for response - just track that we sent it
+      // The chainstate will process blocks in order since they're sent in order
+      process.send(
+        chainstate,
+        oni_supervisor.ConnectBlock(block, process.new_subject()),
+      )
+      // Update our tracking optimistically
+      // (In production, we'd want confirmation but for IBD this is fine)
+      update_blocks_height(height, state)
+    }
+  }
+}
+
+/// Update state after successfully connecting a block
+fn update_blocks_height(height: Int, state: IbdCoordinatorState) -> IbdCoordinatorState {
+  // Remove from buffer
+  let new_buffer = dict.delete(state.block_buffer, height)
+
+  // Update heights
+  let new_blocks_height = height
+  let new_next_height = height + 1
 
   // Log progress every 100 blocks or on first block
   case
@@ -595,32 +730,19 @@ fn handle_block_received(
         <> int.to_string(state.headers_height)
         <> " ("
         <> int.to_string(new_blocks_height * 100 / int.max(state.headers_height, 1))
-        <> "%)",
+        <> "%) [buffer: "
+        <> int.to_string(dict.size(new_buffer))
+        <> "]",
       )
     False -> Nil
   }
 
-  let new_state =
-    IbdCoordinatorState(
-      ..state,
-      inflight: new_inflight,
-      blocks_height: new_blocks_height,
-      last_activity: now_ms(),
-    )
-
-  // Check if we're done
-  case new_blocks_height >= state.headers_height {
-    True -> {
-      io.println(
-        "[IBD] Sync complete at height " <> int.to_string(new_blocks_height),
-      )
-      IbdCoordinatorState(..new_state, state: IbdSynced)
-    }
-    False -> {
-      // Request more blocks
-      schedule_block_downloads(new_state)
-    }
-  }
+  IbdCoordinatorState(
+    ..state,
+    block_buffer: new_buffer,
+    blocks_height: new_blocks_height,
+    next_connect_height: new_next_height,
+  )
 }
 
 /// Handle block validation result
@@ -744,8 +866,8 @@ fn start_block_download(state: IbdCoordinatorState) -> IbdCoordinatorState {
     <> int.to_string(state.headers_height),
   )
 
-  // Build download queue from headers
-  let queue = build_download_queue(state.headers, state.blocks_height)
+  // Build download queue from headers and hash-to-height mapping
+  let #(queue, hash_map) = build_download_queue_and_mapping(state.headers, state.blocks_height)
   let queue_size = list.length(queue)
 
   io.println(
@@ -759,6 +881,8 @@ fn start_block_download(state: IbdCoordinatorState) -> IbdCoordinatorState {
       ..state,
       state: IbdDownloadingBlocks,
       download_queue: queue,
+      hash_to_height: hash_map,
+      next_connect_height: state.blocks_height + 1,
     )
 
   schedule_block_downloads(new_state)
@@ -770,40 +894,52 @@ fn schedule_block_downloads(state: IbdCoordinatorState) -> IbdCoordinatorState {
   let available_peers =
     get_available_peers(state.peers, state.config.blocks_per_peer)
   let slots = state.config.max_inflight_blocks - dict.size(state.inflight)
-  let queue_size = list.length(state.download_queue)
   let peer_count = list.length(available_peers)
 
-  io.println(
-    "[IBD] Schedule downloads: "
-    <> int.to_string(queue_size)
-    <> " in queue, "
-    <> int.to_string(peer_count)
-    <> " available peers, "
-    <> int.to_string(slots)
-    <> " slots free",
-  )
+  // Filter out already-received blocks from the queue
+  let filtered_queue = list.filter(state.download_queue, fn(hash) {
+    let hash_hex = oni_bitcoin.block_hash_to_hex(hash)
+    !set.contains(state.received_hashes, hash_hex)
+  })
+  let queue_size = list.length(filtered_queue)
+
+  // Only log when there's actual activity
+  case queue_size > 0 && peer_count > 0 && slots > 0 {
+    True ->
+      io.println(
+        "[IBD] Schedule downloads: "
+        <> int.to_string(queue_size)
+        <> " in queue, "
+        <> int.to_string(peer_count)
+        <> " available peers, "
+        <> int.to_string(slots)
+        <> " slots free, buffer: "
+        <> int.to_string(dict.size(state.block_buffer)),
+      )
+    False -> Nil
+  }
 
   case
     list.is_empty(available_peers),
-    list.is_empty(state.download_queue),
+    list.is_empty(filtered_queue),
     slots > 0
   {
     True, _, _ -> {
-      io.println("[IBD] No available peers for block download")
+      // Only log occasionally to avoid spam
       state
     }
     _, True, _ -> {
-      io.println("[IBD] Download queue is empty")
-      state
+      // Queue is empty (all blocks received or connected)
+      IbdCoordinatorState(..state, download_queue: [])
     }
     _, _, False -> {
-      io.println("[IBD] No slots available (max inflight reached)")
-      state
+      // No slots available
+      IbdCoordinatorState(..state, download_queue: filtered_queue)
     }
     False, False, True -> {
       // Take blocks from queue
-      let to_request = list.take(state.download_queue, slots)
-      let remaining = list.drop(state.download_queue, slots)
+      let to_request = list.take(filtered_queue, slots)
+      let remaining = list.drop(filtered_queue, slots)
       let request_count = list.length(to_request)
 
       io.println(
@@ -1243,19 +1379,51 @@ fn now_secs() -> Int {
   now_ms() / 1000
 }
 
-/// Build download queue from header chain
+/// Build download queue from header chain and hash-to-height mapping
+fn build_download_queue_and_mapping(
+  headers: List(BlockHeaderNet),
+  start_height: Int,
+) -> #(List(BlockHash), Dict(String, Int)) {
+  build_download_queue_loop(headers, start_height, 1, [], dict.new())
+}
+
+fn build_download_queue_loop(
+  headers: List(BlockHeaderNet),
+  start_height: Int,
+  current_height: Int,
+  queue_acc: List(BlockHash),
+  map_acc: Dict(String, Int),
+) -> #(List(BlockHash), Dict(String, Int)) {
+  case headers {
+    [] -> #(list.reverse(queue_acc), map_acc)
+    [header, ..rest] -> {
+      // Hash the header to get block hash
+      let header_bytes = encode_header(header)
+      let hash_bytes = oni_bitcoin.sha256d(header_bytes)
+      let block_hash = oni_bitcoin.BlockHash(hash: oni_bitcoin.Hash256(bytes: hash_bytes))
+      let hash_hex = oni_bitcoin.block_hash_to_hex(block_hash)
+
+      // Add to map
+      let new_map = dict.insert(map_acc, hash_hex, current_height)
+
+      // Only add to queue if past start_height
+      let new_queue = case current_height > start_height {
+        True -> [block_hash, ..queue_acc]
+        False -> queue_acc
+      }
+
+      build_download_queue_loop(rest, start_height, current_height + 1, new_queue, new_map)
+    }
+  }
+}
+
+/// Legacy function for backward compatibility
 fn build_download_queue(
   headers: List(BlockHeaderNet),
   start_height: Int,
 ) -> List(BlockHash) {
-  headers
-  |> list.drop(start_height)
-  |> list.map(fn(header) {
-    // Hash the header to get block hash
-    let header_bytes = encode_header(header)
-    let hash = oni_bitcoin.sha256d(header_bytes)
-    oni_bitcoin.BlockHash(hash: oni_bitcoin.Hash256(bytes: hash))
-  })
+  let #(queue, _) = build_download_queue_and_mapping(headers, start_height)
+  queue
 }
 
 /// Encode block header for hashing

@@ -236,7 +236,8 @@ pub fn start_with_config(config: NodeConfig) -> Result(NodeState, String) {
   let ibd_handle = case #(p2p_listener, event_router_handle) {
     #(Some(listener), Some(router)) -> {
       let ibd_config = ibd_coordinator.default_config(config.network)
-      case ibd_coordinator.start(ibd_config, listener) {
+      // Start IBD with chainstate for block connection
+      case ibd_coordinator.start_with_chainstate(ibd_config, listener, Some(chainstate)) {
         Ok(ibd) -> {
           io.println("  ✓ IBD coordinator started")
           // Connect IBD coordinator to event router for peer events
