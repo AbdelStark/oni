@@ -14,6 +14,7 @@ import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
 import gleam/result
+import ibd_coordinator.{type IbdMsg}
 import oni_bitcoin
 import oni_supervisor
 import regtest_miner
@@ -415,14 +416,25 @@ fn convert_template_data(
 
 /// State for sync adapter
 type SyncAdapterState {
-  SyncAdapterState(target: Subject(oni_supervisor.SyncMsg))
+  SyncAdapterState(
+    target: Subject(oni_supervisor.SyncMsg),
+    ibd: Option(Subject(IbdMsg)),
+  )
 }
 
 /// Start an adapter that translates RPC sync queries to supervisor messages
 pub fn start_sync_adapter(
   sync: Subject(oni_supervisor.SyncMsg),
 ) -> Result(Subject(SyncQuery), actor.StartError) {
-  actor.start(SyncAdapterState(target: sync), handle_sync_query)
+  actor.start(SyncAdapterState(target: sync, ibd: None), handle_sync_query)
+}
+
+/// Start sync adapter with IBD coordinator for accurate sync status
+pub fn start_sync_adapter_with_ibd(
+  sync: Subject(oni_supervisor.SyncMsg),
+  ibd: Subject(IbdMsg),
+) -> Result(Subject(SyncQuery), actor.StartError) {
+  actor.start(SyncAdapterState(target: sync, ibd: Some(ibd)), handle_sync_query)
 }
 
 fn handle_sync_query(
@@ -431,15 +443,40 @@ fn handle_sync_query(
 ) -> actor.Next(SyncQuery, SyncAdapterState) {
   case msg {
     QuerySyncState(reply) -> {
-      let status = process.call(state.target, oni_supervisor.GetStatus, 5000)
-      let is_syncing = status.state != "idle"
-      let result =
-        SyncState(
-          state: status.state,
-          headers_height: status.headers_height,
-          blocks_height: status.blocks_height,
-          is_syncing: is_syncing,
-        )
+      // Prefer IBD coordinator status (validated) over oni_supervisor (unvalidated)
+      let result = case state.ibd {
+        Some(ibd) -> {
+          let ibd_status = process.call(ibd, ibd_coordinator.GetStatus, 5000)
+          let state_str = case ibd_status.state {
+            ibd_coordinator.IbdWaitingForPeers -> "waiting_for_peers"
+            ibd_coordinator.IbdSyncingHeaders -> "syncing_headers"
+            ibd_coordinator.IbdDownloadingBlocks -> "downloading_blocks"
+            ibd_coordinator.IbdSynced -> "synced"
+            ibd_coordinator.IbdError(_) -> "error"
+          }
+          let is_syncing = case ibd_status.state {
+            ibd_coordinator.IbdSyncingHeaders | ibd_coordinator.IbdDownloadingBlocks -> True
+            _ -> False
+          }
+          SyncState(
+            state: state_str,
+            headers_height: ibd_status.headers_height,
+            blocks_height: ibd_status.blocks_height,
+            is_syncing: is_syncing,
+          )
+        }
+        None -> {
+          // Fallback to oni_supervisor (legacy, unvalidated)
+          let status = process.call(state.target, oni_supervisor.GetStatus, 5000)
+          let is_syncing = status.state != "idle"
+          SyncState(
+            state: status.state,
+            headers_height: status.headers_height,
+            blocks_height: status.blocks_height,
+            is_syncing: is_syncing,
+          )
+        }
+      }
       process.send(reply, result)
       actor.continue(state)
     }
@@ -463,6 +500,14 @@ pub type RpcNodeHandles {
 pub fn create_rpc_handles(
   handles: oni_supervisor.NodeHandles,
 ) -> Result(RpcNodeHandles, actor.StartError) {
+  create_rpc_handles_with_ibd(handles, None)
+}
+
+/// Create RPC-compatible handles with IBD coordinator for accurate sync status
+pub fn create_rpc_handles_with_ibd(
+  handles: oni_supervisor.NodeHandles,
+  ibd: Option(Subject(IbdMsg)),
+) -> Result(RpcNodeHandles, actor.StartError) {
   // Start adapter actors
   case start_chainstate_adapter(handles.chainstate) {
     Error(e) -> Error(e)
@@ -470,7 +515,12 @@ pub fn create_rpc_handles(
       case start_mempool_adapter(handles.mempool) {
         Error(e) -> Error(e)
         Ok(mempool_adapter) -> {
-          case start_sync_adapter(handles.sync) {
+          // Use IBD-aware sync adapter if IBD handle is available
+          let sync_result = case ibd {
+            Some(ibd_handle) -> start_sync_adapter_with_ibd(handles.sync, ibd_handle)
+            None -> start_sync_adapter(handles.sync)
+          }
+          case sync_result {
             Error(e) -> Error(e)
             Ok(sync_adapter) -> {
               Ok(RpcNodeHandles(

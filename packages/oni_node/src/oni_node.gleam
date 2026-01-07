@@ -209,29 +209,7 @@ pub fn start_with_config(config: NodeConfig) -> Result(NodeState, String) {
       sync: sync,
     )
 
-  // Start RPC adapters and server if enabled
-  let #(rpc_handles, rpc_server) = case config.enable_rpc {
-    True -> {
-      case start_rpc_server(config, node_handles) {
-        Ok(#(handles, server)) -> {
-          io.println(
-            "  ✓ RPC server started on "
-            <> config.rpc_bind
-            <> ":"
-            <> int.to_string(config.rpc_port),
-          )
-          #(Some(handles), Some(server))
-        }
-        Error(err) -> {
-          io.println("  ✗ RPC server failed: " <> err)
-          #(None, None)
-        }
-      }
-    }
-    False -> #(None, None)
-  }
-
-  // Start P2P listener and event router if enabled
+  // Start P2P listener and event router if enabled (before RPC so IBD can be wired)
   let #(event_router_handle, p2p_listener) = case config.enable_p2p {
     True -> {
       case start_p2p_with_router(config, chainstate, mempool, sync) {
@@ -277,6 +255,28 @@ pub fn start_with_config(config: NodeConfig) -> Result(NodeState, String) {
       None
     }
     #(None, _) -> None
+  }
+
+  // Start RPC adapters and server AFTER IBD coordinator so we can use validated sync status
+  let #(rpc_handles, rpc_server) = case config.enable_rpc {
+    True -> {
+      case start_rpc_server_with_ibd(config, node_handles, ibd_handle) {
+        Ok(#(handles, server)) -> {
+          io.println(
+            "  ✓ RPC server started on "
+            <> config.rpc_bind
+            <> ":"
+            <> int.to_string(config.rpc_port),
+          )
+          #(Some(handles), Some(server))
+        }
+        Error(err) -> {
+          io.println("  ✗ RPC server failed: " <> err)
+          #(None, None)
+        }
+      }
+    }
+    False -> #(None, None)
   }
 
   // Discover and connect to peers via DNS seeds
@@ -325,14 +325,15 @@ pub fn start_with_config(config: NodeConfig) -> Result(NodeState, String) {
   ))
 }
 
-/// Start the RPC server with adapters
-fn start_rpc_server(
+/// Start the RPC server with adapters and optional IBD coordinator
+fn start_rpc_server_with_ibd(
   config: NodeConfig,
   handles: oni_supervisor.NodeHandles,
+  ibd: Option(Subject(IbdMsg)),
 ) -> Result(#(RpcNodeHandles, Subject(ServerMsg)), String) {
-  // Create RPC adapter handles
+  // Create RPC adapter handles with IBD coordinator for accurate sync status
   use rpc_handles <- result.try(
-    node_rpc.create_rpc_handles(handles)
+    node_rpc.create_rpc_handles_with_ibd(handles, ibd)
     |> result.map_error(fn(_) { "Failed to create RPC adapters" }),
   )
 

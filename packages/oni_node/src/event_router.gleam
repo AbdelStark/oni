@@ -348,11 +348,10 @@ fn handle_headers(
     <> int.to_string(peer_id),
   )
 
-  // Notify sync coordinator
-  process.send(
-    state.sync,
-    oni_supervisor.OnHeaders(int.to_string(peer_id), header_count),
-  )
+  // NOTE: We do NOT notify oni_supervisor.OnHeaders here anymore!
+  // The old code blindly added header counts without validation,
+  // causing headers_height to inflate beyond actual chain height.
+  // Headers are now validated by IBD coordinator before being counted.
 
   // Forward headers to IBD coordinator for validation
   case state.ibd {

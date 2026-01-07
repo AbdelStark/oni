@@ -22,6 +22,7 @@ import gleam/io
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
+import gleam/string
 import oni_bitcoin.{type BlockHash, type BlockHeader, type Network}
 import oni_p2p.{type BlockHeaderNet, type Message, MsgGetHeaders}
 import p2p_network.{type ListenerMsg, BroadcastMessage}
@@ -222,6 +223,21 @@ pub fn start(
   p2p: Subject(ListenerMsg),
 ) -> Result(Subject(IbdMsg), actor.StartError) {
   let params = get_network_params(config.network)
+
+  // DEBUG: Log network configuration at startup
+  let network_name = case config.network {
+    oni_bitcoin.Mainnet -> "Mainnet"
+    oni_bitcoin.Testnet -> "Testnet3"
+    oni_bitcoin.Testnet4 -> "Testnet4"
+    oni_bitcoin.Signet -> "Signet"
+    oni_bitcoin.Regtest -> "Regtest"
+  }
+  io.println("[IBD] ========================================")
+  io.println("[IBD] Starting IBD coordinator")
+  io.println("[IBD] Network: " <> network_name)
+  io.println("[IBD] Genesis hash: " <> oni_bitcoin.block_hash_to_hex(params.genesis_hash))
+  io.println("[IBD] Max expected height: " <> int.to_string(config.max_expected_height))
+  io.println("[IBD] ========================================")
 
   let initial_state =
     IbdCoordinatorState(
@@ -922,6 +938,19 @@ fn validate_headers(
     [first_header, ..] -> {
       // Get the expected prev_block hash (either last header's hash or genesis)
       let expected_prev = get_expected_prev_hash(state)
+
+      // DEBUG: Log the comparison for first batch
+      case state.headers_height {
+        0 -> {
+          io.println("[IBD] DEBUG: Validating FIRST batch of headers")
+          io.println("[IBD] DEBUG: Expected prev_block (genesis): " <> oni_bitcoin.block_hash_to_hex(expected_prev))
+          io.println("[IBD] DEBUG: First header's prev_block:     " <> oni_bitcoin.block_hash_to_hex(first_header.prev_block))
+          io.println("[IBD] DEBUG: Expected bytes: " <> bytes_to_hex_debug(expected_prev.hash.bytes))
+          io.println("[IBD] DEBUG: Received bytes: " <> bytes_to_hex_debug(first_header.prev_block.hash.bytes))
+        }
+        _ -> Nil
+      }
+
       case first_header.prev_block.hash.bytes == expected_prev.hash.bytes {
         False -> {
           let received = oni_bitcoin.block_hash_to_hex(first_header.prev_block)
@@ -934,6 +963,7 @@ fn validate_headers(
           Error("Headers don't connect to our chain")
         }
         True -> {
+          io.println("[IBD] DEBUG: Chain continuity check PASSED")
           // Now validate headers with chain continuity
           validate_headers_loop(
             headers,
@@ -946,6 +976,13 @@ fn validate_headers(
       }
     }
   }
+}
+
+/// Debug helper to show raw bytes
+fn bytes_to_hex_debug(bytes: BitArray) -> String {
+  bytes
+  |> bit_array.base16_encode()
+  |> string.lowercase()
 }
 
 /// Get the expected prev_block hash for the next header
