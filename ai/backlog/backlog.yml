@@ -483,3 +483,30 @@
     - "Signature verification throughput measured"
   tests:
     - "bench"
+
+- id: N2
+  title: "Operational readiness drills"
+  subsystem: ops
+  status: pending
+  depends_on: [M1]
+  description: >
+    Run soak tests and failure drills with metrics/alerts to validate
+    operational response.
+  acceptance:
+    - "24h soak test completed with stable resource usage"
+    - "Alert playbook validated for crash loop and stalled IBD"
+  tests:
+    - "soak"
+
+- id: N3
+  title: "Release checklist and rollback verification"
+  subsystem: ops
+  status: pending
+  depends_on: [N2]
+  description: >
+    Publish a release checklist and verify rollback steps in staging.
+  acceptance:
+    - "Checklist covers build, SBOM, upgrade, rollback"
+    - "Rollback steps verified in staging environment"
+  tests:
+    - "integration"

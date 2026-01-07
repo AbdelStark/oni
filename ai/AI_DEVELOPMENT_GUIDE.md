@@ -22,7 +22,18 @@ This guide is for using AI tools effectively on oni.
 5. Add telemetry if runtime-visible.
 6. Run `make ci`.
 
-## 3. Task sizing rules
+## 3. Change declaration (required)
+
+Every change must declare:
+- impacted subsystem(s)
+- consensus impact (yes/no)
+- test additions
+- documentation updates (if any)
+
+If the change spans multiple subsystems, add a short ADR in `docs/adr/`
+that captures the decision and tradeoffs before implementation.
+
+## 4. Task sizing rules
 
 Good AI tasks:
 - implement a single message codec + tests
@@ -37,7 +48,7 @@ Bad AI tasks (too large):
 
 Break large tasks into 1–3 day equivalent chunks (no time estimates in tickets; just scope).
 
-## 4. Documentation standards
+## 5. Documentation standards
 
 Every module should answer:
 - What does it do?
@@ -45,7 +56,7 @@ Every module should answer:
 - What errors can it return and why?
 - What is the test coverage strategy?
 
-## 5. Debuggability requirements
+## 6. Debuggability requirements
 
 Any new subsystem must:
 - emit structured logs for lifecycle events
