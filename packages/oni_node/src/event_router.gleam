@@ -358,7 +358,7 @@ fn handle_headers(
     Some(ibd) -> {
       process.send(
         ibd,
-        ibd_coordinator.HeadersReceived(int.to_string(peer_id), headers),
+        ibd_coordinator.HeadersReceived(peer_id, headers),
       )
     }
     None -> Nil
@@ -619,10 +619,7 @@ fn handle_peer_connected(
       )
       process.send(
         ibd,
-        ibd_coordinator.PeerConnected(
-          int.to_string(peer_id),
-          version.start_height,
-        ),
+        ibd_coordinator.PeerConnected(peer_id, version.start_height),
       )
     }
     None -> Nil
@@ -654,10 +651,7 @@ fn handle_peer_disconnected(
   // Notify IBD coordinator
   case state.ibd {
     Some(ibd) -> {
-      process.send(
-        ibd,
-        ibd_coordinator.PeerDisconnected(int.to_string(peer_id)),
-      )
+      process.send(ibd, ibd_coordinator.PeerDisconnected(peer_id))
     }
     None -> Nil
   }

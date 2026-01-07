@@ -196,6 +196,10 @@ pub type ListenerMsg {
   GetPeerCount(reply_to: Subject(Int))
   /// Broadcast message to all peers
   BroadcastMessage(message: Message)
+  /// Send message to specific peer
+  SendToPeer(peer_id: Int, message: Message)
+  /// Get list of connected peer IDs
+  GetPeerIds(reply_to: Subject(List(Int)))
 }
 
 // ============================================================================
@@ -474,6 +478,24 @@ fn handle_listener_message(
         io.println("[P2P] Sending to peer " <> int.to_string(peer_id))
         process.send(peer_subject, SendMessage(message))
       })
+      actor.continue(state)
+    }
+
+    SendToPeer(peer_id, message) -> {
+      case dict.get(state.peers, peer_id) {
+        Ok(peer_subject) -> {
+          process.send(peer_subject, SendMessage(message))
+        }
+        Error(_) -> {
+          // Peer not found, ignore silently
+          Nil
+        }
+      }
+      actor.continue(state)
+    }
+
+    GetPeerIds(reply_to) -> {
+      process.send(reply_to, dict.keys(state.peers))
       actor.continue(state)
     }
   }
@@ -915,6 +937,20 @@ pub fn get_peer_count(listener: Subject(ListenerMsg), timeout: Int) -> Int {
 /// Broadcast message to all peers
 pub fn broadcast(listener: Subject(ListenerMsg), message: Message) -> Nil {
   process.send(listener, BroadcastMessage(message))
+}
+
+/// Send message to a specific peer
+pub fn send_to_peer(
+  listener: Subject(ListenerMsg),
+  peer_id: Int,
+  message: Message,
+) -> Nil {
+  process.send(listener, SendToPeer(peer_id, message))
+}
+
+/// Get list of connected peer IDs
+pub fn get_peer_ids(listener: Subject(ListenerMsg), timeout: Int) -> List(Int) {
+  process.call(listener, GetPeerIds, timeout)
 }
 
 // ============================================================================

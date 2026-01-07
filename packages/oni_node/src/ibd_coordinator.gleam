@@ -27,7 +27,7 @@ import gleam/string
 import oni_bitcoin.{type BlockHash, type BlockHeader, type Network}
 import oni_p2p.{type BlockHeaderNet, type Message, MsgGetHeaders}
 import oni_supervisor.{type ChainstateMsg}
-import p2p_network.{type ListenerMsg, BroadcastMessage}
+import p2p_network.{type ListenerMsg, BroadcastMessage, SendToPeer}
 
 // ============================================================================
 // Configuration
@@ -104,7 +104,7 @@ pub type IbdState {
 /// Peer sync state
 pub type PeerSyncState {
   PeerSyncState(
-    peer_id: String,
+    peer_id: Int,
     height: Int,
     last_request: Int,
     inflight_blocks: Int,
@@ -114,7 +114,7 @@ pub type PeerSyncState {
 
 /// Block download request
 pub type BlockRequest {
-  BlockRequest(hash: BlockHash, height: Int, peer_id: String, requested_at: Int)
+  BlockRequest(hash: BlockHash, height: Int, peer_id: Int, requested_at: Int)
 }
 
 /// Header chain segment (for validation)
@@ -133,12 +133,12 @@ pub type HeaderChain {
 
 /// Messages for the IBD coordinator
 pub type IbdMsg {
-  /// Peer connected with version info
-  PeerConnected(peer_id: String, height: Int)
+  /// Peer connected with version info (peer_id is Int from P2P layer)
+  PeerConnected(peer_id: Int, height: Int)
   /// Peer disconnected
-  PeerDisconnected(peer_id: String)
+  PeerDisconnected(peer_id: Int)
   /// Headers received from peer
-  HeadersReceived(peer_id: String, headers: List(BlockHeaderNet))
+  HeadersReceived(peer_id: Int, headers: List(BlockHeaderNet))
   /// Block received with full block data
   BlockReceived(hash: BlockHash, block: oni_bitcoin.Block)
   /// Block validation completed
@@ -194,8 +194,8 @@ type IbdCoordinatorState {
     p2p: Subject(ListenerMsg),
     /// Reference to chainstate for connecting blocks
     chainstate: Option(Subject(ChainstateMsg)),
-    /// Connected peers with their state
-    peers: Dict(String, PeerSyncState),
+    /// Connected peers with their state (keyed by peer_id Int)
+    peers: Dict(Int, PeerSyncState),
     /// Header chain being synced
     headers: List(BlockHeaderNet),
     /// Current headers height (validated)
@@ -204,12 +204,12 @@ type IbdCoordinatorState {
     blocks_height: Int,
     /// Target height (from best peer)
     target_height: Int,
-    /// Inflight block requests
+    /// Inflight block requests (keyed by block hash hex)
     inflight: Dict(String, BlockRequest),
     /// Queue of blocks to download (block hashes)
     download_queue: List(BlockHash),
-    /// Sync peer (primary peer for headers)
-    sync_peer: Option(String),
+    /// Sync peer ID (primary peer for headers)
+    sync_peer: Option(Int),
     /// Genesis hash for the network
     genesis_hash: BlockHash,
     /// Last activity timestamp
@@ -222,6 +222,8 @@ type IbdCoordinatorState {
     received_hashes: Set(String),
     /// Next height to connect to chainstate
     next_connect_height: Int,
+    /// Round-robin peer index for distributing block requests
+    next_peer_index: Int,
   )
 }
 
@@ -284,6 +286,7 @@ pub fn start_with_chainstate(
       hash_to_height: dict.new(),
       received_hashes: set.new(),
       next_connect_height: 1,  // Start at height 1 (genesis is already connected)
+      next_peer_index: 0,
     )
 
   actor.start(initial_state, handle_message)
@@ -358,14 +361,14 @@ fn handle_message(
 
 /// Handle peer connection
 fn handle_peer_connected(
-  peer_id: String,
+  peer_id: Int,
   height: Int,
   state: IbdCoordinatorState,
 ) -> IbdCoordinatorState {
   // Always log peer connections during sync
   io.println(
     "[IBD] Peer "
-    <> peer_id
+    <> int.to_string(peer_id)
     <> " connected at height "
     <> int.to_string(height)
     <> " (total peers: "
@@ -442,11 +445,11 @@ fn ibd_state_to_string(state: IbdState) -> String {
 
 /// Handle peer disconnection
 fn handle_peer_disconnected(
-  peer_id: String,
+  peer_id: Int,
   state: IbdCoordinatorState,
 ) -> IbdCoordinatorState {
   case state.config.debug {
-    True -> io.println("[IBD] Peer " <> peer_id <> " disconnected")
+    True -> io.println("[IBD] Peer " <> int.to_string(peer_id) <> " disconnected")
     False -> Nil
   }
 
@@ -487,7 +490,7 @@ fn handle_peer_disconnected(
 
 /// Handle headers received
 fn handle_headers_received(
-  peer_id: String,
+  peer_id: Int,
   headers: List(BlockHeaderNet),
   state: IbdCoordinatorState,
 ) -> IbdCoordinatorState {
@@ -505,7 +508,7 @@ fn handle_headers_received(
 
 /// Process headers from the sync peer
 fn handle_headers_from_sync_peer(
-  peer_id: String,
+  peer_id: Int,
   headers: List(BlockHeaderNet),
   state: IbdCoordinatorState,
 ) -> IbdCoordinatorState {
@@ -515,7 +518,7 @@ fn handle_headers_from_sync_peer(
     "[IBD] Received "
     <> int.to_string(header_count)
     <> " headers from sync peer "
-    <> peer_id
+    <> int.to_string(peer_id)
     <> " (current height: "
     <> int.to_string(state.headers_height)
     <> ")",
@@ -820,7 +823,7 @@ fn start_headers_sync(state: IbdCoordinatorState) -> IbdCoordinatorState {
       state
     }
     Some(peer_id) -> {
-      io.println("[IBD] Selected sync peer: " <> peer_id)
+      io.println("[IBD] Selected sync peer: " <> int.to_string(peer_id))
 
       // Send getheaders request
       // Use null hash (all zeros) as stop_hash to get all headers up to peer's tip
@@ -889,11 +892,13 @@ fn start_block_download(state: IbdCoordinatorState) -> IbdCoordinatorState {
 }
 
 /// Schedule block downloads to available peers
+/// Uses round-robin distribution to spread blocks across peers
 fn schedule_block_downloads(state: IbdCoordinatorState) -> IbdCoordinatorState {
-  // Find available peers
+  // Find available peers with slots
   let available_peers =
     get_available_peers(state.peers, state.config.blocks_per_peer)
-  let slots = state.config.max_inflight_blocks - dict.size(state.inflight)
+  let total_inflight = dict.size(state.inflight)
+  let slots = state.config.max_inflight_blocks - total_inflight
   let peer_count = list.length(available_peers)
 
   // Filter out already-received blocks from the queue
@@ -911,9 +916,9 @@ fn schedule_block_downloads(state: IbdCoordinatorState) -> IbdCoordinatorState {
         <> int.to_string(queue_size)
         <> " in queue, "
         <> int.to_string(peer_count)
-        <> " available peers, "
+        <> " peers, "
         <> int.to_string(slots)
-        <> " slots free, buffer: "
+        <> " slots, buffer: "
         <> int.to_string(dict.size(state.block_buffer)),
       )
     False -> Nil
@@ -925,7 +930,7 @@ fn schedule_block_downloads(state: IbdCoordinatorState) -> IbdCoordinatorState {
     slots > 0
   {
     True, _, _ -> {
-      // Only log occasionally to avoid spam
+      // No available peers
       state
     }
     _, True, _ -> {
@@ -937,31 +942,242 @@ fn schedule_block_downloads(state: IbdCoordinatorState) -> IbdCoordinatorState {
       IbdCoordinatorState(..state, download_queue: filtered_queue)
     }
     False, False, True -> {
-      // Take blocks from queue
-      let to_request = list.take(filtered_queue, slots)
-      let remaining = list.drop(filtered_queue, slots)
-      let request_count = list.length(to_request)
+      // Distribute blocks across peers using round-robin
+      let #(assignments, new_next_peer_index, new_peers, remaining_queue) =
+        distribute_blocks_to_peers(
+          filtered_queue,
+          available_peers,
+          state.peers,
+          state.config.blocks_per_peer,
+          slots,
+          state.next_peer_index,
+        )
 
-      io.println(
-        "[IBD] Requesting "
-        <> int.to_string(request_count)
-        <> " blocks from peers",
-      )
+      // Send getdata to each peer with their assigned blocks
+      send_block_requests(assignments, state.p2p)
 
-      // Create getdata messages
-      let _ = request_blocks_from_peers(to_request, available_peers, state.p2p)
+      // Track inflight requests with peer assignments
+      let new_inflight = add_inflight_with_peers(assignments, state.inflight)
 
-      // Track inflight
-      let new_inflight = add_inflight_requests(to_request, state.inflight)
+      let assigned_count = list.length(list.flat_map(assignments, fn(a) { a.1 }))
+      case assigned_count > 0 {
+        True ->
+          io.println(
+            "[IBD] Assigned "
+            <> int.to_string(assigned_count)
+            <> " blocks to "
+            <> int.to_string(list.length(assignments))
+            <> " peers",
+          )
+        False -> Nil
+      }
 
       IbdCoordinatorState(
         ..state,
-        download_queue: remaining,
+        download_queue: remaining_queue,
         inflight: new_inflight,
+        peers: new_peers,
+        next_peer_index: new_next_peer_index,
         last_activity: now_ms(),
       )
     }
   }
+}
+
+/// Distribute blocks to peers in round-robin fashion
+/// Returns: (list of (peer_id, blocks), new_peer_index, updated_peers, remaining_queue)
+fn distribute_blocks_to_peers(
+  queue: List(BlockHash),
+  available_peers: List(Int),
+  peers: Dict(Int, PeerSyncState),
+  max_per_peer: Int,
+  max_total: Int,
+  start_index: Int,
+) -> #(List(#(Int, List(BlockHash))), Int, Dict(Int, PeerSyncState), List(BlockHash)) {
+  let peer_count = list.length(available_peers)
+  case peer_count {
+    0 -> #([], start_index, peers, queue)
+    _ -> {
+      distribute_blocks_loop(
+        queue,
+        available_peers,
+        peers,
+        max_per_peer,
+        max_total,
+        start_index,
+        peer_count,
+        dict.new(),  // peer_id -> assigned blocks
+        0,           // total assigned
+      )
+    }
+  }
+}
+
+fn distribute_blocks_loop(
+  queue: List(BlockHash),
+  available_peers: List(Int),
+  peers: Dict(Int, PeerSyncState),
+  max_per_peer: Int,
+  max_total: Int,
+  current_index: Int,
+  peer_count: Int,
+  assignments: Dict(Int, List(BlockHash)),
+  total_assigned: Int,
+) -> #(List(#(Int, List(BlockHash))), Int, Dict(Int, PeerSyncState), List(BlockHash)) {
+  case queue {
+    [] -> {
+      // Queue exhausted
+      let assignment_list = dict.to_list(assignments)
+      #(assignment_list, current_index, peers, [])
+    }
+    [hash, ..rest] -> {
+      case total_assigned >= max_total {
+        True -> {
+          // Hit max total limit
+          let assignment_list = dict.to_list(assignments)
+          #(assignment_list, current_index, peers, queue)
+        }
+        False -> {
+          // Find next peer with available slot using round-robin
+          case find_next_available_peer(
+            available_peers,
+            peers,
+            assignments,
+            max_per_peer,
+            current_index,
+            peer_count,
+            0,
+          ) {
+            None -> {
+              // No peers with available slots
+              let assignment_list = dict.to_list(assignments)
+              #(assignment_list, current_index, peers, queue)
+            }
+            Some(#(peer_id, new_index)) -> {
+              // Assign block to this peer
+              let peer_blocks = case dict.get(assignments, peer_id) {
+                Ok(blocks) -> [hash, ..blocks]
+                Error(_) -> [hash]
+              }
+              let new_assignments = dict.insert(assignments, peer_id, peer_blocks)
+
+              // Update peer's inflight count
+              let new_peers = case dict.get(peers, peer_id) {
+                Ok(peer_state) -> {
+                  let updated = PeerSyncState(
+                    ..peer_state,
+                    inflight_blocks: peer_state.inflight_blocks + 1,
+                  )
+                  dict.insert(peers, peer_id, updated)
+                }
+                Error(_) -> peers
+              }
+
+              distribute_blocks_loop(
+                rest,
+                available_peers,
+                new_peers,
+                max_per_peer,
+                max_total,
+                new_index,
+                peer_count,
+                new_assignments,
+                total_assigned + 1,
+              )
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+/// Find next peer with available slot (round-robin)
+fn find_next_available_peer(
+  available_peers: List(Int),
+  peers: Dict(Int, PeerSyncState),
+  assignments: Dict(Int, List(BlockHash)),
+  max_per_peer: Int,
+  current_index: Int,
+  peer_count: Int,
+  attempts: Int,
+) -> Option(#(Int, Int)) {
+  case attempts >= peer_count {
+    True -> None  // Tried all peers, none available
+    False -> {
+      let idx = current_index % peer_count
+      case list.at(available_peers, idx) {
+        Error(_) -> None
+        Ok(peer_id) -> {
+          // Check if this peer has room
+          let current_inflight = case dict.get(peers, peer_id) {
+            Ok(ps) -> ps.inflight_blocks
+            Error(_) -> 0
+          }
+          let assigned_count = case dict.get(assignments, peer_id) {
+            Ok(blocks) -> list.length(blocks)
+            Error(_) -> 0
+          }
+          let total_for_peer = current_inflight + assigned_count
+
+          case total_for_peer < max_per_peer {
+            True -> Some(#(peer_id, { current_index + 1 } % peer_count))
+            False -> {
+              // Try next peer
+              find_next_available_peer(
+                available_peers,
+                peers,
+                assignments,
+                max_per_peer,
+                current_index + 1,
+                peer_count,
+                attempts + 1,
+              )
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+/// Send block requests to specific peers (not broadcast!)
+fn send_block_requests(
+  assignments: List(#(Int, List(BlockHash))),
+  p2p: Subject(ListenerMsg),
+) -> Nil {
+  list.each(assignments, fn(assignment) {
+    let #(peer_id, hashes) = assignment
+    case list.is_empty(hashes) {
+      True -> Nil
+      False -> {
+        let getdata = oni_p2p.create_getdata_blocks(hashes)
+        // Use SendToPeer instead of BroadcastMessage!
+        process.send(p2p, SendToPeer(peer_id, getdata))
+      }
+    }
+  })
+}
+
+/// Add inflight requests with peer tracking
+fn add_inflight_with_peers(
+  assignments: List(#(Int, List(BlockHash))),
+  inflight: Dict(String, BlockRequest),
+) -> Dict(String, BlockRequest) {
+  let now = now_ms()
+  list.fold(assignments, inflight, fn(acc, assignment) {
+    let #(peer_id, hashes) = assignment
+    list.fold(hashes, acc, fn(inner_acc, hash) {
+      let hash_hex = oni_bitcoin.block_hash_to_hex(hash)
+      let request = BlockRequest(
+        hash: hash,
+        height: 0,  // Height tracked separately in hash_to_height
+        peer_id: peer_id,
+        requested_at: now,
+      )
+      dict.insert(inner_acc, hash_hex, request)
+    })
+  })
 }
 
 // ============================================================================
@@ -969,7 +1185,7 @@ fn schedule_block_downloads(state: IbdCoordinatorState) -> IbdCoordinatorState {
 // ============================================================================
 
 /// Find the best peer for syncing (highest height)
-fn find_best_peer(peers: Dict(String, PeerSyncState)) -> Option(String) {
+fn find_best_peer(peers: Dict(Int, PeerSyncState)) -> Option(Int) {
   let peer_list = dict.to_list(peers)
   case peer_list {
     [] -> None
@@ -988,11 +1204,11 @@ fn find_best_peer(peers: Dict(String, PeerSyncState)) -> Option(String) {
   }
 }
 
-/// Get peers with available download slots
+/// Get peers with available download slots (returns list of peer IDs)
 fn get_available_peers(
-  peers: Dict(String, PeerSyncState),
+  peers: Dict(Int, PeerSyncState),
   max_per_peer: Int,
-) -> List(String) {
+) -> List(Int) {
   peers
   |> dict.to_list
   |> list.filter_map(fn(entry) {
@@ -1417,15 +1633,6 @@ fn build_download_queue_loop(
   }
 }
 
-/// Legacy function for backward compatibility
-fn build_download_queue(
-  headers: List(BlockHeaderNet),
-  start_height: Int,
-) -> List(BlockHash) {
-  let #(queue, _) = build_download_queue_and_mapping(headers, start_height)
-  queue
-}
-
 /// Encode block header for hashing
 fn encode_header(header: BlockHeaderNet) -> BitArray {
   <<
@@ -1438,40 +1645,9 @@ fn encode_header(header: BlockHeaderNet) -> BitArray {
   >>
 }
 
-/// Request blocks from peers
-fn request_blocks_from_peers(
-  hashes: List(BlockHash),
-  _peers: List(String),
-  p2p: Subject(ListenerMsg),
-) -> Nil {
-  let getdata = oni_p2p.create_getdata_blocks(hashes)
-  process.send(p2p, BroadcastMessage(getdata))
-}
-
-/// Add inflight requests
-fn add_inflight_requests(
-  hashes: List(BlockHash),
-  inflight: Dict(String, BlockRequest),
-) -> Dict(String, BlockRequest) {
-  let now = now_ms()
-  list.fold(hashes, inflight, fn(acc, hash) {
-    let hash_hex = oni_bitcoin.block_hash_to_hex(hash)
-    let request =
-      BlockRequest(
-        hash: hash,
-        height: 0,
-        // Would track actual height
-        peer_id: "",
-        // Would track actual peer
-        requested_at: now,
-      )
-    dict.insert(acc, hash_hex, request)
-  })
-}
-
 /// Cancel requests from a peer
 fn cancel_peer_requests(
-  peer_id: String,
+  peer_id: Int,
   inflight: Dict(String, BlockRequest),
 ) -> #(Dict(String, BlockRequest), List(BlockHash)) {
   dict.fold(inflight, #(dict.new(), []), fn(acc, hash_hex, request) {
@@ -1527,7 +1703,8 @@ fn build_progress(state: IbdCoordinatorState) -> IbdProgress {
     IbdError(err) -> "error: " <> err
   }
 
-  let peers = dict.keys(state.peers)
+  // Convert Int peer IDs to String for display
+  let peers = list.map(dict.keys(state.peers), int.to_string)
 
   // Estimate remaining time (very rough)
   let remaining_blocks = state.target_height - state.blocks_height
