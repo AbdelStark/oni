@@ -13,6 +13,7 @@
     spawn_acceptor/2,
     spawn_connector/3,
     spawn_receiver/2,
+    transfer_socket_ownership/2,
     erlang_now_ms/0,
     erlang_now_secs/0,
     generate_nonce/0,
@@ -105,10 +106,20 @@ spawn_acceptor(ListenSocket, Parent) ->
 -spec spawn_connector(tuple(), integer(), term()) -> nil.
 spawn_connector(NetAddr, Timeout, Parent) ->
     {net_addr, _Services, IpAddr, Port} = NetAddr,
+    %% Get the parent's actual Erlang PID for controlling_process
+    ParentPid = gleam@erlang@process:subject_owner(Parent),
     spawn_link(fun() ->
         case tcp_connect(IpAddr, Port, Timeout) of
             {ok, Socket} ->
-                gleam@erlang@process:send(Parent, {outbound_connected, NetAddr, Socket});
+                %% Transfer socket ownership to parent BEFORE exiting
+                %% This prevents the socket from being closed when this process exits
+                case gen_tcp:controlling_process(Socket, ParentPid) of
+                    ok ->
+                        gleam@erlang@process:send(Parent, {outbound_connected, NetAddr, Socket});
+                    {error, Reason} ->
+                        gen_tcp:close(Socket),
+                        gleam@erlang@process:send(Parent, {connection_failed, NetAddr, format_error(Reason)})
+                end;
             {error, Reason} ->
                 gleam@erlang@process:send(Parent, {connection_failed, NetAddr, Reason})
         end
@@ -120,6 +131,15 @@ spawn_connector(NetAddr, Timeout, Parent) ->
 spawn_receiver(Socket, Parent) ->
     spawn_link(fun() -> receiver_loop(Socket, Parent) end),
     nil.
+
+%% Transfer socket ownership to a Subject's process
+-spec transfer_socket_ownership(port(), term()) -> {ok, nil} | {error, binary()}.
+transfer_socket_ownership(Socket, Subject) ->
+    Pid = gleam@erlang@process:subject_owner(Subject),
+    case gen_tcp:controlling_process(Socket, Pid) of
+        ok -> {ok, nil};
+        {error, Reason} -> {error, format_error(Reason)}
+    end.
 
 receiver_loop(Socket, Parent) ->
     case gen_tcp:recv(Socket, 0) of

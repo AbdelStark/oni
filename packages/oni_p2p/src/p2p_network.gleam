@@ -113,6 +113,8 @@ pub type ListenSocket
 
 /// Messages to a peer actor
 pub type PeerMsg {
+  /// Initialize the peer (send version for outbound)
+  PeerInit(self_subject: Subject(PeerMsg))
   /// Send a message to the peer
   SendMessage(message: Message)
   /// Message received from network
@@ -462,7 +464,14 @@ fn handle_listener_message(
     }
 
     BroadcastMessage(message) -> {
-      dict.fold(state.peers, Nil, fn(_acc, _id, peer_subject) {
+      let peer_count = dict.size(state.peers)
+      io.println(
+        "[P2P] Broadcasting message to "
+        <> int.to_string(peer_count)
+        <> " connected peers",
+      )
+      dict.fold(state.peers, Nil, fn(_acc, peer_id, peer_subject) {
+        io.println("[P2P] Sending to peer " <> int.to_string(peer_id))
         process.send(peer_subject, SendMessage(message))
       })
       actor.continue(state)
@@ -521,19 +530,27 @@ fn start_peer_actor(
 
   case actor.start(initial_state, handle_peer_message) {
     Ok(subject) -> {
-      // Initialize and start handshake
-      process.send(subject, peer_init_msg(subject))
-      Ok(subject)
+      // Transfer socket ownership to the peer actor process
+      case transfer_socket_ownership(socket, subject) {
+        Ok(_) -> {
+          // Initialize and start handshake
+          process.send(subject, peer_init_msg(subject))
+          Ok(subject)
+        }
+        Error(err) -> {
+          io.println("[P2P] Failed to transfer socket ownership: " <> err)
+          // Actor started but can't use socket, return error
+          Error(actor.InitTimeout)
+        }
+      }
     }
     Error(e) -> Error(e)
   }
 }
 
-/// Create the init message (workaround for not having internal message type)
-fn peer_init_msg(_subject: Subject(PeerMsg)) -> PeerMsg {
-  // We'll send a ReceivedData with empty data to trigger init
-  // This is a hack - ideally we'd have a proper Init message
-  ReceivedData(<<>>)
+/// Create the init message
+fn peer_init_msg(subject: Subject(PeerMsg)) -> PeerMsg {
+  PeerInit(subject)
 }
 
 /// Handle peer messages
@@ -542,6 +559,61 @@ fn handle_peer_message(
   state: PeerActorState,
 ) -> actor.Next(PeerMsg, PeerActorState) {
   case msg {
+    PeerInit(self_subject) -> {
+      // Save the self subject
+      let new_state = PeerActorState(..state, self_subject: Some(self_subject))
+
+      // For outbound connections, we send version first
+      case state.info.inbound {
+        False -> {
+          io.println(
+            "[P2P] Peer "
+            <> int.to_string(state.info.id)
+            <> " sending version (outbound)",
+          )
+          let version =
+            oni_p2p.version_message(
+              state.config.services,
+              erlang_now_secs(),
+              state.info.addr,
+              generate_nonce(),
+              state.config.best_height,
+            )
+          case encode_and_send(state.socket, version, state.config.network) {
+            Ok(bytes_sent) ->
+              io.println(
+                "[P2P] Peer "
+                <> int.to_string(state.info.id)
+                <> " sent version ("
+                <> int.to_string(bytes_sent)
+                <> " bytes)",
+              )
+            Error(err) ->
+              io.println(
+                "[P2P] Peer "
+                <> int.to_string(state.info.id)
+                <> " version send failed: "
+                <> err,
+              )
+          }
+          Nil
+        }
+        True -> {
+          io.println(
+            "[P2P] Peer "
+            <> int.to_string(state.info.id)
+            <> " waiting for version (inbound)",
+          )
+          Nil
+        }
+      }
+
+      // Start receiving data from socket
+      spawn_receiver(state.socket, self_subject)
+
+      actor.continue(new_state)
+    }
+
     SendMessage(message) -> {
       case encode_and_send(state.socket, message, state.config.network) {
         Error(_reason) -> {
@@ -643,8 +715,17 @@ fn process_single_message(
 ) -> PeerActorState {
   case message {
     MsgVersion(version) -> {
+      io.println(
+        "[P2P] Peer "
+        <> int.to_string(state.info.id)
+        <> " version received: height="
+        <> int.to_string(version.start_height)
+        <> ", agent="
+        <> version.user_agent,
+      )
       // Send verack
       let _ = encode_and_send(state.socket, MsgVerack, state.config.network)
+      io.println("[P2P] Sent verack to peer " <> int.to_string(state.info.id))
 
       // If we haven't sent our version yet (inbound), send it now
       case state.info.state {
@@ -659,6 +740,9 @@ fn process_single_message(
             )
           let _ =
             encode_and_send(state.socket, our_version, state.config.network)
+          io.println(
+            "[P2P] Sent our version to peer " <> int.to_string(state.info.id),
+          )
           Nil
         }
         _ -> Nil
@@ -674,14 +758,31 @@ fn process_single_message(
     }
 
     MsgVerack -> {
+      io.println(
+        "[P2P] Peer "
+        <> int.to_string(state.info.id)
+        <> " verack received, handshake complete",
+      )
       let new_info = PeerInfo(..state.info, state: PeerReady)
       case state.info.version {
-        Some(version) ->
+        Some(version) -> {
+          io.println(
+            "[P2P] Sending PeerHandshakeComplete for peer "
+            <> int.to_string(state.info.id)
+            <> " at height "
+            <> int.to_string(version.start_height),
+          )
           process.send(
             state.parent,
             PeerHandshakeComplete(state.info.id, version),
           )
-        None -> Nil
+        }
+        None -> {
+          io.println(
+            "[P2P] WARNING: No version stored for peer "
+            <> int.to_string(state.info.id),
+          )
+        }
       }
       PeerActorState(..state, info: new_info)
     }
@@ -848,6 +949,12 @@ fn spawn_connector(
 
 @external(erlang, "p2p_network_ffi", "spawn_receiver")
 pub fn spawn_receiver(socket: Socket, parent: Subject(PeerMsg)) -> Nil
+
+@external(erlang, "p2p_network_ffi", "transfer_socket_ownership")
+fn transfer_socket_ownership(
+  socket: Socket,
+  owner: Subject(PeerMsg),
+) -> Result(Nil, String)
 
 @external(erlang, "p2p_network_ffi", "erlang_now_ms")
 fn erlang_now_ms() -> Int
