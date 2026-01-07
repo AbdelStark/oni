@@ -25,9 +25,9 @@ If you are unsure:
 - **See**: [STATUS.md](/STATUS.md) for detailed implementation status
 
 ### Key Remaining Work
-1. Persistent block storage backend
-2. Headers-first IBD synchronization
-3. Mainnet sync capability
+1. Live mainnet IBD testing
+2. Memory-bounded operation validation
+3. Production deployment testing
 
 ---
 
@@ -180,6 +180,8 @@ Required for cross-module changes.
 | Agent roles | `ai/AGENTS.md` |
 | Skills/playbooks | `ai/skills/` |
 | Test vectors | `test_vectors/` |
+| RPC debug script | `scripts/btc_rpc.py` |
+| RPC skill docs | `skills/bitcoin-rpc.md` |
 
 ---
 

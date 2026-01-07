@@ -2,7 +2,7 @@
 
 This document tracks the implementation status of oni across all packages and features.
 
-> **Last Updated**: 2026-01-06
+> **Last Updated**: 2026-01-07
 
 ## Summary
 
@@ -230,6 +230,9 @@ This document tracks the implementation status of oni across all packages and fe
 21. **Mainnet checkpoints**: Checkpoint verification up to block 820,000
 22. **DNS peer discovery**: Real DNS resolution via Erlang inet module for mainnet/testnet seeds
 23. **IBD coordinator integration**: IBD coordinator wired into node startup with automatic peer connection
+24. **Chain continuity validation**: Headers validated with prev_block hash verification to prevent chain divergence
+25. **Testnet4 (BIP-94) support**: Added Testnet4 network parameters, genesis, and DNS seeds
+26. **RPC debugging tools**: Python scripts for querying public Bitcoin RPC endpoints to validate sync progress
 
 ## Legend
 

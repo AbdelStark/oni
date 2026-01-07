@@ -11,6 +11,7 @@ This project uses AI-assisted development guidelines.
 | Skill playbooks | `ai/skills/` |
 | Implementation status | `STATUS.md` |
 | Task backlog | `ai/backlog/backlog.yml` |
+| RPC debug script | `scripts/btc_rpc.py` |
 
 ## Current Status
 

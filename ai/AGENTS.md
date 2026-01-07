@@ -210,3 +210,23 @@ See `ai/skills/` for detailed playbooks:
 - `skill_fuzzing.md` — Fuzz testing
 - `skill_benchmarks.md` — Performance testing
 - `skill_security_review.md` — Security audits
+- `skill_btc_rpc_debug.md` — Bitcoin RPC debugging for sync validation
+
+## 8. Debugging Tools
+
+### Bitcoin RPC Queries
+
+Use `scripts/btc_rpc.py` to query public Bitcoin RPC endpoints for debugging sync issues:
+
+```bash
+# Check current chain height
+uv run scripts/btc_rpc.py height --network testnet4
+
+# Compare local node with public chain
+uv run scripts/btc_rpc.py compare --network testnet4
+
+# Verify genesis block
+uv run scripts/btc_rpc.py genesis --network testnet4
+```
+
+See `skills/bitcoin-rpc.md` for full documentation.

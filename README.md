@@ -45,11 +45,14 @@ See [STATUS.md](STATUS.md) for detailed implementation status.
 - **Node**: OTP application that runs and responds to RPC calls
 - **Operations**: Prometheus metrics, structured logging, health endpoints
 - **E2E Testing**: 52 comprehensive regtest tests running in CI
+- **IBD Sync**: Headers-first sync with chain continuity validation
+- **Multi-Network**: Mainnet, Testnet3, Testnet4 (BIP-94), Signet, Regtest
+- **DNS Discovery**: Real DNS resolution for peer discovery on mainnet/testnet
 
 ### Next Steps
-- Persistent block storage backend
-- Headers-first IBD synchronization
-- Full mainnet sync capability (Milestone 6)
+- Live mainnet IBD testing
+- Memory-bounded operation validation
+- Production deployment (Milestone 6)
 
 ## Quick Start
 
@@ -74,11 +77,23 @@ make build     # Build all packages
 # Mainnet (default)
 make run
 
-# Testnet
+# Testnet3
 make run-testnet
+
+# Testnet4 (BIP-94)
+make run-testnet4
 
 # Regtest (for development)
 make run-regtest
+```
+
+### Debug Sync Progress
+```sh
+# Check public chain height
+uv run scripts/btc_rpc.py height --network testnet4
+
+# Compare local node with public chain
+uv run scripts/btc_rpc.py compare --network testnet4
 ```
 
 ## Repository Structure

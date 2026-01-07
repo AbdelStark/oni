@@ -151,6 +151,9 @@ This roadmap tracks oni's progress toward becoming a production-grade Bitcoin fu
 - [x] Reorg handler implementation
 - [x] IBD coordinator wired into node startup
 - [x] Automatic peer discovery and connection on startup
+- [x] Chain continuity validation (prev_block hash verification)
+- [x] Testnet4 (BIP-94) network support
+- [x] RPC debugging tools for sync validation
 - [ ] Live mainnet IBD testing
 - [ ] Memory-bounded operation validation
 - [ ] Production deployment testing
