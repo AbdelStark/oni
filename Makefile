@@ -2,6 +2,12 @@ PACKAGES := $(shell ls -1 packages)
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 
 .PHONY: help fmt fmt-check check test ci clean build docs bench version info nif run run-testnet run-testnet4 run-regtest test-vectors test-differential test-all
+.PHONY: watch-ibd watch-sync node-status node-stop node-logs clear-testnet4 clear-testnet clear-mainnet compare-testnet4 compare-testnet
+
+# Log file locations
+TESTNET4_LOG := /tmp/oni-testnet4.log
+TESTNET_LOG := /tmp/oni-testnet.log
+MAINNET_LOG := /tmp/oni-mainnet.log
 
 help:
 	@echo "oni development commands"
@@ -22,6 +28,20 @@ help:
 	@echo "  make run-testnet  - run node in testnet3 mode (port 18333/18332)"
 	@echo "  make run-testnet4 - run node in testnet4 mode (port 48333/48332)"
 	@echo "  make run-regtest  - run node in regtest mode (port 18444/18443)"
+	@echo ""
+	@echo "Monitoring:"
+	@echo "  make watch-ibd         - watch IBD block progress (live)"
+	@echo "  make watch-sync        - watch sync progress every 5s"
+	@echo "  make node-status       - show current node status via RPC"
+	@echo "  make node-logs         - show recent node logs"
+	@echo "  make compare-testnet4  - compare local vs public testnet4 chain"
+	@echo "  make compare-testnet   - compare local vs public testnet3 chain"
+	@echo ""
+	@echo "Management:"
+	@echo "  make node-stop         - stop running oni node"
+	@echo "  make clear-testnet4    - clear testnet4 data and restart"
+	@echo "  make clear-testnet     - clear testnet3 data"
+	@echo "  make clear-mainnet     - clear mainnet data"
 	@echo ""
 	@echo "Testing:"
 	@echo "  make test-vectors     - run test vector suite"
@@ -214,3 +234,108 @@ test-e2e-full:
 # Run all test suites
 test-all: test test-vectors
 	@echo "==> All test suites passed!"
+
+# ============================================================================
+# Monitoring Commands
+# ============================================================================
+
+# Watch IBD block progress (live streaming)
+watch-ibd:
+	@echo "==> Watching IBD progress (Ctrl+C to stop)..."
+	@if [ -f $(TESTNET4_LOG) ]; then \
+		tail -f $(TESTNET4_LOG) | grep --line-buffered '\[IBD\] Block'; \
+	elif [ -f $(TESTNET_LOG) ]; then \
+		tail -f $(TESTNET_LOG) | grep --line-buffered '\[IBD\] Block'; \
+	elif [ -f $(MAINNET_LOG) ]; then \
+		tail -f $(MAINNET_LOG) | grep --line-buffered '\[IBD\] Block'; \
+	else \
+		echo "No log file found. Start a node first with make run-testnet4"; \
+	fi
+
+# Watch sync progress every 5 seconds
+watch-sync:
+	@echo "==> Watching sync progress every 5s (Ctrl+C to stop)..."
+	@watch -n 5 'grep "\[IBD\] Block" /tmp/oni-testnet4.log 2>/dev/null | tail -1 || echo "No IBD progress yet"'
+
+# Show current node status via RPC
+node-status:
+	@echo "==> Checking node status..."
+	@echo ""
+	@echo "--- Testnet4 (port 48332) ---"
+	@curl -s --max-time 5 http://127.0.0.1:48332 -X POST \
+		-H "Content-Type: application/json" \
+		-d '{"jsonrpc":"2.0","id":1,"method":"getblockchaininfo"}' 2>/dev/null | \
+		jq '.result | {chain, blocks, headers, verificationprogress, initialblockdownload}' 2>/dev/null || \
+		echo "Not running or not responding"
+	@echo ""
+	@echo "--- Testnet3 (port 18332) ---"
+	@curl -s --max-time 5 http://127.0.0.1:18332 -X POST \
+		-H "Content-Type: application/json" \
+		-d '{"jsonrpc":"2.0","id":1,"method":"getblockchaininfo"}' 2>/dev/null | \
+		jq '.result | {chain, blocks, headers, verificationprogress, initialblockdownload}' 2>/dev/null || \
+		echo "Not running or not responding"
+	@echo ""
+	@echo "--- Mainnet (port 8332) ---"
+	@curl -s --max-time 5 http://127.0.0.1:8332 -X POST \
+		-H "Content-Type: application/json" \
+		-d '{"jsonrpc":"2.0","id":1,"method":"getblockchaininfo"}' 2>/dev/null | \
+		jq '.result | {chain, blocks, headers, verificationprogress, initialblockdownload}' 2>/dev/null || \
+		echo "Not running or not responding"
+
+# Show recent node logs
+node-logs:
+	@echo "==> Recent node logs..."
+	@if [ -f $(TESTNET4_LOG) ]; then \
+		echo "--- Testnet4 logs (last 30 lines) ---"; \
+		tail -30 $(TESTNET4_LOG) | grep -v 'Sending to peer'; \
+	elif [ -f $(TESTNET_LOG) ]; then \
+		echo "--- Testnet3 logs (last 30 lines) ---"; \
+		tail -30 $(TESTNET_LOG) | grep -v 'Sending to peer'; \
+	elif [ -f $(MAINNET_LOG) ]; then \
+		echo "--- Mainnet logs (last 30 lines) ---"; \
+		tail -30 $(MAINNET_LOG) | grep -v 'Sending to peer'; \
+	else \
+		echo "No log file found. Start a node first."; \
+	fi
+
+# Compare local vs public testnet4 chain
+compare-testnet4:
+	@echo "==> Comparing local testnet4 with public chain..."
+	@uv run scripts/btc_rpc.py compare --network testnet4
+
+# Compare local vs public testnet3 chain
+compare-testnet:
+	@echo "==> Comparing local testnet3 with public chain..."
+	@uv run scripts/btc_rpc.py compare --network testnet3
+
+# ============================================================================
+# Management Commands
+# ============================================================================
+
+# Stop running oni node
+node-stop:
+	@echo "==> Stopping oni node..."
+	@pkill -f 'beam.*oni' 2>/dev/null && echo "Node stopped" || echo "No node running"
+
+# Clear testnet4 data and optionally restart
+clear-testnet4:
+	@echo "==> Clearing testnet4 data..."
+	@rm -rf ~/.oni/testnet4
+	@echo "Testnet4 data cleared from ~/.oni/testnet4"
+
+# Clear testnet3 data
+clear-testnet:
+	@echo "==> Clearing testnet3 data..."
+	@rm -rf ~/.oni/testnet3
+	@echo "Testnet3 data cleared from ~/.oni/testnet3"
+
+# Clear mainnet data
+clear-mainnet:
+	@echo "==> Clearing mainnet data..."
+	@rm -rf ~/.oni/mainnet
+	@echo "Mainnet data cleared from ~/.oni/mainnet"
+
+# Fresh testnet4 start (clear + run)
+fresh-testnet4: node-stop clear-testnet4
+	@echo "==> Starting fresh testnet4 sync..."
+	@$(MAKE) run-testnet4
