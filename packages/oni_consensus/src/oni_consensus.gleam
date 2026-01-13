@@ -57,6 +57,7 @@ pub type ConsensusError {
   TxSequenceLockNotMet
   TxLockTimeNotMet
   TxSigOpCountExceeded
+  TxScriptFailed(input_index: Int)
 
   // Block errors
   BlockInvalidHeader
