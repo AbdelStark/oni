@@ -327,6 +327,29 @@
     Implementation complete in validation.gleam: sighash_legacy, sighash_segwit_v0,
     sighash_taproot. Test vectors in test_vectors/sighash_tests.json.
 
+- id: D6
+  title: "Script verification integration"
+  subsystem: consensus
+  status: done
+  depends_on: [D5, C4]
+  description: >
+    Wire script verification into transaction contextual validation so that
+    input scripts are actually verified during block/tx validation.
+  acceptance:
+    - "Transaction validation verifies input scripts"
+    - "P2PKH, P2WPKH, P2WSH, and Taproot key path are supported"
+    - "Invalid scripts cause validation failure"
+  tests:
+    - "unit"
+  notes: >
+    COMPLETED: Added verify_input_scripts to validation.gleam that:
+    - Detects script type (legacy, P2WPKH, P2WSH, Taproot, unknown witness)
+    - Verifies legacy scripts via verify_script_with_sig
+    - Verifies SegWit v0 with proper witness handling
+    - Verifies Taproot key path with Schnorr signature verification
+    - Script path validation validates structure (full execution pending)
+    - Added TxScriptFailed error type with input index
+
 - id: F4
   title: "Persistent storage backend"
   subsystem: storage

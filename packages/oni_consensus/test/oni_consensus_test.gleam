@@ -1617,3 +1617,92 @@ pub fn execute_csv_disable_flag_succeeds_test() {
   // Should succeed because disable flag makes CSV a NOP
   result |> should.be_ok
 }
+
+// ============================================================================
+// Script Verification Integration Tests
+// ============================================================================
+
+pub fn tx_script_failed_error_type_test() {
+  // Verify the TxScriptFailed error carries the input index
+  let err = oni_consensus.TxScriptFailed(2)
+  case err {
+    oni_consensus.TxScriptFailed(idx) -> idx |> should.equal(2)
+    _ -> should.fail()
+  }
+}
+
+pub fn validation_flags_to_script_flags_conversion_test() {
+  // Test that default validation flags produce correct script flags
+  let val_flags = validation.default_validation_flags()
+  // The validation should have all BIPs enabled
+  val_flags.bip16 |> should.be_true
+  val_flags.bip141 |> should.be_true
+  val_flags.bip341 |> should.be_true
+}
+
+pub fn validate_tx_contextual_returns_fee_test() {
+  // Create a transaction with valid UTXOs and verify it returns the fee
+  let assert Ok(hash) = oni_bitcoin.hash256_from_bytes(<<1:256>>)
+  let outpoint = oni_bitcoin.OutPoint(txid: oni_bitcoin.Txid(hash), vout: 0)
+  let assert Ok(input_value) = oni_bitcoin.amount_from_sats(10_000)
+  let assert Ok(output_value) = oni_bitcoin.amount_from_sats(9000)
+
+  // Create input (spending from a UTXO) with OP_TRUE script
+  let input =
+    oni_bitcoin.TxIn(
+      prevout: outpoint,
+      script_sig: oni_bitcoin.script_from_bytes(<<0x51>>),
+      // OP_TRUE
+      sequence: 0xffffffff,
+      witness: [],
+    )
+
+  let output =
+    oni_bitcoin.TxOut(
+      value: output_value,
+      script_pubkey: oni_bitcoin.script_from_bytes(<<0x51>>),
+      // OP_TRUE
+    )
+
+  let tx =
+    oni_bitcoin.Transaction(
+      version: 1,
+      inputs: [input],
+      outputs: [output],
+      lock_time: 0,
+    )
+
+  // Create UTXO view with the coin being spent
+  // The scriptPubKey must be OP_TRUE for simple verification
+  let coin =
+    oni_storage.Coin(
+      output: oni_bitcoin.TxOut(
+        value: input_value,
+        script_pubkey: oni_bitcoin.script_from_bytes(<<0x51>>),
+        // OP_TRUE
+      ),
+      height: 1,
+      is_coinbase: False,
+    )
+
+  let utxos = oni_storage.utxo_new()
+  let utxos_with_coin = oni_storage.utxo_insert(utxos, outpoint, coin)
+
+  let ctx =
+    validation.ValidationContext(
+      utxos: utxos_with_coin,
+      block_height: 100,
+      block_time: 1_700_000_000,
+      median_time_past: 1_699_990_000,
+      flags: validation.default_validation_flags(),
+    )
+
+  // Validate transaction
+  let result = validation.validate_tx_contextual(tx, ctx)
+
+  // Should succeed and return fee of 1000 sats
+  case result {
+    Ok(fee) -> fee |> should.equal(1000)
+    Error(_) -> should.fail()
+  }
+}

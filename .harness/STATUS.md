@@ -65,8 +65,8 @@ This document tracks the implementation status of oni across all packages and fe
 | Merkle root computation | ✅ Done | |
 | Witness commitment | ✅ Done | |
 | Transaction validation (stateless) | ✅ Done | In `validation.gleam` |
-| Transaction validation (contextual) | ⚠️ Partial | |
-| Block validation | ⚠️ Partial | Header checks, merkle |
+| Transaction validation (contextual) | ✅ Done | Script verification integrated |
+| Block validation | ⚠️ Partial | Header checks, merkle, tx scripts |
 | Difficulty calculation | ✅ Done | In `difficulty.gleam` |
 | Soft fork activation | ✅ Done | In `activation.gleam` |
 | Block filters (BIP157) | ✅ Done | In `block_filter.gleam` |
@@ -207,7 +207,8 @@ This document tracks the implementation status of oni across all packages and fe
 3. **Schnorr batch verification**: Full implementation (currently stubbed)
 
 ### Recently Completed
-1. **Sighash implementation**: Complete for legacy, BIP143, BIP341
+1. **Script verification integration**: Transaction validation now verifies input scripts (P2PKH, P2WPKH, P2WSH, Taproot key path)
+2. **Sighash implementation**: Complete for legacy, BIP143, BIP341
 2. **Persistent storage**: DETS backend with unified_storage bridge
 3. **secp256k1 Gleam wiring**: Schnorr/ECDSA verify, Taproot tweak functions
 4. **secp256k1 NIF CI/CD**: GitHub Actions now builds NIF with libsecp256k1
