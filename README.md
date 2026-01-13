@@ -15,7 +15,7 @@ oni aims to be a **fully validating, mainnet-compatible Bitcoin full node** with
 
 ## Project Status
 
-> **Status: Active Development** — Milestones 0-5 complete. Node runs, responds to RPC, mines regtest blocks, and passes 52 E2E tests.
+> **Status: Active Development** — Milestones 0-5 complete. Milestone 6 near completion with optimized IBD (batch processing, parallel block downloads). Node runs, responds to RPC, mines regtest blocks, and passes 52 E2E tests.
 
 ### Implementation Progress
 
@@ -45,9 +45,11 @@ See [STATUS.md](STATUS.md) for detailed implementation status.
 - **Node**: OTP application that runs and responds to RPC calls
 - **Operations**: Prometheus metrics, structured logging, health endpoints
 - **E2E Testing**: 52 comprehensive regtest tests running in CI
-- **IBD Sync**: Headers-first sync with chain continuity validation
+- **IBD Sync**: Headers-first sync with batch processing and parallel block downloads
+- **Chain Validation**: Chain continuity validation, checkpoint verification
 - **Multi-Network**: Mainnet, Testnet3, Testnet4 (BIP-94), Signet, Regtest
 - **DNS Discovery**: Real DNS resolution for peer discovery on mainnet/testnet
+- **Monitoring**: Makefile tasks for IBD progress, node status, and log viewing
 
 ### Next Steps
 - Live mainnet IBD testing
@@ -87,6 +89,21 @@ make run-testnet4
 make run-regtest
 ```
 
+### Monitor Node
+```sh
+# Watch IBD block progress live
+make watch-ibd
+
+# Check node status via RPC
+make node-status
+
+# View recent logs
+make node-logs
+
+# Compare with public chain
+make compare-testnet4
+```
+
 ### Debug Sync Progress
 ```sh
 # Check public chain height
@@ -107,9 +124,12 @@ oni/
 │   ├── oni_p2p/        # P2P networking
 │   ├── oni_rpc/        # JSON-RPC server
 │   └── oni_node/       # OTP application
+├── .harness/           # Agent state tracking
+│   ├── STATUS.md       # Implementation status
+│   ├── milestones.md   # Roadmap and progress
+│   ├── backlog.yml     # Task queue
+│   └── knowledge/      # Domain playbooks
 ├── docs/               # Architecture and specifications
-├── plan/               # Implementation roadmap
-├── ai/                 # AI development guidance
 ├── test_vectors/       # Bitcoin Core test vectors
 ├── scripts/            # Automation scripts
 ├── monitoring/         # Prometheus + Grafana configs
@@ -124,9 +144,14 @@ oni/
 - [docs/CONSENSUS.md](docs/CONSENSUS.md) — Consensus rules
 
 ### Development
-- [ai/CLAUDE.md](ai/CLAUDE.md) — AI development instructions
+- [CLAUDE.md](CLAUDE.md) — AI development instructions
+- [AGENTS.md](AGENTS.md) — Agent roles and coordination
 - [CONTRIBUTING.md](CONTRIBUTING.md) — Contribution guidelines
-- [plan/IMPLEMENTATION_PLAN.md](plan/IMPLEMENTATION_PLAN.md) — Development phases
+
+### Status Tracking
+- [.harness/STATUS.md](.harness/STATUS.md) — Implementation status
+- [.harness/milestones.md](.harness/milestones.md) — Roadmap and progress
+- [.harness/backlog.yml](.harness/backlog.yml) — Task queue
 
 ### Operations
 - [docs/OPERATIONS.md](docs/OPERATIONS.md) — Operational runbook

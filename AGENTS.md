@@ -1,117 +1,102 @@
 # AGENTS.md
 
-This project’s multi-agent workflow documentation is located at:
+Agent roles and coordination for multi-agent development on oni.
 
-- `ai/AGENTS.md` (primary)
-- `ai/AI_DEVELOPMENT_GUIDE.md`
-- `ai/skills/`
+## Agent Roles
 
-For convenience, `ai/AGENTS.md` is duplicated below.
+<agents>
+| Agent | Scope | Status |
+|-------|-------|--------|
+| **Consensus** | `oni_consensus`, script engine, sighash, validation | Complete |
+| **Primitives** | `oni_bitcoin`, serialization, encoding, types | Complete |
+| **Storage** | `oni_storage`, UTXO set, chainstate, persistence | Complete |
+| **P2P** | `oni_p2p`, networking, sync, relay | Complete |
+| **RPC/Node** | `oni_rpc`, `oni_node`, CLI, OTP app | Complete |
+| **Ops** | Telemetry, CI/CD, deployment, monitoring | Complete |
+| **Security** | Fuzzing, threat model, audits | Framework ready |
+</agents>
 
----
+## Boundaries
 
-# AGENTS.md — AI agent roles and workflow
+<boundaries>
+**Consensus agent** owns:
+- Script interpreter and opcodes
+- Sighash computation (legacy, BIP143, BIP341)
+- Block/transaction validation rules
+- **Never touches**: mempool policy, P2P relay decisions
 
-oni is designed for multi-agent development. This file describes recommended agent roles and how they coordinate.
+**Storage agent** owns:
+- UTXO set operations
+- Block index and chainstate
+- Connect/disconnect block
+- Crash recovery
 
-## 1. Agent roles
+**P2P agent** owns:
+- Message framing and codecs
+- Peer management and sync
+- DoS defenses
+- **Consensus rules flow through**: validation module only
+</boundaries>
 
-### 1.1 Consensus Agent
-Scope:
-- `packages/oni_consensus`
-- `docs/CONSENSUS.md`
+## Coordination
 
-Responsibilities:
-- script interpreter
-- sighash
-- validation rules
-- consensus test vectors + differential harness
+<coordination>
+**Before work:**
+1. Check `.harness/backlog.yml` for existing tasks
+2. Read `.harness/STATUS.md` for current state
+3. Verify dependencies are complete
 
-Never touches:
-- mempool policy logic (except to define shared primitives)
+**For each change, declare:**
+- Impacted subsystem(s)
+- Consensus impact (yes/no)
+- Test additions
+- Documentation updates
 
-### 1.2 Primitives Agent
-Scope:
-- `packages/oni_bitcoin`
+**Cross-subsystem changes:**
+Require ADR in `docs/adr/`
+</coordination>
 
-Responsibilities:
-- serialization, hashes, base58/bech32, core types
-- strict parsing and encoding correctness
-- cross-platform determinism
+## Review Requirements
 
-### 1.3 Storage Agent
-Scope:
-- `packages/oni_storage`
-- `docs/STORAGE.md`
+<review>
+| Change Type | Requirement |
+|-------------|-------------|
+| Consensus | Explicit review, test vectors |
+| Storage | Crash recovery tests |
+| P2P | Fuzz target update |
+| Security-sensitive | Security review |
+| Cross-subsystem | ADR required |
+</review>
 
-Responsibilities:
-- DB abstraction
-- UTXO set storage + caching
-- crash recovery + migrations
-- reorg correctness
+## Debugging Tools
 
-### 1.4 P2P Agent
-Scope:
-- `packages/oni_p2p`
-- `docs/P2P.md`
+<debugging>
+```sh
+# Bitcoin RPC queries (sync validation)
+uv run scripts/btc_rpc.py height --network testnet4
+uv run scripts/btc_rpc.py compare --network testnet4
 
-Responsibilities:
-- message framing/codecs
-- peer lifecycle + addrman
-- relay scheduling + DoS defenses
-- P2P fuzzing targets
+# Node monitoring
+make watch-ibd       # IBD progress
+make node-status     # RPC health check
+make node-logs       # Recent logs
 
-### 1.5 RPC/CLI Agent
-Scope:
-- `packages/oni_rpc`, `packages/oni_node`
+# Node management
+make node-stop       # Stop node
+make clear-testnet4  # Clear data
+make fresh-testnet4  # Clear + restart
+```
+</debugging>
 
-Responsibilities:
-- JSON-RPC server
-- auth, rate limiting
-- CLI tooling
-- operator UX
+## Skills
 
-### 1.6 Ops/Telemetry Agent
-Scope:
-- `docs/TELEMETRY.md`, CI workflows, deployment scripts
+Domain playbooks in `skills/`:
 
-Responsibilities:
-- structured logging
-- metrics and tracing
-- dashboards and alerts
-- release pipeline and SBOM
-
-### 1.7 Security Agent
-Scope:
-- `docs/SECURITY.md`, fuzz harnesses, dependency policy
-
-Responsibilities:
-- threat model updates
-- fuzzing strategy
-- secure coding checklists
-- supply chain controls
-
-## 2. Coordination rules
-
-- Each change must declare:
-  - impacted subsystem(s)
-  - consensus impact (yes/no)
-  - test additions
-- Cross-subsystem changes require a short ADR.
-
-## 3. Task format
-
-Add tasks to `ai/backlog/backlog.yml` using the template included there:
-- id
-- title
-- subsystem
-- description
-- acceptance criteria
-- tests required
-- dependencies
-
-## 4. Review strategy
-
-- Consensus changes require explicit consensus-owner review.
-- Storage changes require crash recovery tests.
-- P2P changes require fuzz target updates or justification.
+| Playbook | Topic |
+|----------|-------|
+| `serialization.md` | Encoding/decoding patterns |
+| `crypto.md` | Cryptographic operations |
+| `script.md` | Script engine patterns |
+| `p2p.md` | P2P message handling |
+| `storage.md` | Storage and chainstate |
+| `fuzzing.md` | Fuzz testing patterns |
