@@ -15,7 +15,9 @@ This project uses AI-assisted development guidelines.
 
 ## Current Status
 
-**Stage**: Milestones 0-5 complete. Node runs, responds to RPC, mines regtest blocks, and passes 52 E2E tests.
+**Stage**: Milestones 0-5 complete. Milestone 6 near completion with optimized IBD.
+
+Node runs, responds to RPC, mines regtest blocks, and passes 52 E2E tests. IBD features batch processing and parallel block downloads.
 
 See `STATUS.md` for detailed implementation matrix.
 

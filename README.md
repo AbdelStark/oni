@@ -15,7 +15,7 @@ oni aims to be a **fully validating, mainnet-compatible Bitcoin full node** with
 
 ## Project Status
 
-> **Status: Active Development** — Milestones 0-5 complete. Node runs, responds to RPC, mines regtest blocks, and passes 52 E2E tests.
+> **Status: Active Development** — Milestones 0-5 complete. Milestone 6 near completion with optimized IBD (batch processing, parallel block downloads). Node runs, responds to RPC, mines regtest blocks, and passes 52 E2E tests.
 
 ### Implementation Progress
 
@@ -45,9 +45,11 @@ See [STATUS.md](STATUS.md) for detailed implementation status.
 - **Node**: OTP application that runs and responds to RPC calls
 - **Operations**: Prometheus metrics, structured logging, health endpoints
 - **E2E Testing**: 52 comprehensive regtest tests running in CI
-- **IBD Sync**: Headers-first sync with chain continuity validation
+- **IBD Sync**: Headers-first sync with batch processing and parallel block downloads
+- **Chain Validation**: Chain continuity validation, checkpoint verification
 - **Multi-Network**: Mainnet, Testnet3, Testnet4 (BIP-94), Signet, Regtest
 - **DNS Discovery**: Real DNS resolution for peer discovery on mainnet/testnet
+- **Monitoring**: Makefile tasks for IBD progress, node status, and log viewing
 
 ### Next Steps
 - Live mainnet IBD testing
@@ -85,6 +87,21 @@ make run-testnet4
 
 # Regtest (for development)
 make run-regtest
+```
+
+### Monitor Node
+```sh
+# Watch IBD block progress live
+make watch-ibd
+
+# Check node status via RPC
+make node-status
+
+# View recent logs
+make node-logs
+
+# Compare with public chain
+make compare-testnet4
 ```
 
 ### Debug Sync Progress

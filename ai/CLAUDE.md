@@ -20,8 +20,9 @@ If you are unsure:
 **oni** is a production-grade Bitcoin full node implementation written in **Gleam** (targeting Erlang/OTP).
 
 ### Current Status
-- **Stage**: Milestones 0-5 complete with 52 E2E regtest tests passing
-- **Focus**: Working toward mainnet sync capability (Milestone 6)
+- **Stage**: Milestones 0-5 complete. Milestone 6 near completion.
+- **Tests**: 915+ unit tests, 52 E2E regtest tests passing
+- **IBD**: Batch processing and parallel block downloads implemented
 - **See**: [STATUS.md](/STATUS.md) for detailed implementation status
 
 ### Key Remaining Work
@@ -56,7 +57,20 @@ make ci         # Full CI pipeline
 make build      # Build all packages
 ```
 
-### 2.4 Package Layout
+### 2.4 Node Operations
+
+```sh
+make run          # Run mainnet node
+make run-testnet4 # Run testnet4 (BIP-94) node
+make run-regtest  # Run regtest node
+
+# Monitoring
+make watch-ibd    # Watch IBD progress live
+make node-status  # Check node status via RPC
+make node-logs    # View recent logs
+```
+
+### 2.5 Package Layout
 
 ```
 packages/

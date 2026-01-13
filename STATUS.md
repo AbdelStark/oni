@@ -2,7 +2,7 @@
 
 This document tracks the implementation status of oni across all packages and features.
 
-> **Last Updated**: 2026-01-07
+> **Last Updated**: 2026-01-13
 
 ## Summary
 
@@ -233,6 +233,10 @@ This document tracks the implementation status of oni across all packages and fe
 24. **Chain continuity validation**: Headers validated with prev_block hash verification to prevent chain divergence
 25. **Testnet4 (BIP-94) support**: Added Testnet4 network parameters, genesis, and DNS seeds
 26. **RPC debugging tools**: Python scripts for querying public Bitcoin RPC endpoints to validate sync progress
+27. **IBD batch processing**: Massive speedup with batch block processing and parallelism
+28. **Distributed block requests**: Block requests distributed across peers (no broadcast flooding)
+29. **Makefile monitoring**: Tasks for watching IBD progress, node status, and log management
+30. **Block ordering for IBD**: Proper block ordering and connection logic for initial sync
 
 ## Legend
 

@@ -10,7 +10,13 @@ This roadmap tracks oni's progress toward becoming a production-grade Bitcoin fu
 
 **Goal**: Achieve mainnet Initial Block Download (IBD) capability.
 
-**Recent Milestone**: Milestone 5 (End-to-End Regtest Node) is now complete with full E2E test coverage.
+**Recent Milestone**: Milestone 5 complete. Milestone 6 near completion with optimized IBD.
+
+**Latest Progress**:
+- Massive IBD speedup via batch processing and parallelism
+- Distributed block requests across multiple peers (no broadcast)
+- Makefile tasks for node monitoring and management
+- Proper block ordering and connection for IBD
 
 ---
 
@@ -154,6 +160,11 @@ This roadmap tracks oni's progress toward becoming a production-grade Bitcoin fu
 - [x] Chain continuity validation (prev_block hash verification)
 - [x] Testnet4 (BIP-94) network support
 - [x] RPC debugging tools for sync validation
+- [x] Batch block processing for IBD speedup
+- [x] Parallel block request distribution across peers
+- [x] Makefile monitoring and management tasks
+- [x] Proper block ordering and connection logic
+- [x] Block and transaction message parsing for IBD
 - [ ] Live mainnet IBD testing
 - [ ] Memory-bounded operation validation
 - [ ] Production deployment testing

@@ -4,12 +4,14 @@ oni is designed for multi-agent development. This file describes recommended age
 
 ## 1. Project Status
 
-**Current Stage**: Milestones 0-5 complete. Node runs, responds to RPC, and passes 52 E2E regtest tests.
+**Current Stage**: Milestones 0-5 complete. Milestone 6 near completion with optimized IBD.
+
+Node runs, responds to RPC, and passes 52 E2E regtest tests. IBD now features batch processing and parallel block downloads.
 
 Key remaining work:
-- Mainnet sync capability (Milestone 6)
-- Persistent block storage backend
-- Production hardening
+- Live mainnet IBD testing
+- Memory-bounded operation validation
+- Production deployment testing
 
 See [STATUS.md](/STATUS.md) for detailed implementation status.
 
@@ -230,3 +232,40 @@ uv run scripts/btc_rpc.py genesis --network testnet4
 ```
 
 See `skills/bitcoin-rpc.md` for full documentation.
+
+### Node Monitoring Commands
+
+Use Makefile targets for real-time monitoring:
+
+```bash
+# Watch IBD block progress live
+make watch-ibd
+
+# Watch sync progress every 5s
+make watch-sync
+
+# Check node status via RPC
+make node-status
+
+# View recent logs
+make node-logs
+
+# Compare with public chain
+make compare-testnet4
+make compare-testnet
+```
+
+### Node Management Commands
+
+```bash
+# Stop running node
+make node-stop
+
+# Clear network data
+make clear-testnet4
+make clear-testnet
+make clear-mainnet
+
+# Fresh restart (clear + run)
+make fresh-testnet4
+```
