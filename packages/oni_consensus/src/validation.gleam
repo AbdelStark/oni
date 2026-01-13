@@ -336,25 +336,29 @@ fn verify_input_scripts(
   ctx: ValidationContext,
 ) -> Result(Nil, ConsensusError) {
   let script_flags = validation_flags_to_script_flags(ctx.flags)
-  verify_input_scripts_loop(tx, coins, 0, script_flags)
+  // Pass the original transaction to all verifications for correct sighash
+  verify_input_scripts_loop(tx, tx.inputs, coins, 0, script_flags)
 }
 
 fn verify_input_scripts_loop(
-  tx: Transaction,
+  original_tx: Transaction,
+  inputs: List(TxIn),
   coins: List(Coin),
   index: Int,
   flags: ScriptFlags,
 ) -> Result(Nil, ConsensusError) {
-  case tx.inputs, coins {
+  case inputs, coins {
     [], [] -> Ok(Nil)
     [input, ..rest_inputs], [coin, ..rest_coins] -> {
-      use _ <- result.try(verify_single_input(tx, input, coin, index, flags))
-      verify_input_scripts_loop(
-        oni_bitcoin.Transaction(..tx, inputs: rest_inputs),
-        rest_coins,
-        index + 1,
+      // Pass original_tx (not modified) for correct sighash computation
+      use _ <- result.try(verify_single_input(
+        original_tx,
+        input,
+        coin,
+        index,
         flags,
-      )
+      ))
+      verify_input_scripts_loop(original_tx, rest_inputs, rest_coins, index + 1, flags)
     }
     _, _ -> Error(TxScriptFailed(index))
   }
@@ -623,16 +627,18 @@ fn verify_taproot_key_path(
       let sighash =
         sighash_taproot(tx, input_index, prevouts, sighash_type, 0, None)
 
-      // Verify Schnorr signature
+      // Verify Schnorr signature using the correct argument order and types:
+      // schnorr_verify(sig: SchnorrSig, msg_hash: BitArray, pubkey: XOnlyPubKey)
       case
         oni_bitcoin.schnorr_verify(
+          oni_bitcoin.SchnorrSig(bytes: sig_bytes),
           sighash.bytes,
-          sig_bytes,
-          <<output_pubkey:256-bits>>,
+          oni_bitcoin.XOnlyPubKey(bytes: <<output_pubkey:256-bits>>),
         )
       {
-        True -> Ok(Nil)
-        False -> Error(TxScriptFailed(input_index))
+        Ok(True) -> Ok(Nil)
+        Ok(False) -> Error(TxScriptFailed(input_index))
+        Error(_) -> Error(TxScriptFailed(input_index))
       }
     }
     _ -> Error(TxScriptFailed(input_index))
