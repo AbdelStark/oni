@@ -89,7 +89,7 @@ packages/
 | Implementation status | `.harness/STATUS.md` |
 | Milestones/roadmap | `.harness/milestones.md` |
 | Task backlog | `.harness/backlog.yml` |
-| Knowledge base | `.harness/knowledge/` |
+| Skills/playbooks | `skills/` |
 | Architecture | `docs/ARCHITECTURE.md` |
 | Consensus rules | `docs/CONSENSUS.md` |
 | Test vectors | `test_vectors/` |
@@ -102,7 +102,8 @@ The `.harness/` directory is the agent's persistent memory:
 - **milestones.md** — Progress tracking for long-running tasks
 - **backlog.yml** — Task queue with acceptance criteria
 - **errors.md** — Known issues and solutions
-- **knowledge/** — Domain-specific playbooks
+
+The `skills/` directory contains domain-specific playbooks.
 
 Update harness files as you work. Context is RAM, filesystem is state.
 </harness_usage>

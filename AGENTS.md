@@ -88,9 +88,9 @@ make fresh-testnet4  # Clear + restart
 ```
 </debugging>
 
-## Knowledge Base
+## Skills
 
-Domain playbooks in `.harness/knowledge/`:
+Domain playbooks in `skills/`:
 
 | Playbook | Topic |
 |----------|-------|

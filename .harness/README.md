@@ -12,14 +12,15 @@ This directory is the agent's filesystem-based state tracking system.
 ├── STATUS.md        # Implementation matrix
 ├── milestones.md    # Long-running task progress
 ├── backlog.yml      # Task queue with acceptance criteria
-├── errors.md        # Known issues and solutions
-└── knowledge/       # Domain-specific playbooks
-    ├── serialization.md
-    ├── crypto.md
-    ├── script.md
-    ├── p2p.md
-    ├── storage.md
-    └── fuzzing.md
+└── errors.md        # Known issues and solutions
+
+skills/              # Domain playbooks (at repo root)
+├── serialization.md
+├── crypto.md
+├── script.md
+├── p2p.md
+├── storage.md
+└── fuzzing.md
 ```
 
 ## Usage
@@ -34,13 +35,13 @@ This directory is the agent's filesystem-based state tracking system.
 
 - Update task status in `backlog.yml` as you progress
 - Log new errors and solutions to `errors.md`
-- Reference `knowledge/` playbooks for domain patterns
+- Reference `skills/` playbooks for domain patterns
 
 ### After Completing Work
 
 - Mark tasks `done` in `backlog.yml`
 - Update `STATUS.md` if implementation changed
-- Add entries to `knowledge/` for patterns discovered
+- Add entries to `skills/` for patterns discovered
 - Update `milestones.md` if milestone progress changed
 
 ## File Formats
@@ -71,7 +72,7 @@ This directory is the agent's filesystem-based state tracking system.
 **Prevention**: How to avoid
 ```
 
-### knowledge/*.md
+### skills/*.md
 
 ```markdown
 # Topic Name
