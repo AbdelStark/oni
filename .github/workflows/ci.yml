@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Erlang/OTP
         uses: erlef/setup-beam@v1
@@ -40,7 +40,7 @@ jobs:
     needs: format
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Erlang/OTP
         uses: erlef/setup-beam@v1
@@ -49,7 +49,7 @@ jobs:
           gleam-version: ${{ env.GLEAM_VERSION }}
 
       - name: Cache Gleam build
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             packages/*/build
@@ -68,7 +68,7 @@ jobs:
     needs: format
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Erlang/OTP
         uses: erlef/setup-beam@v1
@@ -78,7 +78,7 @@ jobs:
 
       - name: Cache libsecp256k1
         id: cache-secp256k1
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: /usr/local/lib/libsecp256k1*
           key: libsecp256k1-${{ runner.os }}-v0.5.0-schnorrsig
@@ -103,7 +103,7 @@ jobs:
         run: make nif
 
       - name: Upload NIF artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: secp256k1-nif
           path: packages/oni_bitcoin/priv/oni_secp256k1.so
@@ -124,7 +124,7 @@ jobs:
             gleam: "1.6.2"
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Erlang/OTP
         uses: erlef/setup-beam@v1
@@ -133,7 +133,7 @@ jobs:
           gleam-version: ${{ matrix.gleam }}
 
       - name: Cache Gleam build
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             packages/*/build
@@ -143,7 +143,7 @@ jobs:
             gleam-${{ runner.os }}-${{ matrix.gleam }}-${{ matrix.otp }}-
 
       - name: Download NIF artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: secp256k1-nif
           path: packages/oni_bitcoin/priv/
@@ -165,7 +165,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: test-results-otp-${{ matrix.otp }}
           path: packages/*/build/test_results/
@@ -179,7 +179,7 @@ jobs:
     needs: typecheck
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Erlang/OTP
         uses: erlef/setup-beam@v1
@@ -188,7 +188,7 @@ jobs:
           gleam-version: ${{ env.GLEAM_VERSION }}
 
       - name: Cache Gleam build
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             packages/*/build
@@ -205,7 +205,7 @@ jobs:
           done
 
       - name: Upload documentation
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: documentation
           path: packages/*/build/docs/
@@ -220,7 +220,7 @@ jobs:
     if: github.event_name == 'push' || github.event.pull_request.draft == false
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Erlang/OTP
         uses: erlef/setup-beam@v1
@@ -229,7 +229,7 @@ jobs:
           gleam-version: ${{ env.GLEAM_VERSION }}
 
       - name: Cache Gleam build
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             packages/*/build
@@ -293,7 +293,7 @@ jobs:
     if: github.event_name == 'push' || github.event.pull_request.draft == false
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Erlang/OTP
         uses: erlef/setup-beam@v1
@@ -302,7 +302,7 @@ jobs:
           gleam-version: ${{ env.GLEAM_VERSION }}
 
       - name: Cache Gleam build
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             packages/*/build
